@@ -1,6 +1,10 @@
 #sensitive files
 settings.json
 setting.json
+cookies.txt
+*.cookie
+session.json
+setting.json
 
 
 # Python virtual environment
