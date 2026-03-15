@@ -1,0 +1,30 @@
+{
+    "anchor": {
+        "nickname": "小蝰Kuii",
+        "room_id": 22900497,
+        "ruid": 98094853
+    },
+    "bilibili": {
+        "SESSDATA": "",
+        "bili_jct": "",
+        "buvid3": ""
+    },
+    "database": {
+        "url": "sqlite:///data/app.db"
+    },
+    "flask": {
+        "secret_key": "replace-this-secret",
+        "debug": true,
+        "host": "0.0.0.0",
+        "port": 7111
+    },
+    "ssl": {
+        "enabled": false,
+        "cert_file": "",
+        "key_file": "",
+        "port": 7112
+    },    
+    "admin": {
+        "uids": []
+    }
+}

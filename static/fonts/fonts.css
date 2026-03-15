@@ -1,0 +1,50 @@
+/* MiSans 字体加载 */
+@font-face {
+    font-family: "MiSans";
+    src: url("/static/fonts/MiSans-Regular.woff2") format("woff2"),
+         url("/static/fonts/MiSans-Regular.woff") format("woff"),
+         url("/static/fonts/MiSans-Regular.ttf") format("truetype");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "MiSans";
+    src: url("/static/fonts/MiSans-Medium.woff2") format("woff2"),
+         url("/static/fonts/MiSans-Medium.woff") format("woff"),
+         url("/static/fonts/MiSans-Medium.ttf") format("truetype");
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "MiSans";
+    src: url("/static/fonts/MiSans-SemiBold.woff2") format("woff2"),
+         url("/static/fonts/MiSans-SemiBold.woff") format("woff"),
+         url("/static/fonts/MiSans-SemiBold.ttf") format("truetype");
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "MiSans";
+    src: url("/static/fonts/MiSans-Bold.woff2") format("woff2"),
+         url("/static/fonts/MiSans-Bold.woff") format("woff"),
+         url("/static/fonts/MiSans-Bold.ttf") format("truetype");
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "MiSans";
+    src: url("/static/fonts/MiSans-ExtraBold.woff2") format("woff2"),
+         url("/static/fonts/MiSans-ExtraBold.woff") format("woff"),
+         url("/static/fonts/MiSans-ExtraBold.ttf") format("truetype");
+    font-weight: 800;
+    font-style: normal;
+    font-display: swap;
+}

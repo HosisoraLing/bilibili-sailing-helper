@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>舰长地址填写</title>
+    <link rel="stylesheet" href="/static/fonts/fonts.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "MiSans", -apple-system, BlinkMacSystemFont, "Segoe UI",
+                         Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            width: 100%;
+            max-width: 480px;
+            border-radius: 20px;
+            padding: 40px 30px;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 6px;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        }
+
+        h2 {
+            font-size: 22px;
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: #7f8c8d;
+            margin-bottom: 25px;
+            line-height: 1.6;
+        }
+
+        input {
+            width: 100%;
+            padding: 14px 12px;
+            border: 2px solid #e5e5e5;
+            border-radius: 10px;
+            font-size: 16px;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        input:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+        }
+
+        .btn {
+            margin-top: 20px;
+            width: 100%;
+            padding: 14px 24px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.3s ease;
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+            color: #333;
+            box-shadow: 0 4px 12px rgba(250, 112, 154, 0.3);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(250, 112, 154, 0.4);
+        }
+
+        .error {
+            margin-top: 15px;
+            font-size: 14px;
+            color: #e74c3c;
+            display: none;
+        }
+
+        .tips {
+            margin-top: 25px;
+            background: #f8f9fb;
+            border-radius: 10px;
+            padding: 15px;
+            text-align: left;
+            font-size: 14px;
+            color: #555;
+        }
+
+        .tips strong {
+            color: #667eea;
+        }
+
+        .tips ul {
+            margin-top: 8px;
+            padding-left: 18px;
+        }
+
+        .tips li {
+            margin: 6px 0;
+        }
+
+        /* 动画 */
+        .fade-in {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        /* 移动端 */
+        @media (max-width: 600px) {
+            .container {
+                padding: 30px 20px;
+                border-radius: 16px;
+            }
+
+            h2 {
+                font-size: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container fade-in">
+    <h2>📦 舰长地址填写</h2>
+
+    <p class="subtitle">
+        请输入您的 B 站 UID，<br>
+        用于校验舰长身份并填写收货地址
+    </p>
+
+    <input
+        type="text"
+        id="uidInput"
+        placeholder="请输入 UID（纯数字）"
+        onkeypress="if(event.key === 'Enter') jump()"
+    >
+
+    <button class="btn" onclick="jump()">开始填写</button>
+
+    <div id="errorMsg" class="error"></div>
+
+    <!-- CSRF Token (用于后续表单) -->
+    <input type="hidden" id="csrfTokenInput" value="{{ csrf_token() }}">
+
+    <div class="tips">
+        <p><strong>💡 使用说明</strong></p>
+        <ul>
+            <li>UID 为您的 B 站账号数字 ID</li>
+            <li>仅限 {{ config.ANCHOR_NICKNAME }} 的舰长填写</li>
+            <li>如遇问题，请联系 @星空凌Official</li>
+        </ul>
+    </div>
+
+    {% if current_user.is_authenticated %}
+        <div style="margin-top: 20px; text-align: center; border-top: 1px solid #e5e5e5; padding-top: 15px;">
+            <a href="/logout" style="color: #e74c3c; text-decoration: none; font-size: 13px; font-weight: 500; margin-right: 15px;">
+                <i class="fas fa-sign-out-alt"></i> 退出登录
+            </a>
+            {% if current_user.is_admin() %}
+                <a href="/admin/panel" style="color: #667eea; text-decoration: none; font-size: 13px; font-weight: 500;">
+                    <i class="fas fa-user-shield"></i> 管理员面板
+                </a>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>
+
+<script>
+    function jump() {
+        const uid = document.getElementById('uidInput').value.trim();
+        const errorMsg = document.getElementById('errorMsg');
+
+        errorMsg.style.display = 'none';
+
+        if (!uid) {
+            errorMsg.textContent = '请输入 UID';
+            errorMsg.style.display = 'block';
+            return;
+        }
+
+        if (!/^\d+$/.test(uid)) {
+            errorMsg.textContent = 'UID 必须是纯数字';
+            errorMsg.style.display = 'block';
+            return;
+        }
+
+        window.location.href = '/?uid=' + uid;
+    }
+
+    // 页面淡入动画
+    document.addEventListener('DOMContentLoaded', () => {
+        const el = document.querySelector('.fade-in');
+        setTimeout(() => {
+            el.style.transition = 'all 0.5s ease';
+            el.style.opacity = '1';
+            el.style.transform = 'translateY(0)';
+        }, 100);
+    });
+</script>
+
+</body>
+</html>

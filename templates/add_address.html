@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>新增地址 - 管理员</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/fonts/fonts.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "MiSans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            background: white;
+            width: 100%;
+            max-width: 550px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px 30px;
+            text-align: center;
+            position: relative;
+        }
+
+        .header h2 {
+            font-size: 22px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .header .subtitle {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-top: 5px;
+        }
+
+        .back-btn {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 6px 16px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            text-decoration: none;
+            border-radius: 20px;
+            font-size: 13px;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .back-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-1px);
+        }
+
+        .form-body {
+            padding: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 500;
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e5e5e5;
+            border-radius: 8px;
+            font-size: 15px;
+            transition: all 0.3s ease;
+            background: #fafafa;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            border-color: #667eea;
+            background: white;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+        }
+
+        .form-row .form-group {
+            margin-bottom: 0;
+        }
+
+        .form-row select {
+            padding: 12px 8px;
+            font-size: 14px;
+        }
+
+        .detail-input {
+            resize: vertical;
+            min-height: 80px;
+            font-family: inherit;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 15px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            text-decoration: none;
+        }
+
+        .btn-save {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+        }
+
+        .btn-save:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-save:active {
+            transform: translateY(0);
+        }
+
+        .btn-cancel {
+            background: #f1f5f9;
+            color: #4a5568;
+            border: 1px solid #e2e8f0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            text-decoration: none;
+        }
+
+        .btn-cancel:hover {
+            background: #e2e8f0;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .alert.error {
+            background: #fff5f5;
+            color: #e53e3e;
+            border: 1px solid #fc8181;
+        }
+
+        .alert.success {
+            background: #f0fff4;
+            color: #38a169;
+            border: 1px solid #9ae6b4;
+        }
+
+        .required::after {
+            content: " *";
+            color: #ff4757;
+        }
+
+        /* 移动端适配 */
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+                align-items: flex-start;
+                padding-top: 20px;
+            }
+
+            .container {
+                border-radius: 12px;
+            }
+
+            .header {
+                padding: 20px;
+            }
+
+            .header h2 {
+                font-size: 18px;
+            }
+
+            .form-body {
+                padding: 20px;
+            }
+
+            .form-row {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+
+            .form-group input,
+            .form-group select {
+                padding: 14px 15px;
+                font-size: 16px;
+            }
+
+            .btn-group {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>✏️ 新增地址</h2>
+            <div class="subtitle">管理员手动添加地址信息</div>
+            <a href="/admin/panel?uid={{ admin_uid }}" class="back-btn">
+                <i class="fas fa-arrow-left"></i> 返回管理面板
+            </a>
+        </div>
+
+        <div class="form-body">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert {{ category }}">
+                            <i class="fas fa-{{ 'check-circle' if category == 'success' else 'exclamation-circle' }}"></i>
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <form method="post" action="/admin/add-address?uid={{ admin_uid }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="secure_token" value="{{ secure_token() }}">
+                <div class="form-group">
+                    <label class="required" for="uid">舰长 UID</label>
+                    <input type="text" id="uid" name="uid" required placeholder="请输入舰长的 B 站 UID（纯数字）" pattern="^\d+$">
+                </div>
+
+                <div class="form-group">
+                    <label class="required" for="name">收件人姓名</label>
+                    <input type="text" id="name" name="name" required placeholder="请填写真实姓名">
+                </div>
+
+                <div class="form-group">
+                    <label class="required" for="phone">手机号码</label>
+                    <input type="tel" id="phone" name="phone" required pattern="^1[3-9]\d{9}$" placeholder="11位手机号码">
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="required" for="province">省</label>
+                        <select id="province" name="province" required>
+                            <option value="">请选择</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="required" for="city">市</label>
+                        <select id="city" name="city" required disabled>
+                            <option value="">请选择</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="required" for="district">区/县</label>
+                        <select id="district" name="district" required disabled>
+                            <option value="">请选择</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="required" for="detail">详细地址</label>
+                    <input type="text" id="detail" name="detail" class="detail-input" required placeholder="街道、门牌号等">
+                </div>
+
+                <div class="btn-group">
+                    <button type="submit" class="btn btn-save">
+                        <i class="fas fa-check"></i> 保存地址
+                    </button>
+                    <a href="/admin/panel?uid={{ admin_uid }}" class="btn btn-cancel">
+                        <i class="fas fa-times"></i> 取消
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let regions = {};
+        const provinceSelect = document.getElementById('province');
+        const citySelect = document.getElementById('city');
+        const districtSelect = document.getElementById('district');
+
+        // 加载行政区划数据
+        fetch('/static/china_regions.json')
+            .then(r => {
+                if (!r.ok) throw new Error('网络错误');
+                return r.json();
+            })
+            .then(data => {
+                regions = data;
+                // 填充省份
+                for (const province in regions) {
+                    const option = document.createElement('option');
+                    option.value = province;
+                    option.textContent = province;
+                    provinceSelect.appendChild(option);
+                }
+            })
+            .catch(err => {
+                console.error('加载地区数据失败:', err);
+            });
+
+        // 省份变化
+        provinceSelect.onchange = function() {
+            citySelect.innerHTML = '<option value="">请选择</option>';
+            districtSelect.innerHTML = '<option value="">请选择</option>';
+            citySelect.disabled = !this.value;
+            districtSelect.disabled = true;
+
+            if (this.value && regions[this.value]) {
+                for (const city in regions[this.value]) {
+                    const option = document.createElement('option');
+                    option.value = city;
+                    option.textContent = city;
+                    citySelect.appendChild(option);
+                }
+            }
+        };
+
+        // 城市变化
+        citySelect.onchange = function() {
+            districtSelect.innerHTML = '<option value="">请选择</option>';
+            districtSelect.disabled = !this.value;
+
+            const city = this.value;
+            const province = provinceSelect.value;
+
+            if (province && city && regions[province] && regions[province][city]) {
+                const districts = regions[province][city];
+                districts.forEach(district => {
+                    const option = document.createElement('option');
+                    option.value = district;
+                    option.textContent = district;
+                    districtSelect.appendChild(option);
+                });
+            }
+        };
+
+        // 手机号实时格式化
+        document.getElementById('phone').addEventListener('input', function(e) {
+            this.value = this.value.replace(/\D/g, '').slice(0, 11);
+        });
+    </script>
+</body>
+</html>

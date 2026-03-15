@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>陪伴榜</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/fonts/fonts.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "MiSans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 6px;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .title h2 {
+            font-size: 24px;
+            color: #2c3e50;
+            font-weight: 700;
+        }
+
+        .admin-badge {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .uid-info {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .uid-info strong {
+            color: #667eea;
+            font-weight: 700;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 10px 18px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #f1f5f9;
+            color: #4a5568;
+            border: 1px solid #e2e8f0;
+        }
+
+        .btn-secondary:hover {
+            background: #e2e8f0;
+            transform: translateY(-2px);
+        }
+
+        .btn-logout {
+            background: #fee;
+            color: #e53e3e;
+            border: 1px solid #fc8181;
+        }
+
+        .btn-logout:hover {
+            background: #fcc;
+        }
+
+        .btn-add {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+
+        .btn-add:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+        }
+
+        .btn-edit {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+
+        .btn-edit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+        }
+
+        .btn-delete {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+
+        .btn-delete:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 13px;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .stat-card .number {
+            font-size: 32px;
+            font-weight: 800;
+            margin-bottom: 5px;
+        }
+
+        .stat-card .label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .filter-box {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .filter-box select {
+            padding: 10px 15px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .filter-box select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+        }
+
+        .filter-box .btn {
+            padding: 10px 20px;
+        }
+
+        th.sortable {
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+            padding-right: 25px;
+        }
+
+        th.sortable:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        th.sortable::after {
+            content: '\f0dc';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            position: absolute;
+            right: 8px;
+            opacity: 0.5;
+            font-size: 12px;
+        }
+
+        th.sortable.asc::after {
+            content: '\f0de';
+            opacity: 1;
+        }
+
+        th.sortable.desc::after {
+            content: '\f0dd';
+            opacity: 1;
+        }
+
+        .table-container {
+            background: white;
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        thead {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        th {
+            padding: 12px 10px;
+            text-align: left;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        th:first-child {
+            border-top-left-radius: 8px;
+        }
+
+        th:last-child {
+            border-top-right-radius: 8px;
+        }
+
+        tbody tr {
+            border-bottom: 1px solid #e2e8f0;
+            transition: background 0.2s ease;
+        }
+
+        tbody tr:hover {
+            background: #f8f9ff;
+        }
+
+        td {
+            padding: 12px 10px;
+            color: #4a5568;
+        }
+
+        .no-wrap {
+            white-space: nowrap;
+        }
+
+        .truncate {
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #718096;
+        }
+
+        .empty-state i {
+            font-size: 48px;
+            margin-bottom: 10px;
+            opacity: 0.5;
+        }
+
+        .level-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .level-guard {
+            background: #ebf8ff;
+            color: #667eea;
+        }
+
+        .level-captain {
+            background: #fffaf0;
+            color: #dd6b20;
+        }
+
+        .level-admiral {
+            background: #fff5f5;
+            color: #e53e3e;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .status-in-guard {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status-not-in-guard {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .rank-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            font-weight: 700;
+            font-size: 12px;
+        }
+
+        .rank-1 {
+            background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+            color: #8b6914;
+        }
+
+        .rank-2 {
+            background: linear-gradient(135deg, #c0c0c0 0%, #e8e8e8 100%);
+            color: #4a5568;
+        }
+
+        .rank-3 {
+            background: linear-gradient(135deg, #cd7f32 0%, #e8a87c 100%);
+            color: #5a3a1a;
+        }
+
+        .rank-other {
+            background: #f1f5f9;
+            color: #4a5568;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid #e2e8f0;
+        }
+
+        .footer {
+            margin-top: 20px;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 13px;
+        }
+
+        .footer a {
+            color: white;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        @media (max-width: 768px) {
+            .header-top {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .stats {
+                grid-template-columns: 1fr;
+            }
+
+            .filter-box {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .filter-box select {
+                width: 100%;
+            }
+
+            .filter-box .btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="container">
+        <div class="header">
+            <div class="header-top">
+                <div class="title">
+                    <h2><i class="fas fa-users"></i> 陪伴榜</h2>
+                    <span class="admin-badge">ADMIN</span>
+                </div>
+                <div class="uid-info">
+                    管理员: <strong>{{ nickname }}</strong> ({{ uid }})
+                </div>
+            </div>
+
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="number">{{ total }}</div>
+                    <div class="label">陪伴榜成员</div>
+                </div>
+                <div class="stat-card">
+                    <div class="number">
+                        {% if status_filter == 'in_guard' %}
+                            在舰
+                        {% elif status_filter == 'not_in_guard' %}
+                            不在舰
+                        {% else %}
+                            所有
+                        {% endif %}
+                    </div>
+                    <div class="label">状态筛选</div>
+                </div>
+            </div>
+
+            <div class="actions" style="margin-top: 15px;">
+                <a href="/admin/panel" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> 返回管理面板
+                </a>
+                <button class="btn btn-primary" onclick="openImportModal('companion')">
+                    <i class="fas fa-file-import"></i> 导入CSV
+                </button>
+                <a href="/admin/export/companion-ranking?rank_type={{ rank_type }}&status={{ status_filter }}" class="btn btn-primary">
+                    <i class="fas fa-file-csv"></i> 导出陪伴榜 CSV
+                </a>
+                <button class="btn btn-primary" onclick="openAddModal()">
+                    <i class="fas fa-plus"></i> 新增成员
+                </button>
+                <a href="/admin/guards" class="btn btn-secondary">
+                    <i class="fas fa-users"></i> 舰长列表
+                </a>
+                <a href="/admin/guard-gifts" class="btn btn-secondary">
+                    <i class="fas fa-gift"></i> 舰长礼物
+                </a>
+                <a href="/logout" class="btn btn-logout">
+                    <i class="fas fa-sign-out-alt"></i> 退出登录
+                </a>
+            </div>
+
+            <div class="filter-box">
+                <select id="rankTypeSelect" onchange="updateRankType()">
+                    <option value="1" {% if rank_type == 1 %}selected{% endif %}>按粉丝牌亮着排序</option>
+                    <option value="2" {% if rank_type == 2 %}selected{% endif %}>按未上舰排序</option>
+                </select>
+                <select id="statusFilterSelect" onchange="updateStatusFilter()">
+                    <option value="all" {% if status_filter == 'all' %}selected{% endif %}>所有状态</option>
+                    <option value="in_guard" {% if status_filter == 'in_guard' %}selected{% endif %}>在舰</option>
+                    <option value="not_in_guard" {% if status_filter == 'not_in_guard' %}selected{% endif %}>不在舰</option>
+                </select>
+                <a href="/admin/companion-ranking?rank_type={{ rank_type }}&status={{ status_filter }}" class="btn btn-primary">
+                    <i class="fas fa-sync-alt"></i> 刷新
+                </a>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table id="companionTable">
+                <thead>
+                    <tr>
+                        <th>排名</th>
+                        <th class="sortable" data-sort="uid">UID</th>
+                        <th class="sortable" data-sort="nickname">昵称</th>
+                        <th class="sortable" data-sort="guard_level">大航海</th>
+                        <th class="sortable" data-sort="in_guard">是否在舰</th>
+                        <th class="sortable" data-sort="accompany_days">陪伴天数</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if items %}
+                        {% for item in items %}
+                            <tr>
+                                <td class="no-wrap">
+                                    {% if item.user_rank == 1 %}
+                                        <span class="rank-badge rank-1">1</span>
+                                    {% elif item.user_rank == 2 %}
+                                        <span class="rank-badge rank-2">2</span>
+                                    {% elif item.user_rank == 3 %}
+                                        <span class="rank-badge rank-3">3</span>
+                                    {% else %}
+                                        <span class="rank-badge rank-other">{{ item.user_rank }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="no-wrap">{{ item.uid }}</td>
+                                <td class="truncate">{{ item.nickname }}</td>
+                                <td class="no-wrap">
+                                    {% if item.guard_level == 'guard' %}
+                                        <span class="level-badge level-guard">舰长</span>
+                                    {% elif item.guard_level == 'captain' %}
+                                        <span class="level-badge level-captain">提督</span>
+                                    {% elif item.guard_level == 'admiral' %}
+                                        <span class="level-badge level-admiral">总督</span>
+                                    {% else %}
+                                        <span class="level-badge level-guard">舰长</span>
+                                    {% endif %}
+                                </td>
+                                <td class="no-wrap">
+                                    {% if item.in_guard %}
+                                        <span class="status-badge status-in-guard">在舰</span>
+                                    {% else %}
+                                        <span class="status-badge status-not-in-guard">不在舰</span>
+                                    {% endif %}
+                                </td>
+                                <td class="no-wrap">{{ item.accompany_days or 0 }}</td>
+                                <td class="action-cell">
+                                    <button class="btn-small btn-edit" onclick="editCompanion('{{ item.uid }}')">
+                                        <i class="fas fa-edit"></i> 编辑
+                                    </button>
+                                    <button class="btn-small btn-delete" onclick="deleteCompanion('{{ item.uid }}')">
+                                        <i class="fas fa-trash"></i> 删除
+                                    </button>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="7" class="empty-state">
+                                <i class="fas fa-inbox"></i>
+                                <p>暂无陪伴榜数据</p>
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="footer">
+            <i class="fas fa-shield-alt"></i> 管理员权限 - 请妥善保管数据
+        </div>
+    </div>
+
+    <!-- Add Companion Modal -->
+    <div id="addModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 12px; padding: 30px; width: 90%; max-width: 500px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="margin: 0; color: #2c3e50; font-size: 20px;"><i class="fas fa-plus"></i> 新增陪伴榜成员</h3>
+                <button onclick="closeAddModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #999;">&times;</button>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">UID *</label>
+                <input type="text" id="newUid" placeholder="请输入Bilibili UID" style="width: 100%; padding: 10px 15px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; box-sizing: border-box;">
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">昵称 *</label>
+                <input type="text" id="newNickname" placeholder="请输入昵称" style="width: 100%; padding: 10px 15px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; box-sizing: border-box;">
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">大航海</label>
+                <select id="newGuardLevel" style="width: 100%; padding: 10px 15px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; box-sizing: border-box;">
+                    <option value="guard">舰长</option>
+                    <option value="captain">提督</option>
+                    <option value="admiral">总督</option>
+                </select>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">是否在舰</label>
+                <select id="newInGuard" style="width: 100%; padding: 10px 15px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; box-sizing: border-box;">
+                    <option value="true">在舰</option>
+                    <option value="false">不在舰</option>
+                </select>
+            </div>
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">陪伴天数</label>
+                <input type="number" id="newAccompanyDays" placeholder="请输入陪伴天数" value="0" style="width: 100%; padding: 10px 15px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; box-sizing: border-box;">
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button onclick="closeAddModal()" style="padding: 10px 20px; border: 2px solid #e2e8f0; background: white; border-radius: 8px; font-weight: 600; cursor: pointer; color: #4a5568;">取消</button>
+                <button onclick="addCompanion()" style="padding: 10px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">确认新增</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Companion Modal -->
+    <div id="editModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 12px; padding: 30px; width: 90%; max-width: 500px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="margin: 0; color: #2c3e50; font-size: 20px;"><i class="fas fa-edit"></i> 编辑陪伴榜成员</h3>
+                <button onclick="closeEditModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #999;">&times;</button>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">UID *</label>
+                <input type="text" id="editUid" readonly style="width: 100%; padding: 10px 15px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; box-sizing: border-box; background: #f8f9ff;">
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">昵称 *</label>
+                <input type="text" id="editNickname" placeholder="请输入昵称" style="width: 100%; padding: 10px 15px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; box-sizing: border-box;">
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">大航海</label>
+                <select id="editGuardLevel" style="width: 100%; padding: 10px 15px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; box-sizing: border-box;">
+                    <option value="guard">舰长</option>
+                    <option value="captain">提督</option>
+                    <option value="admiral">总督</option>
+                </select>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">是否在舰</label>
+                <select id="editInGuard" style="width: 100%; padding: 10px 15px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; box-sizing: border-box;">
+                    <option value="true">在舰</option>
+                    <option value="false">不在舰</option>
+                </select>
+            </div>
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">陪伴天数</label>
+                <input type="number" id="editAccompanyDays" placeholder="请输入陪伴天数" style="width: 100%; padding: 10px 15px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; box-sizing: border-box;">
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button onclick="closeEditModal()" style="padding: 10px 20px; border: 2px solid #e2e8f0; background: white; border-radius: 8px; font-weight: 600; cursor: pointer; color: #4a5568;">取消</button>
+                <button onclick="saveEditCompanion()" style="padding: 10px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">保存修改</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import CSV Modal -->
+    <div id="importModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 12px; padding: 30px; width: 90%; max-width: 500px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="margin: 0; color: #2c3e50; font-size: 20px;"><i class="fas fa-file-import"></i> 导入CSV</h3>
+                <button onclick="closeImportModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #999;">&times;</button>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">选择CSV文件</label>
+                <input type="file" id="csvFile" accept=".csv" style="width: 100%; padding: 10px 15px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; box-sizing: border-box;">
+            </div>
+            <div style="margin-bottom: 20px; padding: 10px; background: #f8f9ff; border-radius: 8px; font-size: 13px; color: #666;">
+                <strong>CSV格式要求：</strong><br>
+                - UID, 昵称, 大航海, 是否在舰, 陪伴天数<br>
+                - 第一行必须是表头<br>
+                - UID和昵称为必填项<br>
+                - 大航海: 舰长/提督/总督<br>
+                - 是否在舰: 是/否
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button onclick="closeImportModal()" style="padding: 10px 20px; border: 2px solid #e2e8f0; background: white; border-radius: 8px; font-weight: 600; cursor: pointer; color: #4a5568;">取消</button>
+                <button onclick="importCSV('companion')" style="padding: 10px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">确认导入</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentSort = { column: null, direction: 'asc' };
+
+        function updateRankType() {
+            const rankType = document.getElementById('rankTypeSelect').value;
+            const statusFilter = document.getElementById('statusFilterSelect').value;
+            window.location.href = `/admin/companion-ranking?rank_type=${rankType}&status=${statusFilter}`;
+        }
+
+        function updateStatusFilter() {
+            const rankType = document.getElementById('rankTypeSelect').value;
+            const statusFilter = document.getElementById('statusFilterSelect').value;
+            window.location.href = `/admin/companion-ranking?rank_type=${rankType}&status=${statusFilter}`;
+        }
+
+        function sortTable(column, direction) {
+            const table = document.getElementById('companionTable');
+            const tbody = table.getElementsByTagName('tbody')[0];
+            const rows = Array.from(tbody.getElementsByTagName('tr'));
+
+            // Get column index based on column name
+            const columnMap = {
+                'uid': 1,
+                'nickname': 2,
+                'guard_level': 3,
+                'in_guard': 4,
+                'accompany_days': 5
+            };
+            const colIndex = columnMap[column];
+            if (colIndex === undefined) return;
+
+            // Sort rows
+            rows.sort((a, b) => {
+                let aVal = a.getElementsByTagName('td')[colIndex].textContent.trim();
+                let bVal = b.getElementsByTagName('td')[colIndex].textContent.trim();
+
+                // Handle different column types
+                if (column === 'uid') {
+                    // Numeric sorting for UID
+                    aVal = parseInt(aVal) || 0;
+                    bVal = parseInt(bVal) || 0;
+                } else if (column === 'guard_level') {
+                    // Custom ordering for guard_level
+                    const levelOrder = { '总督': 0, '提督': 1, '舰长': 2 };
+                    aVal = levelOrder[aVal] !== undefined ? levelOrder[aVal] : 99;
+                    bVal = levelOrder[bVal] !== undefined ? levelOrder[bVal] : 99;
+                } else if (column === 'in_guard') {
+                    // Custom ordering for in_guard (在舰 > 不在舰)
+                    const statusOrder = { '在舰': 0, '不在舰': 1 };
+                    aVal = statusOrder[aVal] !== undefined ? statusOrder[aVal] : 99;
+                    bVal = statusOrder[bVal] !== undefined ? statusOrder[bVal] : 99;
+                } else if (column === 'accompany_days') {
+                    // Numeric sorting for accompany_days
+                    aVal = parseInt(aVal) || 0;
+                    bVal = parseInt(bVal) || 0;
+                }
+                // For nickname, use string comparison
+
+                if (aVal < bVal) return direction === 'asc' ? -1 : 1;
+                if (aVal > bVal) return direction === 'asc' ? 1 : -1;
+                return 0;
+            });
+
+            // Re-append sorted rows
+            rows.forEach(row => tbody.appendChild(row));
+        }
+
+        // Add click handlers to sortable headers
+        document.addEventListener('DOMContentLoaded', function() {
+            const headers = document.querySelectorAll('th.sortable');
+            headers.forEach(header => {
+                header.addEventListener('click', function() {
+                    const column = this.getAttribute('data-sort');
+                    let direction = 'asc';
+
+                    if (currentSort.column === column) {
+                        direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+                    }
+
+                    // Update UI
+                    headers.forEach(h => {
+                        h.classList.remove('asc', 'desc');
+                    });
+                    this.classList.add(direction);
+
+                    // Sort
+                    currentSort = { column, direction };
+                    sortTable(column, direction);
+                });
+            });
+        });
+
+        function editCompanion(uid) {
+            // Fetch current companion data
+            const csrfToken = document.querySelector('input[name="csrf_token"]')?.value || '';
+
+            fetch(`/admin/companion/${uid}`, {
+                method: 'GET',
+                headers: {
+                    'X-CSRF-Token': csrfToken
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.guard) {
+                    // Populate edit modal with current data
+                    document.getElementById('editUid').value = data.guard.uid;
+                    document.getElementById('editNickname').value = data.guard.nickname;
+                    document.getElementById('editGuardLevel').value = data.guard.guard_level;
+                    document.getElementById('editInGuard').value = data.guard.in_guard ? 'true' : 'false';
+                    document.getElementById('editAccompanyDays').value = data.guard.accompany_days || 0;
+
+                    // Show edit modal
+                    document.getElementById('editModal').style.display = 'flex';
+                } else {
+                    alert('获取数据失败：' + (data.error || '未知错误'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('请求失败，请稍后重试');
+            });
+        }
+
+        function saveEditCompanion() {
+            const uid = document.getElementById('editUid').value.trim();
+            const nickname = document.getElementById('editNickname').value.trim();
+            const guardLevel = document.getElementById('editGuardLevel').value;
+            const inGuard = document.getElementById('editInGuard').value;
+            const accompanyDays = document.getElementById('editAccompanyDays').value.trim();
+
+            if (!uid) {
+                alert('UID不能为空！');
+                return;
+            }
+
+            if (!nickname) {
+                alert('昵称不能为空！');
+                return;
+            }
+
+            const csrfToken = document.querySelector('input[name="csrf_token"]')?.value || '';
+
+            fetch('/admin/companion/edit', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRF-Token': csrfToken
+                },
+                body: `uid=${encodeURIComponent(uid)}&nickname=${encodeURIComponent(nickname)}&guard_level=${encodeURIComponent(guardLevel)}&in_guard=${encodeURIComponent(inGuard)}&accompany_days=${encodeURIComponent(accompanyDays)}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('修改成功！');
+                    location.reload();
+                } else {
+                    alert('修改失败：' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('请求失败，请稍后重试');
+            });
+        }
+
+        function closeEditModal() {
+            document.getElementById('editModal').style.display = 'none';
+        }
+
+        function deleteCompanion(uid) {
+            if (!confirm(`确定要删除陪伴榜成员 ${uid} 吗？此操作不可恢复！`)) {
+                return;
+            }
+
+            const csrfToken = document.querySelector('input[name="csrf_token"]')?.value || '';
+
+            fetch('/admin/companion/delete', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRF-Token': csrfToken
+                },
+                body: `uid=${encodeURIComponent(uid)}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('删除成功！');
+                    location.reload();
+                } else {
+                    alert('删除失败：' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('请求失败，请稍后重试');
+            });
+        }
+
+        function openAddModal() {
+            document.getElementById('addModal').style.display = 'flex';
+        }
+
+        function closeAddModal() {
+            document.getElementById('addModal').style.display = 'none';
+        }
+
+        function addCompanion() {
+            const uid = document.getElementById('newUid').value.trim();
+            const nickname = document.getElementById('newNickname').value.trim();
+            const guardLevel = document.getElementById('newGuardLevel').value;
+            const inGuard = document.getElementById('newInGuard').value;
+            const accompanyDays = document.getElementById('newAccompanyDays').value;
+
+            if (!uid) {
+                alert('请输入UID！');
+                return;
+            }
+
+            if (!nickname) {
+                alert('请输入昵称！');
+                return;
+            }
+
+            const csrfToken = document.querySelector('input[name="csrf_token"]')?.value || '';
+
+            fetch('/admin/companion/add', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRF-Token': csrfToken
+                },
+                body: `uid=${encodeURIComponent(uid)}&nickname=${encodeURIComponent(nickname)}&guard_level=${encodeURIComponent(guardLevel)}&in_guard=${encodeURIComponent(inGuard)}&accompany_days=${encodeURIComponent(accompanyDays)}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('新增成功！');
+                    location.reload();
+                } else {
+                    alert('新增失败：' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('请求失败，请稍后重试');
+            });
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const addModal = document.getElementById('addModal');
+            const editModal = document.getElementById('editModal');
+            const importModal = document.getElementById('importModal');
+            if (event.target === addModal) {
+                closeAddModal();
+            }
+            if (event.target === editModal) {
+                closeEditModal();
+            }
+            if (event.target === importModal) {
+                closeImportModal();
+            }
+        }
+
+        // Import CSV functions
+        function openImportModal(type) {
+            document.getElementById('importModal').style.display = 'flex';
+        }
+
+        function closeImportModal() {
+            document.getElementById('importModal').style.display = 'none';
+            document.getElementById('csvFile').value = '';
+        }
+
+        function importCSV(type) {
+            const fileInput = document.getElementById('csvFile');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert('请选择CSV文件！');
+                return;
+            }
+
+            const csrfToken = document.querySelector('input[name="csrf_token"]')?.value || '';
+
+            const formData = new FormData();
+            formData.append('csv_file', file);
+
+            fetch(`/admin/import/csv?type=${type}`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-Token': csrfToken
+                },
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(`导入成功！\n新增: ${data.added} 条\n更新: ${data.updated} 条\n跳过: ${data.skipped} 条`);
+                    location.reload();
+                } else {
+                    alert('导入失败：' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('请求失败，请稍后重试');
+            });
+        }
+    </script>
+</body>
+</html>
