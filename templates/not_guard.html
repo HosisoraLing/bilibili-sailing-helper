@@ -4,167 +4,44 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>你还不是舰长</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="/static/fonts/fonts.css">
+    <link rel="stylesheet" href="/static/css/common.css">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: "MiSans", -apple-system, BlinkMacSystemFont, "Segoe UI",
-                         Roboto, "Helvetica Neue", Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-
         .container {
-            background: white;
-            width: 100%;
-            max-width: 480px;
-            border-radius: 20px;
             padding: 40px 30px;
             text-align: center;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .container::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 6px;
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
         }
 
         .icon {
             font-size: 60px;
             margin-bottom: 15px;
-            animation: pulse 2s ease-in-out infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.05); }
+            animation: pulseScale 2s ease-in-out infinite;
         }
 
         h1 {
             font-size: 22px;
-            color: #2c3e50;
+            color: var(--text-primary);
             margin-bottom: 10px;
             font-weight: 700;
         }
 
         .message {
             font-size: 15px;
-            color: #7f8c8d;
+            color: var(--text-secondary);
             margin: 15px 0 25px 0;
             line-height: 1.6;
         }
 
         .uid {
             font-weight: 600;
-            color: #667eea;
-        }
-
-        .highlight {
-            background: #fff3cd;
-            padding: 12px;
-            border-radius: 8px;
-            border-left: 4px solid #ffc107;
-            margin: 15px 0;
-            text-align: left;
-            font-size: 14px;
-            color: #856404;
-        }
-
-        .actions {
-            display: flex;
-            gap: 12px;
-            justify-content: center;
-            margin-top: 20px;
-        }
-
-        .btn {
-            padding: 14px 24px;
-            border-radius: 10px;
-            text-decoration: none;
-            font-weight: 600;
-            font-size: 15px;
-            transition: all 0.3s ease;
-            cursor: pointer;
-            border: none;
-            display: inline-block;
-            flex: 1;
-            max-width: 200px;
-        }
-
-        .btn-live {
-            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
-            color: #333;
-            box-shadow: 0 4px 12px rgba(250, 112, 154, 0.3);
-        }
-
-        .btn-live:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(250, 112, 154, 0.4);
-        }
-
-        .btn-home {
-            background: transparent;
-            color: #999;
-            border: 1px solid #e5e5e5;
-            margin-top: 15px;
-            font-size: 13px;
-            padding: 10px;
-            max-width: 100%;
-        }
-
-        .btn-home:hover {
-            background: #f5f5f5;
-            color: #666;
-        }
-
-        /* 移动端适配 */
-        @media (max-width: 600px) {
-            .container {
-                padding: 30px 20px;
-                border-radius: 16px;
-            }
-
-            .icon {
-                font-size: 50px;
-            }
-
-            h1 {
-                font-size: 19px;
-            }
-
-            .message {
-                font-size: 14px;
-            }
-
-            .actions {
-                flex-direction: column;
-            }
-
-            .btn {
-                max-width: 100%;
-            }
+            color: var(--primary);
         }
     </style>
 </head>
 <body>
 
-<div class="container">
+<div class="container animate-slideUp">
     <div class="icon">🚫</div>
 
     <h1>你还不是舰长</h1>
@@ -174,38 +51,21 @@
         当前不在舰长名单中，暂时无法填写收货地址。
     </p>
 
-    <div class="highlight">
+    <div class="highlight-box mb-20">
         如果你支持 {{ config.ANCHOR_NICKNAME }}，<br>
         欢迎前往直播间上舰后再回来填写～
     </div>
 
     <div class="actions">
-        <a
-            href="{{ config.ANCHOR_LIVE_URL }}"
-            target="_blank"
-            class="btn btn-live">
+        <a href="{{ config.ANCHOR_LIVE_URL }}" target="_blank" class="btn btn-gradient">
             🚢 前往 {{ config.ANCHOR_NICKNAME }} 的直播间
         </a>
     </div>
 
-    <a href="/" class="btn btn-home">
-        返回首页（重新输入 UID）
+    <a href="/" class="btn btn-ghost btn-block btn-sm mt-20">
+        <i class="fas fa-arrow-left"></i> 返回首页（重新输入 UID）
     </a>
 </div>
-
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const container = document.querySelector('.container');
-        container.style.opacity = '0';
-        container.style.transform = 'translateY(20px)';
-
-        setTimeout(() => {
-            container.style.transition = 'all 0.5s ease';
-            container.style.opacity = '1';
-            container.style.transform = 'translateY(0)';
-        }, 100);
-    });
-</script>
 
 </body>
 </html>

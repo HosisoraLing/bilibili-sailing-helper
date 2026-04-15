@@ -2,12 +2,12 @@
 路由模块
 包含所有 Flask 路由定义
 """
-from datetime import datetime, date
+from datetime import date
 from flask import (
     Blueprint, request, render_template, redirect,
-    url_for, jsonify, flash, session, Response
+    url_for, jsonify, flash, session
 )
-from flask_login import login_user, login_required, current_user, logout_user
+from flask_login import login_user, current_user, logout_user
 
 from db.models import db, User, Address, Guard, GuardGiftRecord, get_beijing_now
 from services.address_service import save_address, get_user_address
@@ -17,17 +17,26 @@ from services.auth_service import (
     get_cached_code,
 )
 from services.security import (
-    SecurityManager,
     RequestValidator,
-    PasswordValidator,
     auth_limiter,
 )
 from services.user_service import UserService
 from services.admin_service import AdminService
 from services.guard_gift_service import GuardGiftService
-from services.guard_service import fetch_guards, GUARD_LEVEL_NAME_MAP
-from utils.request_utils import get_uid_from_request, is_json_request
+from services.guard_service import GUARD_LEVEL_NAME_MAP
+from utils.request_utils import get_uid_from_request
 from utils.csv_utils import create_csv_response
+from utils.cache_utils import (
+    invalidate_cache,
+    user_cache,
+    guard_cache,
+    address_cache,
+)
+from decorators import (
+    require_login,
+    require_guard_or_admin,
+    require_admin,
+)
 
 
 # 创建蓝图
@@ -35,77 +44,6 @@ main_bp = Blueprint('main', __name__)
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
 
-# =========================
-# 工具装饰器
-# =========================
-
-def require_login(f):
-    """
-    装饰器：要求用户必须登录
-    未登录用户重定向到首页
-    """
-    from functools import wraps
-
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if not current_user.is_authenticated:
-            uid = get_uid_from_request()
-            if uid:
-                return redirect(url_for('main.login', uid=uid))
-            return redirect(url_for('main.index'))
-        return f(*args, **kwargs)
-    return decorated_function
-
-
-def require_guard_or_admin(f):
-    """
-    装饰器：要求用户必须是陪伴榜用户或管理员
-    非陪伴榜用户重定向到非陪伴榜页面
-    """
-    from functools import wraps
-
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if not current_user.is_authenticated:
-            return redirect(url_for('main.index'))
-
-        uid = str(current_user.uid)
-        is_valid, error_msg = UserService.validate_user_access(uid)
-        if not is_valid:
-            return render_template('not_guard.html', uid=uid), 403
-
-        return f(*args, **kwargs)
-    return decorated_function
-
-
-def validate_sensitive_request(f):
-    """验证敏感操作请求的装饰器"""
-    from functools import wraps
-
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        # 验证CSRF Token（POST请求）
-        if request.method == 'POST':
-            csrf_token = request.form.get('csrf_token') or request.headers.get('X-CSRF-Token')
-            if not csrf_token or not SecurityManager.verify_csrf_token(csrf_token):
-                if is_json_request():
-                    return jsonify({'error': 'CSRF token invalid or missing'}), 403
-                flash('安全验证失败，请刷新页面重试', 'error')
-                return redirect(request.referrer or url_for('main.index'))
-
-        # 验证敏感操作Token（高敏感操作必须验证）
-        is_valid, error_msg = RequestValidator.validate_sensitive_request()
-        if not is_valid:
-            if is_json_request():
-                return jsonify({'error': error_msg}), 403
-            flash(error_msg or '安全验证失败', 'error')
-            return redirect(request.referrer or url_for('main.index'))
-
-        return f(*args, **kwargs)
-    return decorated_function
-
-
-# =========================
 # 主路由
 # =========================
 
@@ -604,12 +542,8 @@ def submit():
 # =========================
 
 @admin_bp.route('/panel')
-@login_required
+@require_admin
 def admin_panel():
-    # Verify admin UID
-    if not current_user.is_admin():
-        return render_template('not_admin.html', uid=current_user.uid), 403
-
     # 速率限制检查
     is_allowed, wait_time = AdminService.check_admin_rate_limit(current_user.uid, "admin_panel")
     if not is_allowed:
@@ -633,11 +567,8 @@ def admin_panel():
 # =========================
 
 @admin_bp.route('/add-address', methods=['GET', 'POST'])
-@login_required
+@require_admin
 def admin_add_address():
-    # Verify admin UID
-    if not current_user.is_admin():
-        return render_template('not_admin.html', uid=current_user.uid), 403
 
     if request.method == 'POST':
         # 验证CSRF Token
@@ -697,11 +628,8 @@ def admin_add_address():
 # =========================
 
 @admin_bp.route('/edit-address/<int:address_id>', methods=['GET', 'POST'])
-@login_required
+@require_admin
 def admin_edit_address(address_id):
-    # Verify admin UID
-    if not current_user.is_admin():
-        return render_template('not_admin.html', uid=current_user.uid), 403
 
     address = AdminService.get_address_by_id(address_id)
     if not address:
@@ -767,11 +695,8 @@ def admin_edit_address(address_id):
 # =========================
 
 @admin_bp.route('/delete-address/<int:address_id>', methods=['POST'])
-@login_required
+@require_admin
 def admin_delete_address(address_id):
-    # Verify admin UID
-    if not current_user.is_admin():
-        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
 
     # 验证CSRF Token
     csrf_token = request.form.get('csrf_token') or request.headers.get('X-CSRF-Token')
@@ -794,11 +719,8 @@ def admin_delete_address(address_id):
 # =========================
 
 @admin_bp.route('/export/csv')
-@login_required
+@require_admin
 def admin_export_csv():
-    # Verify admin UID
-    if not current_user.is_admin():
-        return 'Unauthorized', 403
 
     # Get month parameter
     month = request.args.get('month')
@@ -830,11 +752,8 @@ def admin_export_csv():
 # =========================
 
 @admin_bp.route('/guards/<uid>', methods=['GET'])
-@login_required
+@require_admin
 def admin_guard_get(uid):
-    # Verify admin UID
-    if not current_user.is_admin():
-        return jsonify({'error': 'Unauthorized'}), 403
 
     # 验证CSRF Token
     csrf_token = request.headers.get('X-CSRF-Token')
@@ -863,11 +782,8 @@ def admin_guard_get(uid):
 # =========================
 
 @admin_bp.route('/guards')
-@login_required
+@require_admin
 def admin_guards():
-    # Verify admin UID
-    if not current_user.is_admin():
-        return render_template('not_admin.html', uid=current_user.uid), 403
 
     # Get filter parameter from query string
     status_filter = request.args.get('status', 'all')
@@ -907,11 +823,8 @@ def admin_guards():
 # =========================
 
 @admin_bp.route('/guards/edit', methods=['POST'])
-@login_required
+@require_admin
 def admin_guard_edit():
-    # Verify admin UID
-    if not current_user.is_admin():
-        return jsonify({'error': 'Unauthorized'}), 403
 
     # 验证CSRF Token
     csrf_token = request.form.get('csrf_token') or request.headers.get('X-CSRF-Token')
@@ -940,10 +853,19 @@ def admin_guard_edit():
     if in_guard is not None:
         guard.in_guard = in_guard.lower() == 'true'
     if accompany_days is not None:
-        guard.accompany_days = int(accompany_days)
+        try:
+            guard.accompany_days = int(accompany_days)
+        except (ValueError, TypeError):
+            guard.accompany_days = 0
 
     guard.updated_at = get_beijing_now()
     db.session.commit()
+
+    # 清除相关缓存
+    guard_cache.clear_pattern(f"guard:{uid}")
+    guard_cache.clear_pattern(f"guard_info:{uid}")
+    if nickname:
+        guard_cache.clear_pattern(f"guard_nickname:{uid}")
 
     return jsonify({'success': True, 'message': 'Guard updated'})
 
@@ -953,11 +875,8 @@ def admin_guard_edit():
 # =========================
 
 @admin_bp.route('/guards/delete', methods=['POST'])
-@login_required
+@require_admin
 def admin_guard_delete():
-    # Verify admin UID
-    if not current_user.is_admin():
-        return jsonify({'error': 'Unauthorized'}), 403
 
     # 验证CSRF Token
     csrf_token = request.form.get('csrf_token') or request.headers.get('X-CSRF-Token')
@@ -978,6 +897,11 @@ def admin_guard_delete():
     db.session.delete(guard)
     db.session.commit()
 
+    # 清除相关缓存
+    guard_cache.clear_pattern(f"guard:{uid}")
+    guard_cache.clear_pattern(f"guard_info:{uid}")
+    guard_cache.clear_pattern(f"guard_nickname:{uid}")
+
     return jsonify({'success': True, 'message': 'Guard deleted'})
 
 
@@ -986,11 +910,8 @@ def admin_guard_delete():
 # =========================
 
 @admin_bp.route('/guards/add', methods=['POST'])
-@login_required
+@require_admin
 def admin_guard_add():
-    # Verify admin UID
-    if not current_user.is_admin():
-        return jsonify({'error': 'Unauthorized'}), 403
 
     # 验证CSRF Token
     csrf_token = request.form.get('csrf_token') or request.headers.get('X-CSRF-Token')
@@ -1026,6 +947,10 @@ def admin_guard_add():
     db.session.add(new_guard)
     db.session.commit()
 
+    # 清除 API 缓存（因为舰长列表已变更）
+    from utils.cache_utils import api_response_cache
+    api_response_cache.clear_pattern(f"guards:")
+
     return jsonify({'success': True, 'message': 'Guard added'})
 
 
@@ -1034,11 +959,8 @@ def admin_guard_add():
 # =========================
 
 @admin_bp.route('/export/guards')
-@login_required
+@require_admin
 def admin_export_guards():
-    # Verify admin UID
-    if not current_user.is_admin():
-        return 'Unauthorized', 403
 
     # Get filter parameter from query string
     status_filter = request.args.get('status', 'all')
@@ -1064,11 +986,8 @@ def admin_export_guards():
 # =========================
 
 @admin_bp.route('/guard-gifts')
-@login_required
+@require_admin
 def admin_guard_gifts():
-    # Verify admin UID
-    if not current_user.is_admin():
-        return render_template('not_admin.html', uid=current_user.uid), 403
 
     # Get month parameter
     month = request.args.get('month')
@@ -1109,11 +1028,8 @@ def admin_guard_gifts():
 # =========================
 
 @admin_bp.route('/export/guard-gifts')
-@login_required
+@require_admin
 def admin_export_guard_gifts():
-    # Verify admin UID
-    if not current_user.is_admin():
-        return 'Unauthorized', 403
 
     # Get month parameter
     month = request.args.get('month')
@@ -1143,11 +1059,8 @@ def admin_export_guard_gifts():
 # =========================
 
 @admin_bp.route('/guard-gifts/<uid>/<month>', methods=['GET'])
-@login_required
+@require_admin
 def admin_guard_gift_get(uid, month):
-    # Verify admin UID
-    if not current_user.is_admin():
-        return jsonify({'error': 'Unauthorized'}), 403
 
     # 验证CSRF Token
     csrf_token = request.headers.get('X-CSRF-Token')
@@ -1177,11 +1090,8 @@ def admin_guard_gift_get(uid, month):
 # =========================
 
 @admin_bp.route('/guard-gifts/edit', methods=['POST'])
-@login_required
+@require_admin
 def admin_guard_gift_edit():
-    # Verify admin UID
-    if not current_user.is_admin():
-        return jsonify({'error': 'Unauthorized'}), 403
 
     # 验证CSRF Token
     csrf_token = request.form.get('csrf_token') or request.headers.get('X-CSRF-Token')
@@ -1209,7 +1119,10 @@ def admin_guard_gift_edit():
     if guard_level:
         record.guard_level = guard_level
     if accompany_days is not None:
-        record.accompany_days = int(accompany_days)
+        try:
+            record.accompany_days = int(accompany_days)
+        except (ValueError, TypeError):
+            record.accompany_days = 0
     if received is not None:
         record.received = received.lower() == 'true'
         if record.received:
@@ -1228,11 +1141,8 @@ def admin_guard_gift_edit():
 # =========================
 
 @admin_bp.route('/guard-gifts/delete', methods=['POST'])
-@login_required
+@require_admin
 def admin_guard_gift_delete():
-    # Verify admin UID
-    if not current_user.is_admin():
-        return jsonify({'error': 'Unauthorized'}), 403
 
     # 验证CSRF Token
     csrf_token = request.form.get('csrf_token') or request.headers.get('X-CSRF-Token')
@@ -1262,11 +1172,8 @@ def admin_guard_gift_delete():
 # =========================
 
 @admin_bp.route('/guard-gifts/add', methods=['POST'])
-@login_required
+@require_admin
 def admin_guard_gift_add():
-    # Verify admin UID
-    if not current_user.is_admin():
-        return jsonify({'error': 'Unauthorized'}), 403
 
     # 验证CSRF Token
     csrf_token = request.form.get('csrf_token') or request.headers.get('X-CSRF-Token')
@@ -1299,7 +1206,7 @@ def admin_guard_gift_add():
         nickname=nickname,
         guard_level=guard_level,
         month=month,
-        accompany_days=int(accompany_days),
+        accompany_days=int(accompany_days) if accompany_days else 0,
         received=False,
         created_at=get_beijing_now(),
         updated_at=get_beijing_now()
@@ -1316,11 +1223,8 @@ def admin_guard_gift_add():
 # =========================
 
 @admin_bp.route('/guard-gifts/receive', methods=['POST'])
-@login_required
+@require_admin
 def admin_guard_gift_receive():
-    # Verify admin UID
-    if not current_user.is_admin():
-        return jsonify({'error': 'Unauthorized'}), 403
 
     # 验证CSRF Token
     csrf_token = request.form.get('csrf_token') or request.headers.get('X-CSRF-Token')
@@ -1347,11 +1251,8 @@ def admin_guard_gift_receive():
 # =========================
 
 @admin_bp.route('/guard-gifts/unreceive', methods=['POST'])
-@login_required
+@require_admin
 def admin_guard_gift_unreceive():
-    # Verify admin UID
-    if not current_user.is_admin():
-        return jsonify({'error': 'Unauthorized'}), 403
 
     # 验证CSRF Token
     csrf_token = request.form.get('csrf_token') or request.headers.get('X-CSRF-Token')
@@ -1383,11 +1284,8 @@ def admin_guard_gift_unreceive():
 # =========================
 
 @admin_bp.route('/calculate-gifts', methods=['POST'])
-@login_required
+@require_admin
 def admin_calculate_gifts():
-    # Verify admin UID
-    if not current_user.is_admin():
-        return jsonify({'error': 'Unauthorized'}), 403
 
     # 验证CSRF Token
     csrf_token = request.form.get('csrf_token') or request.headers.get('X-CSRF-Token')
@@ -1408,11 +1306,8 @@ def admin_calculate_gifts():
 # =========================
 
 @admin_bp.route('/companion/<uid>', methods=['GET'])
-@login_required
+@require_admin
 def admin_companion_get(uid):
-    # Verify admin UID
-    if not current_user.is_admin():
-        return jsonify({'error': 'Unauthorized'}), 403
 
     # 验证CSRF Token
     csrf_token = request.headers.get('X-CSRF-Token')
@@ -1441,11 +1336,8 @@ def admin_companion_get(uid):
 # =========================
 
 @admin_bp.route('/companion/edit', methods=['POST'])
-@login_required
+@require_admin
 def admin_companion_edit():
-    # Verify admin UID
-    if not current_user.is_admin():
-        return jsonify({'error': 'Unauthorized'}), 403
 
     # 验证CSRF Token
     csrf_token = request.form.get('csrf_token') or request.headers.get('X-CSRF-Token')
@@ -1474,10 +1366,19 @@ def admin_companion_edit():
     if in_guard is not None:
         guard.in_guard = in_guard.lower() == 'true'
     if accompany_days is not None:
-        guard.accompany_days = int(accompany_days)
+        try:
+            guard.accompany_days = int(accompany_days)
+        except (ValueError, TypeError):
+            guard.accompany_days = 0
 
     guard.updated_at = get_beijing_now()
     db.session.commit()
+
+    # 清除相关缓存
+    guard_cache.clear_pattern(f"guard:{uid}")
+    guard_cache.clear_pattern(f"guard_info:{uid}")
+    if nickname:
+        guard_cache.clear_pattern(f"guard_nickname:{uid}")
 
     return jsonify({'success': True, 'message': 'Guard updated'})
 
@@ -1487,11 +1388,8 @@ def admin_companion_edit():
 # =========================
 
 @admin_bp.route('/companion/delete', methods=['POST'])
-@login_required
+@require_admin
 def admin_companion_delete():
-    # Verify admin UID
-    if not current_user.is_admin():
-        return jsonify({'error': 'Unauthorized'}), 403
 
     # 验证CSRF Token
     csrf_token = request.form.get('csrf_token') or request.headers.get('X-CSRF-Token')
@@ -1512,6 +1410,11 @@ def admin_companion_delete():
     db.session.delete(guard)
     db.session.commit()
 
+    # 清除相关缓存
+    guard_cache.clear_pattern(f"guard:{uid}")
+    guard_cache.clear_pattern(f"guard_info:{uid}")
+    guard_cache.clear_pattern(f"guard_nickname:{uid}")
+
     return jsonify({'success': True, 'message': 'Guard deleted'})
 
 
@@ -1520,11 +1423,8 @@ def admin_companion_delete():
 # =========================
 
 @admin_bp.route('/companion/add', methods=['POST'])
-@login_required
+@require_admin
 def admin_companion_add():
-    # Verify admin UID
-    if not current_user.is_admin():
-        return jsonify({'error': 'Unauthorized'}), 403
 
     # 验证CSRF Token
     csrf_token = request.form.get('csrf_token') or request.headers.get('X-CSRF-Token')
@@ -1554,13 +1454,17 @@ def admin_companion_add():
         nickname=nickname,
         guard_level=guard_level,
         in_guard=in_guard.lower() == 'true',
-        accompany_days=int(accompany_days),
+        accompany_days=int(accompany_days) if accompany_days else 0,
         last_guard_date=date.today(),
         updated_at=get_beijing_now()
     )
 
     db.session.add(new_guard)
     db.session.commit()
+
+    # 清除 API 缓存（因为舰长列表已变更）
+    from utils.cache_utils import api_response_cache
+    api_response_cache.clear_pattern(f"guards:")
 
     return jsonify({'success': True, 'message': 'Guard added'})
 
@@ -1570,11 +1474,8 @@ def admin_companion_add():
 # =========================
 
 @admin_bp.route('/companion-ranking')
-@login_required
+@require_admin
 def admin_companion_ranking():
-    # Verify admin UID
-    if not current_user.is_admin():
-        return render_template('not_admin.html', uid=current_user.uid), 403
 
     # 速率限制检查
     is_allowed, wait_time = AdminService.check_admin_rate_limit(current_user.uid, "companion_ranking")
@@ -1636,11 +1537,8 @@ def admin_companion_ranking():
 # =========================
 
 @admin_bp.route('/export/companion-ranking')
-@login_required
+@require_admin
 def admin_export_companion_ranking():
-    # Verify admin UID
-    if not current_user.is_admin():
-        return 'Unauthorized', 403
 
     # Get rank_type parameter (kept for compatibility, but not used for guards)
     rank_type = request.args.get('rank_type', 1, type=int)
@@ -1736,17 +1634,13 @@ def generate_companion_ranking_csv(items: list, rank_type: int) -> str:
 # =========================
 
 @admin_bp.route('/import/csv', methods=['POST'])
-@login_required
+@require_admin
 def admin_import_csv():
     """导入CSV数据到数据库"""
     import csv
     from io import StringIO
     from datetime import date
     from db.models import get_beijing_now
-
-    # Verify admin UID
-    if not current_user.is_admin():
-        return jsonify({'error': 'Unauthorized'}), 403
 
     # 验证CSRF Token
     csrf_token = request.headers.get('X-CSRF-Token')

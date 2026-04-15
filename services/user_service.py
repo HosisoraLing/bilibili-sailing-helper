@@ -12,6 +12,7 @@ from services.security import (
     login_limiter,
 )
 from services.auth_service import get_active_auth_session
+from utils.cache_utils import user_cache, guard_cache, cached
 
 
 class UserService:
@@ -23,6 +24,7 @@ class UserService:
         return uid in Config.ADMIN_UIDS
 
     @staticmethod
+    @cached(guard_cache, "guard_nickname", ttl=300)
     def get_guard_nickname(uid: str) -> Optional[str]:
         """获取舰长昵称，如果不是舰长返回 None"""
         guard = Guard.query.filter_by(uid=uid).first()
@@ -35,9 +37,18 @@ class UserService:
         返回: (user, created) - 用户对象和是否为新创建
         """
         uid = str(uid)
+
+        # 尝试从缓存获取
+        cache_key = f"user:{uid}"
+        cached_user = user_cache.get(cache_key)
+        if cached_user:
+            return cached_user, False
+
         user = User.query.filter_by(uid=uid).first()
 
         if user:
+            # 缓存用户对象
+            user_cache.set(cache_key, user, ttl=300)
             return user, False
 
         # 获取舰长信息用于昵称
@@ -52,7 +63,16 @@ class UserService:
         db.session.add(user)
         db.session.commit()
 
+        # 缓存新创建的用户
+        user_cache.set(cache_key, user, ttl=300)
+
         return user, True
+
+    @staticmethod
+    def invalidate_user_cache(uid: str):
+        """清除用户缓存"""
+        user_cache.delete(f"user:{uid}")
+        guard_cache.delete(f"guard_nickname:{uid}")
 
     @staticmethod
     def validate_user_access(uid: str) -> Tuple[bool, Optional[str]]:
@@ -82,16 +102,23 @@ class UserService:
         """
         uid = str(uid)
 
-        # 1. 先检查本地Guard表（手动添加的舰长记录）
+        # 1. 先检查本地Guard表（手动添加的舰长记录）- 使用缓存
+        cache_key = f"guard:{uid}"
+        cached_guard = guard_cache.get(cache_key)
+        if cached_guard:
+            return True
+
         guard = Guard.query.filter_by(uid=uid).first()
         if guard:
+            # 缓存舰长信息
+            guard_cache.set(cache_key, guard, ttl=300)
             return True
 
         # 2. 再检查B站API实时数据
         try:
             from services.guard_service import fetch_guards
 
-            # 获取舰长/陪伴榜用户列表
+            # 获取舰长/陪伴榜用户列表 - 使用缓存版本
             guards_data = fetch_guards()
 
             # 检查UID是否在舰长列表中
@@ -111,7 +138,15 @@ class UserService:
         返回: (has_password, message) - 是否已设置密码，需要跳转的提示信息
         """
         uid = str(uid)
-        user = User.query.filter_by(uid=uid).first()
+
+        # 尝试从缓存获取
+        cache_key = f"user:{uid}"
+        user = user_cache.get(cache_key)
+
+        if not user:
+            user = User.query.filter_by(uid=uid).first()
+            if user:
+                user_cache.set(cache_key, user, ttl=300)
 
         if not user or not user.password_hash:
             return False, "您还没有设置密码，请先注册账号"
@@ -186,6 +221,8 @@ class UserService:
         """设置用户密码"""
         user.set_password(password)
         db.session.commit()
+        # 清除用户缓存
+        UserService.invalidate_user_cache(user.uid)
 
     @staticmethod
     def clear_session():

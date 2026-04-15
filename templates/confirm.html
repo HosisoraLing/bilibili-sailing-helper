@@ -4,195 +4,54 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>地址确认</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="/static/fonts/fonts.css">
+    <link rel="stylesheet" href="/static/css/common.css">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: "MiSans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-
         .container {
-            background: white;
-            width: 100%;
-            max-width: 480px;
-            border-radius: 20px;
             padding: 40px 30px;
             text-align: center;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .container::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 6px;
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
         }
 
         .icon {
             font-size: 60px;
             margin-bottom: 15px;
-            animation: pulse 2s ease-in-out infinite;
-            color: #667eea; /* 添加颜色确保可见 */
-        }
-
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.05); }
+            animation: pulseScale 2s ease-in-out infinite;
         }
 
         h1 {
             font-size: 22px;
-            color: #2c3e50;
+            color: var(--text-primary);
             margin-bottom: 10px;
             font-weight: 700;
         }
 
-        .nickname {
-            color: #667eea;
-            font-weight: 600;
-        }
-
         .message {
             font-size: 15px;
-            color: #7f8c8d;
+            color: var(--text-secondary);
             margin: 15px 0 25px 0;
             line-height: 1.6;
         }
 
-        .highlight {
-            background: #fff3cd;
-            padding: 12px;
-            border-radius: 8px;
-            border-left: 4px solid #ffc107;
-            margin: 15px 0;
-            text-align: left;
-            font-size: 14px;
-            color: #856404;
-        }
-
-        .actions {
-            display: flex;
-            gap: 12px;
-            justify-content: center;
-            margin-top: 20px;
-        }
-
-        .btn {
-            padding: 14px 24px;
-            border-radius: 10px;
-            text-decoration: none;
+        .nickname {
+            color: var(--primary);
             font-weight: 600;
-            font-size: 15px;
-            transition: all 0.3s ease;
-            cursor: pointer;
-            border: none;
-            display: inline-block;
-            flex: 1;
-            max-width: 200px;
         }
 
-        .btn-update {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        .btn-admin {
+            margin-top: 10px;
+            background: var(--primary);
             color: white;
-            box-shadow: 0 4px 12px rgba(245, 87, 108, 0.3);
+            border: none;
         }
 
-        .btn-update:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(245, 87, 108, 0.4);
-        }
-
-        .btn-live {
-            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
-            color: #333;
-            box-shadow: 0 4px 12px rgba(250, 112, 154, 0.3);
-        }
-
-        .btn-live:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(250, 112, 154, 0.4);
-        }
-
-        .btn-logout {
-            background: transparent;
-            color: #999;
-            border: 1px solid #e5e5e5;
-            margin-top: 15px;
-            flex: 1;
-            max-width: 100%;
-            font-size: 13px;
-            padding: 10px;
-        }
-
-        .btn-logout:hover {
-            background: #f5f5f5;
-            color: #666;
-        }
-
-        .info-box {
-            background: #e3f2fd;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 15px 0;
-            text-align: left;
-            font-size: 13px;
-            color: #555;
-        }
-
-        .info-box strong {
-            color: #0066cc;
-            display: block;
-            margin-bottom: 5px;
-        }
-
-        /* 移动端适配 */
-        @media (max-width: 600px) {
-            .container {
-                padding: 30px 20px;
-                border-radius: 16px;
-            }
-
-            .icon {
-                font-size: 50px;
-            }
-
-            h1 {
-                font-size: 19px;
-            }
-
-            .message {
-                font-size: 14px;
-            }
-
-            .actions {
-                flex-direction: column;
-            }
-
-            .btn {
-                max-width: 100%;
-            }
+        .btn-admin:hover {
+            box-shadow: var(--shadow-primary-hover);
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- 使用文字图标替代emoji，确保兼容性 -->
+    <div class="container animate-slideUp">
         <div class="icon">📝</div>
 
         <h1>您已填写过地址</h1>
@@ -200,41 +59,36 @@
             舰长 <span class="nickname">{{ nickname }}</span>，您之前已经提交过收货信息
         </p>
 
-        <div class="highlight">
+        <div class="highlight-box mb-20">
             提示：您可以选择更新地址或前往小蝰直播间
         </div>
 
         <div class="actions">
-            <a href="/?force_form=1" class="btn btn-update">更新地址</a>
-            <a href="/view" class="btn btn-live">查看已提交信息</a>
+            <a href="/?force_form=1" class="btn btn-pink">
+                <i class="fas fa-edit"></i> 更新地址
+            </a>
+            <a href="/view" class="btn btn-gradient">
+                <i class="fas fa-eye"></i> 查看已提交信息
+            </a>
         </div>
 
-        <div class="info-box">
-            <strong>为什么要更新？</strong><br>
+        <div class="info-box mt-20">
+            <strong>为什么要更新？</strong>
             • 搬家或更换收货地址<br>
             • 修改收件人信息<br>
             • 核对之前的填写内容
         </div>
 
-        <a href="/logout" class="btn btn-logout">退出登录</a>
-        {% if current_user.uid|string in config.ADMIN_UIDS %}
-            <a href="/admin/panel" class="btn btn-logout" style="margin-top: 10px; background: #667eea; color: white; border: none;">管理员面板</a>
-        {% endif %}
+        <div class="mt-20">
+            <a href="/logout" class="btn btn-ghost btn-block btn-sm">
+                <i class="fas fa-sign-out-alt"></i> 退出登录
+            </a>
+            {% if current_user.uid|string in config.ADMIN_UIDS %}
+                <a href="/admin/panel" class="btn btn-primary btn-block btn-sm mt-10">
+                    <i class="fas fa-user-shield"></i> 管理员面板
+                </a>
+            {% endif %}
+        </div>
     </div>
-
-    <script>
-        // 页面加载动画
-        document.addEventListener('DOMContentLoaded', function() {
-            const container = document.querySelector('.container');
-            container.style.opacity = '0';
-            container.style.transform = 'translateY(20px)';
-
-            setTimeout(() => {
-                container.style.transition = 'all 0.5s ease';
-                container.style.opacity = '1';
-                container.style.transform = 'translateY(0)';
-            }, 100);
-        });
-    </script>
 </body>
 </html>

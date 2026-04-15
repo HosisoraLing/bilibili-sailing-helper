@@ -6,33 +6,35 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="/static/fonts/fonts.css">
+    <link rel="stylesheet" href="/static/css/common.css">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: "MiSans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-        }
-
         body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
+            align-items: flex-start;
             padding: 20px;
         }
 
         .container {
             max-width: 1200px;
             margin: 0 auto;
+            background: transparent;
+            box-shadow: none;
+            border-radius: 0;
+            overflow: visible;
+        }
+
+        .container::before {
+            display: none;
         }
 
         .header {
             background: white;
-            border-radius: 20px;
+            border-radius: var(--radius-xl);
             padding: 30px;
             margin-bottom: 20px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            box-shadow: var(--shadow-lg);
             position: relative;
             overflow: hidden;
+            animation: slideUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
         }
 
         .header::before {
@@ -41,8 +43,8 @@
             top: 0;
             left: 0;
             right: 0;
-            height: 6px;
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            height: 5px;
+            background: linear-gradient(90deg, var(--bg-start) 0%, var(--bg-end) 100%);
         }
 
         .header-top {
@@ -61,16 +63,7 @@
 
         .title h2 {
             font-size: 24px;
-            color: #2c3e50;
-            font-weight: 700;
-        }
-
-        .admin-badge {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 6px 16px;
-            border-radius: 20px;
-            font-size: 12px;
+            color: var(--text-primary);
             font-weight: 700;
         }
 
@@ -80,58 +73,18 @@
         }
 
         .uid-info strong {
-            color: #667eea;
+            color: var(--primary);
             font-weight: 700;
         }
 
-        .actions {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        .btn {
-            padding: 10px 18px;
-            border-radius: 8px;
-            text-decoration: none;
-            font-weight: 600;
-            font-size: 14px;
-            transition: all 0.3s ease;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
-        }
-
-        .btn-secondary {
-            background: #f1f5f9;
-            color: #4a5568;
-            border: 1px solid #e2e8f0;
-        }
-
-        .btn-secondary:hover {
-            background: #e2e8f0;
-            transform: translateY(-2px);
-        }
-
         .btn-logout {
-            background: #fee;
-            color: #e53e3e;
+            background: #fff5f5;
+            color: var(--error);
             border: 1px solid #fc8181;
         }
 
         .btn-logout:hover {
-            background: #fcc;
+            background: #fed7d7;
         }
 
         .btn-add {
@@ -198,17 +151,24 @@
 
         .stats {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 12px;
             margin-top: 20px;
         }
 
         .stat-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, var(--bg-start) 0%, var(--bg-end) 100%);
             color: white;
-            padding: 20px;
-            border-radius: 12px;
+            padding: 18px;
+            border-radius: var(--radius-md);
             text-align: center;
+            border-left: none;
+            transition: var(--transition);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
         }
 
         .stat-card.guard {
@@ -244,16 +204,17 @@
         .search-box input {
             flex: 1;
             padding: 10px 15px;
-            border: 2px solid #e2e8f0;
-            border-radius: 8px;
+            border: 2px solid var(--border-color);
+            border-radius: var(--radius-sm);
             font-size: 14px;
-            transition: all 0.3s ease;
+            transition: var(--transition);
+            font-family: var(--font-family);
         }
 
         .search-box input:focus {
             outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.12);
         }
 
         .search-box .btn {
@@ -293,10 +254,23 @@
 
         .table-container {
             background: white;
-            border-radius: 20px;
+            border-radius: var(--radius-xl);
             padding: 20px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            box-shadow: var(--shadow-lg);
             overflow-x: auto;
+            position: relative;
+            animation: slideUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
+        }
+
+        .table-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: linear-gradient(90deg, var(--bg-start) 0%, var(--bg-end) 100%);
+            border-radius: var(--radius-xl) var(--radius-xl) 0 0;
         }
 
         table {
@@ -306,7 +280,7 @@
         }
 
         thead {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, var(--bg-start) 0%, var(--bg-end) 100%);
             color: white;
         }
 
@@ -317,21 +291,16 @@
             white-space: nowrap;
         }
 
-        th:first-child {
-            border-top-left-radius: 8px;
-        }
-
-        th:last-child {
-            border-top-right-radius: 8px;
-        }
+        th:first-child { border-top-left-radius: var(--radius-sm); }
+        th:last-child { border-top-right-radius: var(--radius-sm); }
 
         tbody tr {
-            border-bottom: 1px solid #e2e8f0;
-            transition: background 0.2s ease;
+            border-bottom: 1px solid var(--border-color);
+            transition: var(--transition-fast);
         }
 
         tbody tr:hover {
-            background: #f8f9ff;
+            background: var(--bg-light);
         }
 
         td {
@@ -339,21 +308,10 @@
             color: #4a5568;
         }
 
-        .no-wrap {
-            white-space: nowrap;
-        }
-
-        .truncate {
-            max-width: 200px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
         .empty-state {
             text-align: center;
             padding: 40px;
-            color: #718096;
+            color: var(--text-secondary);
         }
 
         .empty-state i {
@@ -365,14 +323,15 @@
         .level-badge {
             display: inline-block;
             padding: 4px 10px;
-            border-radius: 12px;
+            border-radius: var(--radius-full);
             font-size: 12px;
             font-weight: 700;
+            transition: var(--transition-fast);
         }
 
         .level-guard {
             background: #ebf8ff;
-            color: #667eea;
+            color: var(--primary);
         }
 
         .level-captain {
@@ -382,25 +341,65 @@
 
         .level-admiral {
             background: #fff5f5;
-            color: #e53e3e;
+            color: var(--error);
         }
 
         .status-badge {
             display: inline-block;
             padding: 4px 10px;
-            border-radius: 12px;
+            border-radius: var(--radius-full);
             font-size: 12px;
             font-weight: 700;
         }
 
         .status-in-guard {
             background: #f0fff4;
-            color: #38a169;
+            color: var(--success);
         }
 
         .status-not-in-guard {
             background: #fff5f5;
-            color: #e53e3e;
+            color: var(--error);
+        }
+
+        .action-cell {
+            white-space: nowrap;
+            display: flex;
+            gap: 6px;
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            border-radius: var(--radius-xs);
+            font-size: 12px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: var(--transition);
+            font-family: var(--font-family);
+        }
+
+        .btn-small.btn-edit {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-small.btn-edit:hover {
+            background: #059669;
+            transform: translateY(-1px);
+        }
+
+        .btn-small.btn-delete {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-small.btn-delete:hover {
+            background: #dc2626;
+            transform: translateY(-1px);
         }
 
         .footer {
@@ -447,7 +446,7 @@
             <div class="header-top">
                 <div class="title">
                     <h2><i class="fas fa-users"></i> 舰长列表</h2>
-                    <span class="admin-badge">ADMIN</span>
+                    <span class="badge badge-primary">ADMIN</span>
                 </div>
                 <div class="uid-info">
                     管理员: <strong>{{ nickname }}</strong> ({{ uid }})

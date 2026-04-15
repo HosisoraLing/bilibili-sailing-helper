@@ -4,71 +4,17 @@
     <meta charset="UTF-8">
     <title>登录 - 舰长地址收集系统</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="/static/fonts/fonts.css">
+    <link rel="stylesheet" href="/static/css/common.css">
     <style>
-        :root {
-            --bg-start: #667eea;
-            --bg-end: #764ba2;
-            --primary: #667eea;
-            --primary-dark: #5a67d8;
-            --btn-start: #fa709a;
-            --btn-end: #fee140;
-            --text-primary: #2d3748;
-            --text-secondary: #718096;
-            --border-radius: 20px;
-            --shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            --transition: all 0.3s ease;
-            --error: #e53e3e;
-        }
-
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-
-        body {
-            font-family: "MiSans", 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-            background: linear-gradient(135deg, var(--bg-start) 0%, var(--bg-end) 100%);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-            color: var(--text-primary);
-        }
-
         .container {
             max-width: 420px;
-            width: 100%;
-            background: white;
-            border-radius: var(--border-radius);
-            box-shadow: var(--shadow);
-            overflow: hidden;
-            position: relative;
-            animation: slideUp 0.6s ease-out;
         }
 
-        @keyframes slideUp {
-            from { opacity: 0; transform: translateY(30px); }
-            to { opacity: 1; transform: translateY(0); }
+        .content {
+            padding: 32px;
         }
-
-        .header {
-            background: linear-gradient(135deg, var(--bg-start) 0%, var(--bg-end) 100%);
-            color: white;
-            padding: 35px 20px;
-            text-align: center;
-        }
-
-        .header i { font-size: 45px; margin-bottom: 12px; opacity: 0.9; }
-
-        .header h1 { font-size: 24px; font-weight: 700; }
-
-        .header .nickname {
-            font-size: 15px;
-            margin-top: 8px;
-            opacity: 0.95;
-        }
-
-        .content { padding: 32px; }
 
         .instruction {
             text-align: center;
@@ -78,98 +24,35 @@
             line-height: 1.6;
         }
 
-        .input-group {
-            margin-bottom: 20px;
-            position: relative;
-        }
-
-        .input-group i {
-            position: absolute;
-            left: 15px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--primary);
-        }
-
-        input {
-            width: 100%;
-            padding: 14px 14px 14px 45px;
-            border: 2px solid #edf2f7;
-            border-radius: 10px;
-            font-size: 16px;
-            transition: var(--transition);
-        }
-
-        input:focus {
-            outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-
-        .btn {
-            width: 100%;
-            padding: 16px;
-            background: linear-gradient(135deg, var(--btn-start) 0%, var(--btn-end) 100%);
-            color: #333;
-            border: none;
-            border-radius: 12px;
-            font-size: 17px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: var(--transition);
-            box-shadow: 0 8px 20px rgba(250, 112, 154, 0.3);
-        }
-
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 12px 25px rgba(250, 112, 154, 0.4);
-        }
-
-        .alert {
-            padding: 12px 16px;
-            border-radius: 8px;
-            margin-bottom: 20px;
+        .divider {
+            margin: 22px 0;
+            text-align: center;
+            color: var(--text-muted);
             font-size: 14px;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 12px;
         }
 
-        .alert.error {
-            background: #fff5f5;
-            color: var(--error);
-            border: 1px solid #fc8181;
-        }
-
-        .alert.info {
-            background: #ebf8ff;
-            color: #2b6cb0;
-            border: 1px solid #90cdf4;
-        }
-
-        .footer-note {
-            margin-top: 25px;
-            text-align: center;
-            font-size: 13px;
-            color: var(--text-secondary);
-        }
-
-        .footer-note a {
-            color: var(--primary);
-            text-decoration: none;
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border-color);
         }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <div class="header">
-        <i class="fas fa-lock"></i>
+<div class="container animate-slideUp">
+    <div class="card-header">
+        <i class="fas fa-lock" style="font-size: 42px; margin-bottom: 12px; opacity: 0.9; display: block;"></i>
         <h1>账户登录</h1>
         <div class="nickname">{{ nickname }}</div>
     </div>
 
-    <div class="content">
+    <div class="content stagger">
         <p class="instruction">
             UID: <strong>{{ uid }}</strong><br>
             选择登录方式
@@ -178,7 +61,7 @@
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
-                    <div class="alert {{ category }}">
+                    <div class="alert alert-{{ category }}">
                         <i class="fas fa-exclamation-circle"></i>
                         {{ message }}
                     </div>
@@ -186,30 +69,28 @@
             {% endif %}
         {% endwith %}
 
-        <!-- 密码登录表单 -->
         <form action="/login?uid={{ uid }}" method="post" id="passwordForm">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <div class="input-group">
-                <i class="fas fa-key"></i>
-                <input type="password" name="password" placeholder="请输入登录密码" required autocomplete="off">
+            <div class="form-group">
+                <div class="input-icon">
+                    <i class="fas fa-key"></i>
+                    <input type="password" name="password" placeholder="请输入登录密码" required autocomplete="off">
+                </div>
             </div>
 
-            <button type="submit" class="btn">
+            <button type="submit" class="btn btn-gradient btn-block">
                 <i class="fas fa-sign-in-alt"></i> 密码登录
             </button>
         </form>
 
-        <div style="margin: 20px 0; text-align: center; color: var(--text-secondary); font-size: 14px;">
-            ── 或 ──
-        </div>
+        <div class="divider">或</div>
 
-        <!-- 鉴权登录按钮 -->
-        <a href="/auth-login?uid={{ uid }}" class="btn" style="display: block; text-align: center; text-decoration: none;">
+        <a href="/auth-login?uid={{ uid }}" class="btn btn-primary btn-block">
             <i class="fas fa-qrcode"></i> 弹幕鉴权登录
         </a>
 
-        <div class="footer-note">
-            <p><a href="/reset-password?uid={{ uid }}"><i class="fas fa-key"></i> 忘记密码 / 修改密码</a></p>
+        <div class="page-footer mt-25">
+            <a href="/reset-password?uid={{ uid }}"><i class="fas fa-key"></i> 忘记密码 / 修改密码</a>
         </div>
     </div>
 </div>

@@ -4,148 +4,91 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>舰长地址填写</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="/static/fonts/fonts.css">
+    <link rel="stylesheet" href="/static/css/common.css">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: "MiSans", -apple-system, BlinkMacSystemFont, "Segoe UI",
-                         Roboto, "Helvetica Neue", Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-
         .container {
-            background: white;
-            width: 100%;
-            max-width: 480px;
-            border-radius: 20px;
             padding: 40px 30px;
             text-align: center;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .container::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 6px;
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
         }
 
         h2 {
             font-size: 22px;
-            color: #2c3e50;
+            color: var(--text-primary);
             margin-bottom: 10px;
             font-weight: 700;
         }
 
         .subtitle {
             font-size: 14px;
-            color: #7f8c8d;
+            color: var(--text-secondary);
             margin-bottom: 25px;
             line-height: 1.6;
         }
 
-        input {
+        .uid-input {
             width: 100%;
-            padding: 14px 12px;
-            border: 2px solid #e5e5e5;
-            border-radius: 10px;
+            padding: 14px 15px;
+            border: 2px solid var(--border-light);
+            border-radius: var(--radius-sm);
             font-size: 16px;
             outline: none;
-            transition: all 0.3s ease;
+            transition: var(--transition);
+            background: #fafafa;
+            font-family: var(--font-family);
         }
 
-        input:focus {
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
-        }
-
-        .btn {
-            margin-top: 20px;
-            width: 100%;
-            padding: 14px 24px;
-            border-radius: 10px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            border: none;
-            transition: all 0.3s ease;
-            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
-            color: #333;
-            box-shadow: 0 4px 12px rgba(250, 112, 154, 0.3);
-        }
-
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(250, 112, 154, 0.4);
+        .uid-input:focus {
+            border-color: var(--primary);
+            background: white;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.12);
         }
 
         .error {
             margin-top: 15px;
             font-size: 14px;
-            color: #e74c3c;
+            color: var(--error);
             display: none;
+            animation: shake 0.3s ease;
         }
 
-        .tips {
-            margin-top: 25px;
-            background: #f8f9fb;
-            border-radius: 10px;
-            padding: 15px;
-            text-align: left;
-            font-size: 14px;
-            color: #555;
+        .bottom-links {
+            margin-top: 20px;
+            border-top: 1px solid var(--border-light);
+            padding-top: 15px;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
         }
 
-        .tips strong {
-            color: #667eea;
+        .bottom-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 500;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
         }
 
-        .tips ul {
-            margin-top: 8px;
-            padding-left: 18px;
+        .bottom-links a:hover {
+            color: var(--primary);
         }
 
-        .tips li {
-            margin: 6px 0;
+        .bottom-links a.danger {
+            color: var(--error);
         }
 
-        /* 动画 */
-        .fade-in {
-            opacity: 0;
-            transform: translateY(20px);
-        }
-
-        /* 移动端 */
-        @media (max-width: 600px) {
-            .container {
-                padding: 30px 20px;
-                border-radius: 16px;
-            }
-
-            h2 {
-                font-size: 20px;
-            }
+        .bottom-links a.danger:hover {
+            color: #c53030;
         }
     </style>
 </head>
 <body>
 
-<div class="container fade-in">
+<div class="container animate-slideUp">
     <h2>📦 舰长地址填写</h2>
 
     <p class="subtitle">
@@ -155,38 +98,39 @@
 
     <input
         type="text"
+        class="uid-input"
         id="uidInput"
         placeholder="请输入 UID（纯数字）"
+        inputmode="numeric"
         onkeypress="if(event.key === 'Enter') jump()"
     >
 
-    <button class="btn" onclick="jump()">开始填写</button>
+    <button class="btn btn-gradient btn-block mt-20" onclick="jump()">开始填写</button>
 
     <div id="errorMsg" class="error"></div>
 
-    <!-- CSRF Token (用于后续表单) -->
     <input type="hidden" id="csrfTokenInput" value="{{ csrf_token() }}">
 
-    <div class="tips">
-        <p><strong>💡 使用说明</strong></p>
-        <ul>
-            <li>UID 为您的 B 站账号数字 ID</li>
-            <li>仅限 {{ config.ANCHOR_NICKNAME }} 的舰长填写</li>
-            <li>如遇问题，请联系 @星空凌Official</li>
+    <div class="tips mt-25">
+        <strong>💡 使用说明</strong>
+        <ul style="padding-left: 18px; margin-top: 6px;">
+            <li style="margin: 5px 0;">UID 为您的 B 站账号数字 ID</li>
+            <li style="margin: 5px 0;">仅限 {{ config.ANCHOR_NICKNAME }} 的舰长填写</li>
+            <li style="margin: 5px 0;">如遇问题，请联系 @星空凌Official</li>
         </ul>
     </div>
 
     {% if current_user.is_authenticated %}
-        <div style="margin-top: 20px; text-align: center; border-top: 1px solid #e5e5e5; padding-top: 15px;">
-            <a href="/logout" style="color: #e74c3c; text-decoration: none; font-size: 13px; font-weight: 500; margin-right: 15px;">
-                <i class="fas fa-sign-out-alt"></i> 退出登录
-            </a>
-            {% if current_user.is_admin() %}
-                <a href="/admin/panel" style="color: #667eea; text-decoration: none; font-size: 13px; font-weight: 500;">
-                    <i class="fas fa-user-shield"></i> 管理员面板
-                </a>
-            {% endif %}
-        </div>
+    <div class="bottom-links">
+        <a href="/logout" class="danger">
+            <i class="fas fa-sign-out-alt"></i> 退出登录
+        </a>
+        {% if current_user.is_admin() %}
+        <a href="/admin/panel">
+            <i class="fas fa-user-shield"></i> 管理员面板
+        </a>
+        {% endif %}
+    </div>
     {% endif %}
 </div>
 
@@ -211,16 +155,6 @@
 
         window.location.href = '/?uid=' + uid;
     }
-
-    // 页面淡入动画
-    document.addEventListener('DOMContentLoaded', () => {
-        const el = document.querySelector('.fade-in');
-        setTimeout(() => {
-            el.style.transition = 'all 0.5s ease';
-            el.style.opacity = '1';
-            el.style.transform = 'translateY(0)';
-        }, 100);
-    });
 </script>
 
 </body>

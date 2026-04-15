@@ -2,6 +2,10 @@ from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, timezone, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 import json
+import logging
+
+# 设置日志
+logger = logging.getLogger(__name__)
 
 db = SQLAlchemy()
 
@@ -111,22 +115,42 @@ class User(db.Model):
 
     # ===== 密码 =====
     def set_password(self, password: str):
-        self.password_hash = generate_password_hash(password)
+        """设置密码（使用werkzeug默认配置）"""
+        try:
+            self.password_hash = generate_password_hash(password)
+        except Exception as e:
+            logger.error(f"设置密码失败: {e}")
+            raise
 
     def check_password(self, password: str) -> bool:
-        return check_password_hash(self.password_hash, password)
+        """验证密码"""
+        if not self.password_hash:
+            return False
+        try:
+            return check_password_hash(self.password_hash, password)
+        except Exception as e:
+            logger.error(f"密码验证失败: {e}")
+            return False
 
     # ===== 角色管理 =====
     def get_roles(self) -> list:
         """获取用户角色列表"""
         try:
             return json.loads(self.roles)
-        except:
+        except json.JSONDecodeError as e:
+            logger.warning(f"解析用户 {self.uid} 角色列表失败: {e}, roles={self.roles}")
+            return []
+        except Exception as e:
+            logger.error(f"获取用户 {self.uid} 角色列表时发生错误: {e}")
             return []
 
     def set_roles(self, roles: list):
         """设置用户角色列表"""
-        self.roles = json.dumps(roles)
+        try:
+            self.roles = json.dumps(roles)
+        except (TypeError, ValueError) as e:
+            logger.error(f"设置用户 {self.uid} 角色列表失败: {e}")
+            raise
 
     def has_role(self, role: str) -> bool:
         """检查用户是否有指定角色"""
@@ -138,6 +162,7 @@ class User(db.Model):
         if role not in roles:
             roles.append(role)
             self.set_roles(roles)
+            logger.info(f"为用户 {self.uid} 添加角色: {role}")
 
     def remove_role(self, role: str):
         """移除角色"""
@@ -145,6 +170,7 @@ class User(db.Model):
         if role in roles:
             roles.remove(role)
             self.set_roles(roles)
+            logger.info(f"为用户 {self.uid} 移除角色: {role}")
 
     def is_admin(self) -> bool:
         """检查是否是管理员"""

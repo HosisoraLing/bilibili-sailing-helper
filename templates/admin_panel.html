@@ -6,33 +6,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="/static/fonts/fonts.css">
+    <link rel="stylesheet" href="/static/css/common.css">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: "MiSans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-        }
-
         body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
+            align-items: flex-start;
             padding: 20px;
         }
 
-        .container {
+        .page-container {
             max-width: 1200px;
+            width: 100%;
             margin: 0 auto;
         }
 
+        /* Header card */
         .header {
             background: white;
-            border-radius: 20px;
+            border-radius: var(--radius-xl);
             padding: 30px;
             margin-bottom: 20px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            box-shadow: var(--shadow-lg);
             position: relative;
             overflow: hidden;
+            animation: slideUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
         }
 
         .header::before {
@@ -41,8 +37,8 @@
             top: 0;
             left: 0;
             right: 0;
-            height: 6px;
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            height: 5px;
+            background: linear-gradient(90deg, var(--bg-start) 0%, var(--bg-end) 100%);
         }
 
         .header-top {
@@ -61,16 +57,7 @@
 
         .title h2 {
             font-size: 24px;
-            color: #2c3e50;
-            font-weight: 700;
-        }
-
-        .admin-badge {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 6px 16px;
-            border-radius: 20px;
-            font-size: 12px;
+            color: var(--text-primary);
             font-weight: 700;
         }
 
@@ -80,118 +67,8 @@
         }
 
         .uid-info strong {
-            color: #667eea;
+            color: var(--primary);
             font-weight: 700;
-        }
-
-        .actions {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        .btn {
-            padding: 10px 18px;
-            border-radius: 8px;
-            text-decoration: none;
-            font-weight: 600;
-            font-size: 14px;
-            transition: all 0.3s ease;
-            cursor: pointer;
-            border: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
-        }
-
-        .btn-export {
-            background: #f1f5f9;
-            color: #4a5568;
-            border: 1px solid #e2e8f0;
-        }
-
-        .btn-export:hover {
-            background: #e2e8f0;
-            transform: translateY(-2px);
-        }
-
-        .btn-logout {
-            background: #f1f5f9;
-            color: #4a5568;
-            border: 1px solid #e2e8f0;
-        }
-
-        .btn-logout:hover {
-            background: #e2e8f0;
-        }
-
-        .btn-add {
-            background: #10b981;
-            color: white;
-            border: none;
-        }
-
-        .btn-add:hover {
-            background: #059669;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
-        }
-
-        .btn-edit {
-            background: #10b981;
-            color: white;
-            padding: 6px 12px;
-            border-radius: 6px;
-            text-decoration: none;
-            font-size: 12px;
-            font-weight: 600;
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            transition: all 0.2s ease;
-        }
-
-        .btn-edit:hover {
-            background: #059669;
-            transform: translateY(-1px);
-        }
-
-        .btn-delete {
-            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-            color: white;
-            border: none;
-            padding: 6px 12px;
-            border-radius: 6px;
-            text-decoration: none;
-            font-size: 12px;
-            font-weight: 600;
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            transition: all 0.2s ease;
-            cursor: pointer;
-        }
-
-        .btn-delete:hover {
-            background: #dc2626;
-            transform: translateY(-1px);
-        }
-
-        .action-cell {
-            white-space: nowrap;
-            display: flex;
-            gap: 6px;
         }
 
         .stats {
@@ -202,43 +79,36 @@
         }
 
         .stat-card {
-            background: #f8f9ff;
-            padding: 15px 20px;
-            border-radius: 10px;
-            border-left: 4px solid #667eea;
             flex: 1;
             min-width: 150px;
         }
 
-        .stat-value {
-            font-size: 28px;
-            font-weight: 700;
-            color: #667eea;
+        .admin-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 15px;
         }
 
-        .stat-label {
-            font-size: 13px;
-            color: #666;
-            margin-top: 4px;
-        }
-
-        .content {
+        /* Content card */
+        .content-card {
             background: white;
-            border-radius: 20px;
+            border-radius: var(--radius-xl);
             padding: 30px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            box-shadow: var(--shadow-lg);
             position: relative;
             overflow: hidden;
+            animation: slideUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
         }
 
-        .content::before {
+        .content-card::before {
             content: '';
             position: absolute;
             top: 0;
             left: 0;
             right: 0;
-            height: 6px;
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            height: 5px;
+            background: linear-gradient(90deg, var(--bg-start) 0%, var(--bg-end) 100%);
         }
 
         .content-header {
@@ -252,67 +122,56 @@
 
         .content-header h3 {
             font-size: 18px;
-            color: #2c3e50;
+            color: var(--text-primary);
             font-weight: 700;
-        }
-
-        .search-box {
-            display: flex;
-            gap: 8px;
         }
 
         .search-box input {
             padding: 8px 12px;
-            border: 2px solid #e2e8f0;
-            border-radius: 8px;
+            border: 2px solid var(--border-color);
+            border-radius: var(--radius-sm);
             font-size: 14px;
             min-width: 200px;
+            transition: var(--transition);
+            font-family: var(--font-family);
         }
 
         .search-box input:focus {
             outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.12);
         }
 
-        .table-container {
-            overflow-x: auto;
-            border-radius: 10px;
-            border: 1px solid #e2e8f0;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 13px;
-        }
-
-        thead {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        /* Table action buttons */
+        .btn-edit {
+            background: #10b981;
             color: white;
-        }
-
-        th {
-            padding: 12px 15px;
-            text-align: left;
+            padding: 6px 12px;
+            border-radius: var(--radius-xs);
+            text-decoration: none;
+            font-size: 12px;
             font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: var(--transition);
+        }
+
+        .btn-edit:hover {
+            background: #059669;
+            transform: translateY(-1px);
+        }
+
+        .action-cell {
             white-space: nowrap;
-        }
-
-        td {
-            padding: 12px 15px;
-            border-bottom: 1px solid #e2e8f0;
-            color: #333;
-        }
-
-        tbody tr:hover {
-            background: #f8f9ff;
+            display: flex;
+            gap: 6px;
         }
 
         .empty-state {
             text-align: center;
             padding: 40px;
-            color: #999;
+            color: var(--text-muted);
         }
 
         .empty-state i {
@@ -321,17 +180,7 @@
             opacity: 0.5;
         }
 
-        .no-wrap {
-            white-space: nowrap;
-        }
-
-        .truncate {
-            max-width: 200px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
+        /* Sortable headers */
         th.sortable {
             cursor: pointer;
             user-select: none;
@@ -353,15 +202,8 @@
             font-size: 12px;
         }
 
-        th.sortable.asc::after {
-            content: '\f0de';
-            opacity: 1;
-        }
-
-        th.sortable.desc::after {
-            content: '\f0de';
-            opacity: 1;
-        }
+        th.sortable.asc::after { content: '\f0de'; opacity: 1; }
+        th.sortable.desc::after { content: '\f0de'; opacity: 1; }
 
         .footer {
             text-align: center;
@@ -370,19 +212,72 @@
             font-size: 13px;
         }
 
+        /* Import Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.2s ease;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: var(--radius-md);
+            padding: 30px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: var(--shadow-lg);
+            animation: slideUp 0.3s ease;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            color: var(--text-primary);
+            font-size: 20px;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: var(--text-muted);
+            transition: var(--transition);
+        }
+
+        .modal-close:hover {
+            color: var(--text-primary);
+        }
+
         @media (max-width: 768px) {
             .header-top {
                 flex-direction: column;
                 align-items: flex-start;
             }
 
-            .actions {
+            .admin-actions {
                 width: 100%;
             }
 
-            .actions .btn {
+            .admin-actions .btn {
                 flex: 1;
                 justify-content: center;
+                font-size: 13px;
+                padding: 10px 12px;
             }
 
             .stats {
@@ -412,13 +307,13 @@
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <input type="hidden" name="secure_token" value="{{ secure_token() }}">
 
-<div class="container">
+<div class="page-container">
     <div class="header">
         <div class="header-top">
             <div class="title">
-                <i class="fas fa-user-shield" style="font-size: 24px; color: #667eea;"></i>
+                <i class="fas fa-user-shield" style="font-size: 24px; color: var(--primary);"></i>
                 <h2>管理员面板</h2>
-                <span class="admin-badge">ADMIN</span>
+                <span class="badge badge-primary">ADMIN</span>
             </div>
             <div class="uid-info">
                 登录 UID: <strong>{{ uid }}</strong> | 昵称: <strong>{{ nickname }}</strong>
@@ -432,35 +327,35 @@
             </div>
         </div>
 
-        <div class="actions" style="margin-top: 15px;">
-            <a href="/admin/guards" class="btn btn-primary">
+        <div class="admin-actions">
+            <a href="/admin/guards" class="btn btn-primary btn-sm">
                 <i class="fas fa-users"></i> 舰长列表
             </a>
-            <a href="/admin/guard-gifts" class="btn btn-primary">
+            <a href="/admin/guard-gifts" class="btn btn-primary btn-sm">
                 <i class="fas fa-gift"></i> 舰长礼物统计
             </a>
-            <a href="/admin/companion-ranking" class="btn btn-primary">
+            <a href="/admin/companion-ranking" class="btn btn-primary btn-sm">
                 <i class="fas fa-crown"></i> 陪伴榜
             </a>
-            <a href="/admin/add-address" class="btn btn-add">
+            <a href="/admin/add-address" class="btn btn-success btn-sm">
                 <i class="fas fa-plus"></i> 新增地址
             </a>
-            <button class="btn btn-export" onclick="openImportModal('address')">
+            <button class="btn btn-light btn-sm" onclick="openImportModal()">
                 <i class="fas fa-file-import"></i> 导入地址 CSV
             </button>
-            <a href="/admin/export/csv?filter=eligible" class="btn btn-export">
+            <a href="/admin/export/csv?filter=eligible" class="btn btn-light btn-sm">
                 <i class="fas fa-file-csv"></i> 导出地址 CSV
             </a>
-            <a href="/?uid={{ uid }}" class="btn btn-logout">
+            <a href="/?uid={{ uid }}" class="btn btn-light btn-sm">
                 <i class="fas fa-arrow-left"></i> 返回普通页面
             </a>
-            <a href="/logout" class="btn btn-logout">
+            <a href="/logout" class="btn btn-light btn-sm">
                 <i class="fas fa-sign-out-alt"></i> 退出登录
             </a>
         </div>
     </div>
 
-    <div class="content">
+    <div class="content-card">
         <div class="content-header">
             <h3><i class="fas fa-list"></i> 已提交地址列表</h3>
             <div class="search-box">
@@ -468,7 +363,7 @@
             </div>
         </div>
 
-        <div class="table-container">
+        <div class="table-wrap">
             <table id="addressTable">
                 <thead>
                     <tr>
@@ -544,25 +439,25 @@
 </div>
 
 <!-- Import CSV Modal -->
-<div id="importModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
-    <div style="background: white; border-radius: 12px; padding: 30px; width: 90%; max-width: 500px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h3 style="margin: 0; color: #2c3e50; font-size: 20px;"><i class="fas fa-file-import"></i> 导入CSV</h3>
-            <button onclick="closeImportModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #999;">&times;</button>
+<div id="importModal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3><i class="fas fa-file-import"></i> 导入CSV</h3>
+            <button class="modal-close" onclick="closeImportModal()">&times;</button>
         </div>
-        <div style="margin-bottom: 15px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">选择CSV文件</label>
-            <input type="file" id="csvFile" accept=".csv" style="width: 100%; padding: 10px 15px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; box-sizing: border-box;">
+        <div class="form-group">
+            <label>选择CSV文件</label>
+            <input type="file" id="csvFile" accept=".csv">
         </div>
-        <div style="margin-bottom: 20px; padding: 10px; background: #f8f9ff; border-radius: 8px; font-size: 13px; color: #666;">
-            <strong>CSV格式要求：</strong><br>
+        <div class="tips mb-20">
+            <strong>CSV格式要求：</strong>
             - UID, 昵称, 收件人, 手机号, 省, 市, 区, 详细地址<br>
             - 第一行必须是表头<br>
             - UID和昵称为必填项
         </div>
         <div style="display: flex; gap: 10px; justify-content: flex-end;">
-            <button onclick="closeImportModal()" style="padding: 10px 20px; border: 2px solid #e2e8f0; background: white; border-radius: 8px; font-weight: 600; cursor: pointer; color: #4a5568;">取消</button>
-            <button onclick="importCSV('address')" style="padding: 10px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">确认导入</button>
+            <button class="btn btn-ghost btn-sm" onclick="closeImportModal()">取消</button>
+            <button class="btn btn-primary btn-sm" onclick="importCSV()">确认导入</button>
         </div>
     </div>
 </div>
@@ -571,100 +466,72 @@
     let currentSort = { column: null, direction: 'asc' };
 
     function filterTable() {
-        const input = document.getElementById("searchInput");
-        const filter = input.value.toLowerCase();
-        const table = document.getElementById("addressTable");
-        const tr = table.getElementsByTagName("tr");
+        const filter = document.getElementById("searchInput").value.toLowerCase();
+        const rows = document.getElementById("addressTable").getElementsByTagName("tr");
 
-        for (let i = 1; i < tr.length; i++) {
-            const td = tr[i].getElementsByTagName("td");
+        for (let i = 1; i < rows.length; i++) {
+            const cells = rows[i].getElementsByTagName("td");
             let found = false;
-            for (let j = 0; j < td.length; j++) {
-                if (td[j]) {
-                    const txtValue = td[j].textContent || td[j].innerText;
-                    if (txtValue.toLowerCase().indexOf(filter) > -1) {
-                        found = true;
-                        break;
-                    }
+            for (let j = 0; j < cells.length; j++) {
+                if (cells[j] && (cells[j].textContent || '').toLowerCase().indexOf(filter) > -1) {
+                    found = true;
+                    break;
                 }
             }
-            tr[i].style.display = found ? "" : "none";
+            rows[i].style.display = found ? "" : "none";
         }
     }
 
     function sortTable(column, direction) {
-        const table = document.getElementById("addressTable");
-        const tbody = table.getElementsByTagName("tbody")[0];
+        const tbody = document.getElementById("addressTable").getElementsByTagName("tbody")[0];
         const rows = Array.from(tbody.getElementsByTagName("tr"));
 
-        // Get column index based on column name
         const columnMap = {
-            'uid': 1,
-            'nickname': 2,
-            'guard_level': 3,
-            'receiver': 4,
-            'phone': 5,
-            'area': 6,
-            'address': 7,
-            'submitted_at': 8
+            'uid': 1, 'nickname': 2, 'guard_level': 3, 'receiver': 4,
+            'phone': 5, 'area': 6, 'address': 7, 'submitted_at': 8
         };
         const colIndex = columnMap[column];
         if (colIndex === undefined) return;
 
-        // Sort rows
         rows.sort((a, b) => {
             let aVal = a.getElementsByTagName("td")[colIndex].textContent.trim();
             let bVal = b.getElementsByTagName("td")[colIndex].textContent.trim();
 
-            // Handle different column types
             if (column === 'uid') {
-                // Numeric sorting for UID
                 aVal = parseInt(aVal) || 0;
                 bVal = parseInt(bVal) || 0;
             } else if (column === 'guard_level') {
-                // Custom ordering for guard_level
-                const levelOrder = { '总督': 0, '提督': 1, '舰长': 2 };
-                aVal = levelOrder[aVal] !== undefined ? levelOrder[aVal] : 99;
-                bVal = levelOrder[bVal] !== undefined ? levelOrder[bVal] : 99;
+                const order = { '总督': 0, '提督': 1, '舰长': 2 };
+                aVal = order[aVal] !== undefined ? order[aVal] : 99;
+                bVal = order[bVal] !== undefined ? order[bVal] : 99;
             }
-            // For other columns (nickname, receiver, phone, area, address, submitted_at), use string comparison
 
             if (aVal < bVal) return direction === 'asc' ? -1 : 1;
             if (aVal > bVal) return direction === 'asc' ? 1 : -1;
             return 0;
         });
 
-        // Re-append sorted rows
         rows.forEach(row => tbody.appendChild(row));
     }
 
-    // Add click handlers to sortable headers
     document.addEventListener('DOMContentLoaded', function() {
         const headers = document.querySelectorAll('th.sortable');
         headers.forEach(header => {
             header.addEventListener('click', function() {
                 const column = this.getAttribute('data-sort');
                 let direction = 'asc';
-
                 if (currentSort.column === column) {
                     direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
                 }
-
-                // Update UI
-                headers.forEach(h => {
-                    h.classList.remove('asc', 'desc');
-                });
+                headers.forEach(h => h.classList.remove('asc', 'desc'));
                 this.classList.add(direction);
-
-                // Sort
                 currentSort = { column, direction };
                 sortTable(column, direction);
             });
         });
     });
 
-    // Import CSV functions
-    function openImportModal(type) {
+    function openImportModal() {
         document.getElementById('importModal').style.display = 'flex';
     }
 
@@ -673,38 +540,32 @@
         document.getElementById('csvFile').value = '';
     }
 
-    function importCSV(type) {
-        const fileInput = document.getElementById('csvFile');
-        const file = fileInput.files[0];
-
+    function importCSV() {
+        const file = document.getElementById('csvFile').files[0];
         if (!file) {
             alert('请选择CSV文件！');
             return;
         }
 
         const csrfToken = document.querySelector('input[name="csrf_token"]')?.value || '';
-
         const formData = new FormData();
         formData.append('csv_file', file);
 
-        fetch(`/admin/import/csv?type=${type}`, {
+        fetch('/admin/import/csv?type=address', {
             method: 'POST',
-            headers: {
-                'X-CSRF-Token': csrfToken
-            },
+            headers: { 'X-CSRF-Token': csrfToken },
             body: formData
         })
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                alert(`导入成功！\n新增: ${data.added} 条\n更新: ${data.updated} 条\n跳过: ${data.skipped} 条`);
+                alert('导入成功！\n新增: ' + data.added + ' 条\n更新: ' + data.updated + ' 条\n跳过: ' + data.skipped + ' 条');
                 location.reload();
             } else {
                 alert('导入失败：' + data.error);
             }
         })
-        .catch(error => {
-            console.error('Error:', error);
+        .catch(() => {
             alert('请求失败，请稍后重试');
         });
     }

@@ -81,10 +81,23 @@ def create_app():
     login_manager = LoginManager()
     login_manager.init_app(app)
     login_manager.login_view = 'main.index'
+    login_manager.login_message = '登录已过期，请重新登录'
+    login_manager.login_message_category = 'error'
 
     @login_manager.user_loader
     def load_user(user_id):
         return User.query.get(int(user_id))
+
+    @login_manager.unauthorized_handler
+    def unauthorized():
+        """处理未登录/session过期的访问"""
+        from flask import flash, redirect, url_for, request
+        flash('登录已过期，请重新登录', 'error')
+        # 尝试获取 uid 参数用于重定向到对应的登录页
+        uid = request.args.get('uid') or request.form.get('uid')
+        if uid:
+            return redirect(url_for('main.login', uid=uid))
+        return redirect(url_for('main.index'))
 
     # ===== 注入配置到模板 =====
     @app.context_processor
@@ -464,19 +477,37 @@ if __name__ == '__main__':
     start_danmaku_auth_listener(app_instance, socketio)
 
     # 检查是否启用 HTTPS
+    ssl_available = False
     if Config.SSL_ENABLED and Config.SSL_CERT_FILE and Config.SSL_KEY_FILE:
         import ssl
         import threading
+        import os
 
+        # 检查证书文件是否存在
+        cert_exists = os.path.exists(Config.SSL_CERT_FILE)
+        key_exists = os.path.exists(Config.SSL_KEY_FILE)
+
+        if cert_exists and key_exists:
+            try:
+                # 创建 SSL 上下文
+                ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+                ssl_context.load_cert_chain(Config.SSL_CERT_FILE, Config.SSL_KEY_FILE)
+                ssl_available = True
+            except ssl.SSLError as e:
+                print(f"[错误] 加载 SSL 证书失败: {e}")
+        else:
+            print(f"[错误] SSL 证书文件不存在:")
+            if not cert_exists:
+                print(f"  - 证书文件: {Config.SSL_CERT_FILE}")
+            if not key_exists:
+                print(f"  - 密钥文件: {Config.SSL_KEY_FILE}")
+
+    if ssl_available:
         print(f"[OK] 启用 HTTPS 支持")
         print(f"  - HTTP 端口: {Config.PORT}")
         print(f"  - HTTPS 端口: {Config.SSL_PORT}")
         print(f"  - SSL 证书: {Config.SSL_CERT_FILE}")
         print(f"  - SSL 密钥: {Config.SSL_KEY_FILE}")
-
-        # 创建 SSL 上下文
-        ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-        ssl_context.load_cert_chain(Config.SSL_CERT_FILE, Config.SSL_KEY_FILE)
 
         # 启动 HTTP 服务器（主线程）
         http_thread = threading.Thread(
