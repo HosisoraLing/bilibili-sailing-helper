@@ -263,6 +263,153 @@ body.admin-layout {
     border-radius: var(--radius-sm);
 }
 
+/* Secondary button (same as light) */
+.btn-secondary {
+    background: #f1f5f9;
+    color: #4a5568;
+    border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+    background: var(--border-color);
+    transform: translateY(-1px);
+}
+
+/* Export button */
+.btn-export {
+    background: #f1f5f9;
+    color: #4a5568;
+    border: 1px solid var(--border-color);
+}
+
+.btn-export:hover {
+    background: var(--border-color);
+    transform: translateY(-1px);
+}
+
+/* Logout button */
+.btn-logout {
+    background: #fff5f5;
+    color: var(--error);
+    border: 1px solid #fc8181;
+}
+
+.btn-logout:hover {
+    background: #fed7d7;
+    transform: translateY(-1px);
+}
+
+/* Add button (green, for creating records) */
+.btn-add {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    border: none;
+}
+
+.btn-add:hover {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(16, 185, 129, 0.35);
+}
+
+/* ────────────────────────────────────────────
+   Table action buttons (small, used in tbody)
+   ──────────────────────────────────────────── */
+
+/* Size modifier for table action buttons */
+.btn-small {
+    padding: 6px 12px !important;
+    font-size: 12px !important;
+    border-radius: var(--radius-xs) !important;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: var(--transition);
+    font-family: var(--font-family);
+    text-decoration: none;
+    line-height: 1;
+}
+
+.btn-small:active {
+    transform: scale(0.96) !important;
+}
+
+/* Edit action (green — matches current design) */
+.btn-edit {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    padding: 6px 12px;
+    border-radius: var(--radius-xs);
+    font-size: 12px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: var(--transition);
+    font-family: var(--font-family);
+    text-decoration: none;
+    line-height: 1;
+}
+
+.btn-edit:hover {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+}
+
+/* Delete action (red) */
+.btn-delete {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: white;
+    padding: 6px 12px;
+    border-radius: var(--radius-xs);
+    font-size: 12px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: var(--transition);
+    font-family: var(--font-family);
+    line-height: 1;
+}
+
+.btn-delete:hover {
+    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);
+}
+
+/* Mark / special action (purple) */
+.btn-mark {
+    background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+    color: white;
+    padding: 6px 12px;
+    border-radius: var(--radius-xs);
+    font-size: 12px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: var(--transition);
+    font-family: var(--font-family);
+    line-height: 1;
+}
+
+.btn-mark:hover {
+    background: linear-gradient(135deg, #6d28d9 0%, #5b21b6 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(109, 40, 217, 0.35);
+}
+
 /* Header pill button (for use inside gradient headers) */
 .btn-pill {
     display: inline-block;
@@ -594,12 +741,45 @@ body.admin-layout {
 }
 
 .table-wrap tbody tr {
-    transition: var(--transition-fast);
+    transition: background var(--transition-fast);
+    animation: rowFadeIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .table-wrap tbody tr:hover {
     background: var(--bg-light);
 }
+
+/* Table row stagger — first 15 rows */
+.table-wrap tbody tr:nth-child(1)  { animation-delay: 0.04s; }
+.table-wrap tbody tr:nth-child(2)  { animation-delay: 0.08s; }
+.table-wrap tbody tr:nth-child(3)  { animation-delay: 0.12s; }
+.table-wrap tbody tr:nth-child(4)  { animation-delay: 0.16s; }
+.table-wrap tbody tr:nth-child(5)  { animation-delay: 0.20s; }
+.table-wrap tbody tr:nth-child(6)  { animation-delay: 0.24s; }
+.table-wrap tbody tr:nth-child(7)  { animation-delay: 0.27s; }
+.table-wrap tbody tr:nth-child(8)  { animation-delay: 0.30s; }
+.table-wrap tbody tr:nth-child(9)  { animation-delay: 0.32s; }
+.table-wrap tbody tr:nth-child(10) { animation-delay: 0.34s; }
+.table-wrap tbody tr:nth-child(n+11) { animation-delay: 0.36s; }
+
+/* Same for table-container (used in admin_guards / admin_companion) */
+.table-container tbody tr {
+    transition: background var(--transition-fast);
+    animation: rowFadeIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.table-container tbody tr:hover { background: var(--bg-light); }
+.table-container tbody tr:nth-child(1)  { animation-delay: 0.04s; }
+.table-container tbody tr:nth-child(2)  { animation-delay: 0.08s; }
+.table-container tbody tr:nth-child(3)  { animation-delay: 0.12s; }
+.table-container tbody tr:nth-child(4)  { animation-delay: 0.16s; }
+.table-container tbody tr:nth-child(5)  { animation-delay: 0.20s; }
+.table-container tbody tr:nth-child(6)  { animation-delay: 0.24s; }
+.table-container tbody tr:nth-child(7)  { animation-delay: 0.27s; }
+.table-container tbody tr:nth-child(8)  { animation-delay: 0.30s; }
+.table-container tbody tr:nth-child(9)  { animation-delay: 0.32s; }
+.table-container tbody tr:nth-child(10) { animation-delay: 0.34s; }
+.table-container tbody tr:nth-child(n+11) { animation-delay: 0.36s; }
 
 /* --- Stat Card --- */
 .stat-card {
@@ -720,6 +900,12 @@ body.admin-layout {
 }
 
 /* Shake for errors */
+/* Table row entrance */
+@keyframes rowFadeIn {
+    from { opacity: 0; transform: translateX(-6px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+
 @keyframes shake {
     0%, 100% { transform: translateX(0); }
     20% { transform: translateX(-6px); }
