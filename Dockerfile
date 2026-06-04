@@ -61,11 +61,9 @@ RUN useradd -r -s /bin/false appuser \
     && chown -R appuser:appuser /app
 USER appuser
 
-# 暴露默认端口（HTTP + HTTPS）
-EXPOSE 7111 7112
+EXPOSE 80 443
 
-# 健康检查
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:7111/')" || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:80/')" || exit 1
 
 CMD ["python", "app.py"]

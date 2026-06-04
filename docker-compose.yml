@@ -7,8 +7,8 @@ services:
     restart: unless-stopped
 
     ports:
-      - "7111:7111"    # HTTP
-      - "7112:7112"    # HTTPS（如启用 SSL）
+      - "80:80"        # HTTP
+      - "443:443"      # HTTPS（如启用 SSL）
 
     volumes:
       # settings.json 含密钥，bind mount 而非打入镜像
