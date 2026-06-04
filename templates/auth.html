@@ -285,10 +285,48 @@
     const socket = io({
         transports: ['websocket', 'polling'],
         reconnection: true,
-        reconnectionAttempts: 5,
+        reconnectionAttempts: 3,
         reconnectionDelay: 1000,
         reconnectionDelayMax: 5000
     });
+
+    // 轮询备用机制
+    let pollingTimer = null;
+    let wsConnected = false;
+
+    function startPolling() {
+        if (pollingTimer) return;
+        console.log('Starting polling fallback...');
+        pollingTimer = setInterval(async () => {
+            try {
+                const urlParams = new URLSearchParams(window.location.search);
+                const loginMode = urlParams.get('login_mode') === 'true';
+                const resetMode = urlParams.get('reset_mode') === 'true';
+                const resp = await fetch(`/auth/status?uid=${uid}&login_mode=${loginMode}&reset_mode=${resetMode}`);
+                const data = await resp.json();
+                console.log('Polling result:', data);
+                if (data.status === 'success') {
+                    stopPolling();
+                    updateStatus('conn-dot--connected', 'status-success', '✅ 鉴权成功，正在跳转…');
+                    setTimeout(() => {
+                        location.href = data.redirect || ('/?uid=' + uid);
+                    }, 800);
+                } else if (data.status === 'expired') {
+                    stopPolling();
+                    updateStatus('conn-dot--disconnected', 'status-expired', '鉴权已过期，请刷新页面重试');
+                }
+            } catch (e) {
+                console.error('Polling error:', e);
+            }
+        }, 2000); // 每2秒轮询一次
+    }
+
+    function stopPolling() {
+        if (pollingTimer) {
+            clearInterval(pollingTimer);
+            pollingTimer = null;
+        }
+    }
 
     function updateStatus(dotClass, textClass, text) {
         statusDiv.textContent = '';
@@ -302,6 +340,8 @@
     }
 
     socket.on('connect', () => {
+        wsConnected = true;
+        stopPolling(); // WebSocket连接成功，停止轮询
         updateStatus('conn-dot--connected', 'status-pending', '已连接，等待弹幕鉴权…');
         const urlParams = new URLSearchParams(window.location.search);
         socket.emit('join_auth', {
@@ -312,14 +352,20 @@
     });
 
     socket.on('connect_error', () => {
-        updateStatus('conn-dot--disconnected', 'status-expired', '连接失败，请刷新页面重试');
+        if (!wsConnected) {
+            startPolling(); // WebSocket连接失败，启动轮询
+        }
+        updateStatus('conn-dot--disconnected', 'status-expired', '连接失败，使用轮询模式…');
     });
 
     socket.on('disconnect', () => {
-        updateStatus('conn-dot--disconnected', 'status-expired', '连接断开，重连中…');
+        wsConnected = false;
+        startPolling(); // WebSocket断开，启动轮询
+        updateStatus('conn-dot--disconnected', 'status-expired', '连接断开，使用轮询模式…');
     });
 
     socket.on('auth_success', (data) => {
+        stopPolling();
         updateStatus('conn-dot--connected', 'status-success', '✅ 鉴权成功，正在跳转…');
         setTimeout(() => {
             location.href = data.redirect || ('/?uid=' + uid);
@@ -329,6 +375,13 @@
     socket.on('joined', (data) => {
         console.log('Joined room:', data);
     });
+
+    // 页面加载时立即启动轮询（作为备用）
+    setTimeout(() => {
+        if (!wsConnected) {
+            startPolling();
+        }
+    }, 3000); // 3秒后如果WebSocket未连接，启动轮询
 </script>
 
 </body>

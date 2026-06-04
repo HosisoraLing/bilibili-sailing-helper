@@ -15,7 +15,7 @@ aiohttp>=3.8.0,<4.0.0
 blivedm @ git+https://github.com/xfgryujk/blivedm.git
 
 # 安全
-Werkzeug>=2.3.0,<3.0.0
+Werkzeug>=2.3.0,<4.0.0
 python-socketio>=5.8.0,<6.0.0
 
 # 工具库

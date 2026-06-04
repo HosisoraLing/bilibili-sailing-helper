@@ -4,6 +4,9 @@ from datetime import date
 from config import GUARD_URL, ROOM_ID, RUID
 from constants import GuardLevel
 from utils.cache_utils import api_response_cache, guard_cache
+from utils.log_utils import get_logger
+
+logger = get_logger(__name__)
 
 # 粉丝团成员排行榜 API
 FANS_MEMBERS_URL = "https://api.live.bilibili.com/xlive/general-interface/v1/rank/getFansMembersRank"
@@ -67,7 +70,7 @@ def fetch_guards(use_cache: bool = True):
             data = resp.json()
 
             if data.get("code") != 0:
-                print(f"⚠ 请求失败: {data}")
+                logger.error(f"请求失败: {data}")
                 break
 
             d = data.get("data", {})
@@ -97,7 +100,7 @@ def fetch_guards(use_cache: bool = True):
         return guards
 
     except Exception as e:
-        print(f"⚠ 获取舰长列表失败: {e}")
+        logger.error(f"获取舰长列表失败: {e}", exc_info=True)
         # 出错时返回缓存数据（即使已过期）
         cached_data = api_response_cache.get(cache_key)
         if cached_data:
@@ -133,7 +136,7 @@ def parse_guard_user(item: dict):
             "accompany_days": accompany_days
         }
     except Exception as e:
-        print(f"⚠ 解析舰长信息失败: {e}, item: {item}")
+        logger.error(f"解析舰长信息失败: {e}, item: {item}", exc_info=True)
         return None
 
 
@@ -185,7 +188,7 @@ def fetch_fans_members(page: int = 1, page_size: int = 30, rank_type: int = 1, u
         data = resp.json()
 
         if data.get("code") != 0:
-            print(f"⚠ 请求粉丝团成员失败: {data}")
+            logger.error(f"请求粉丝团成员失败: {data}")
             return {"items": [], "total": 0, "medal_status": 0}
 
         d = data.get("data", {})
@@ -213,7 +216,7 @@ def fetch_fans_members(page: int = 1, page_size: int = 30, rank_type: int = 1, u
         return result
 
     except Exception as e:
-        print(f"⚠ 请求粉丝团成员失败: {e}")
+        logger.error(f"请求粉丝团成员失败: {e}", exc_info=True)
         # 出错时返回缓存数据
         cached_data = api_response_cache.get(cache_key)
         if cached_data:
@@ -263,7 +266,7 @@ def parse_fans_member(item: dict):
             "user_rank": item.get("user_rank", 0)
         }
     except Exception as e:
-        print(f"⚠ 解析粉丝团成员信息失败: {e}, item: {item}")
+        logger.error(f"解析粉丝团成员信息失败: {e}, item: {item}", exc_info=True)
         return None
 
 

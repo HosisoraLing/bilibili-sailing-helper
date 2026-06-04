@@ -2,7 +2,6 @@ import asyncio
 import re
 import threading
 import time
-import logging
 from typing import Set, Optional
 
 import aiohttp
@@ -15,14 +14,9 @@ from services.auth_service import (
     get_cached_code,
     mark_auth_success,
 )
+from utils.log_utils import get_logger
 
-# =========================
-# 日志配置
-# =========================
-
-logging.basicConfig(level=logging.WARNING)
-logging.getLogger("blivedm").setLevel(logging.ERROR)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # =========================
 # 全局状态

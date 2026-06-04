@@ -10,6 +10,9 @@ from db.models import db, User, Guard
 from services.region_service import ensure_region_json
 from services.security import SecurityManager
 from routes import register_routes
+from utils.log_utils import get_logger
+
+logger = get_logger(__name__)
 
 
 # =========================
@@ -137,9 +140,8 @@ def run_migrations():
         password_hash_col = columns.get('password_hash')
 
         if password_hash_col and not password_hash_col['nullable']:
-            print("Migrating: Altering users.password_hash to be nullable...")
+            logger.info("Migrating: Altering users.password_hash to be nullable...")
             with db.engine.connect() as conn:
-                # SQLite-compatible migration
                 conn.execute(text("""
                     CREATE TABLE IF NOT EXISTS users_new (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -158,57 +160,57 @@ def run_migrations():
                 conn.execute(text("ALTER TABLE users_new RENAME TO users"))
                 conn.execute(text("CREATE INDEX IF NOT EXISTS ix_users_uid ON users(uid)"))
                 conn.commit()
-                print("Migration completed: users.password_hash is now nullable")
+                logger.info("Migration completed: users.password_hash is now nullable")
 
     # Check guards table for guard_level column
     if 'guards' in inspector.get_table_names():
         columns = {col['name']: col for col in inspector.get_columns('guards')}
         if 'guard_level' not in columns:
-            print("Migrating: Adding guard_level to guards table...")
+            logger.info("Migrating: Adding guard_level to guards table...")
             with db.engine.connect() as conn:
                 conn.execute(text("ALTER TABLE guards ADD COLUMN guard_level VARCHAR(16) DEFAULT 'guard'"))
                 conn.commit()
-                print("Migration completed: guards.guard_level added")
+                logger.info("Migration completed: guards.guard_level added")
 
         # Check for accompany_days column
         if 'accompany_days' not in columns:
-            print("Migrating: Adding accompany_days to guards table...")
+            logger.info("Migrating: Adding accompany_days to guards table...")
             with db.engine.connect() as conn:
                 conn.execute(text("ALTER TABLE guards ADD COLUMN accompany_days INTEGER DEFAULT 0"))
                 conn.commit()
-                print("Migration completed: guards.accompany_days added")
+                logger.info("Migration completed: guards.accompany_days added")
 
         # Check for in_guard column
         if 'in_guard' not in columns:
-            print("Migrating: Adding in_guard to guards table...")
+            logger.info("Migrating: Adding in_guard to guards table...")
             with db.engine.connect() as conn:
                 conn.execute(text("ALTER TABLE guards ADD COLUMN in_guard BOOLEAN DEFAULT 1"))
                 conn.commit()
-                print("Migration completed: guards.in_guard added")
+                logger.info("Migration completed: guards.in_guard added")
 
     # Check addresses table for guard_level column
     if 'addresses' in inspector.get_table_names():
         columns = {col['name']: col for col in inspector.get_columns('addresses')}
         if 'guard_level' not in columns:
-            print("Migrating: Adding guard_level to addresses table...")
+            logger.info("Migrating: Adding guard_level to addresses table...")
             with db.engine.connect() as conn:
                 conn.execute(text("ALTER TABLE addresses ADD COLUMN guard_level VARCHAR(16) DEFAULT 'guard'"))
                 conn.commit()
-                print("Migration completed: addresses.guard_level added")
+                logger.info("Migration completed: addresses.guard_level added")
 
     # Check users table for roles column
     if 'users' in inspector.get_table_names():
         columns = {col['name']: col for col in inspector.get_columns('users')}
         if 'roles' not in columns:
-            print("Migrating: Adding roles to users table...")
+            logger.info("Migrating: Adding roles to users table...")
             with db.engine.connect() as conn:
                 conn.execute(text("ALTER TABLE users ADD COLUMN roles VARCHAR(256) DEFAULT '[]'"))
                 conn.commit()
-                print("Migration completed: users.roles added")
+                logger.info("Migration completed: users.roles added")
 
     # Check for guard_gift_records table
     if 'guard_gift_records' not in inspector.get_table_names():
-        print("Migrating: Creating guard_gift_records table...")
+        logger.info("Migrating: Creating guard_gift_records table...")
         with db.engine.connect() as conn:
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS guard_gift_records (
@@ -228,7 +230,7 @@ def run_migrations():
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_guard_gift_records_uid ON guard_gift_records(uid)"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_guard_gift_records_month ON guard_gift_records(month)"))
             conn.commit()
-            print("Migration completed: guard_gift_records table created")
+            logger.info("Migration completed: guard_gift_records table created")
 
 
 # =========================
@@ -244,11 +246,11 @@ def fetch_and_save_guards():
     from db.models import get_beijing_now
     from datetime import date
 
-    print("开始爬取舰长数据...")
+    logger.info("开始爬取舰长数据...")
     guards_data = fetch_guards()
 
     if not guards_data:
-        print("[WARN] 未获取到舰长数据")
+        logger.warning("未获取到舰长数据")
         return
 
     updated_count = 0
@@ -272,7 +274,7 @@ def fetch_and_save_guards():
             guard.in_guard = False
             guard.updated_at = get_beijing_now()
             removed_count += 1
-            print(f"  [REMOVE] 标记不在舰: {guard.nickname} (UID: {uid})")
+            logger.info(f"标记不在舰: {guard.nickname} (UID: {uid})")
 
     for uid, data in guards_data.items():
         guard = Guard.query.filter_by(uid=uid).first()
@@ -293,7 +295,7 @@ def fetch_and_save_guards():
 
             # 如果手动修改的数据与自动更新的数据不同，输出日志
             if old_nickname != data['nickname'] or old_accompany_days != data.get('accompany_days', 0):
-                print(f"  [UPDATE] 自动更新覆盖手动数据: {old_nickname} -> {data['nickname']} (UID: {uid})")
+                logger.info(f"自动更新覆盖手动数据: {old_nickname} -> {data['nickname']} (UID: {uid})")
         else:
             # 创建新舰长
             guard = Guard(
@@ -307,21 +309,21 @@ def fetch_and_save_guards():
             )
             db.session.add(guard)
             created_count += 1
-            print(f"  [ADD] 新增舰长: {data['nickname']} (UID: {uid})")
+            logger.info(f"新增舰长: {data['nickname']} (UID: {uid})")
 
     db.session.commit()
 
     # 输出统计信息
     if removed_count > 0 or created_count > 0 or updated_count > 0:
-        print(f"[OK] 舰长数据更新完成:")
+        logger.info(f"舰长数据更新完成:")
         if created_count > 0:
-            print(f"  - 新增: {created_count} 个")
+            logger.info(f"  - 新增: {created_count} 个")
         if updated_count > 0:
-            print(f"  - 更新: {updated_count} 个")
+            logger.info(f"  - 更新: {updated_count} 个")
         if removed_count > 0:
-            print(f"  - 标记不在舰: {removed_count} 个")
+            logger.info(f"  - 标记不在舰: {removed_count} 个")
     else:
-        print("[OK] 舰长数据无变化")
+        logger.info("舰长数据无变化")
 
 
 def start_guards_scheduler(app):
@@ -337,7 +339,7 @@ def start_guards_scheduler(app):
                 with app.app_context():
                     fetch_and_save_guards()
             except Exception as e:
-                print(f"[ERROR] 舰长爬取任务出错: {e}")
+                logger.error(f"舰长爬取任务出错: {e}", exc_info=True)
 
             # 等待5分钟
             time.sleep(300)
@@ -345,7 +347,7 @@ def start_guards_scheduler(app):
     # 启动后台线程
     thread = threading.Thread(target=scheduler, daemon=True)
     thread.start()
-    print("[OK] 舰长爬取定时任务已启动（每5分钟执行一次）")
+    logger.info("舰长爬取定时任务已启动（每5分钟执行一次）")
 
 
 def start_guard_gift_scheduler(app):
@@ -386,15 +388,15 @@ def start_guard_gift_scheduler(app):
 
                 if is_15th_4am or is_last_day_last_second:
                     with app.app_context():
-                        print(f"开始执行舰长礼物统计任务（{'每月15日4点' if is_15th_4am else '月末最后一秒'}）...")
+                        logger.info(f"开始执行舰长礼物统计任务（{'每月15日4点' if is_15th_4am else '月末最后一秒'}）...")
                         eligible_records = GuardGiftService.calculate_monthly_eligible_guards()
                         if eligible_records:
-                            print(f"[OK] 舰长礼物统计完成，新增 {len(eligible_records)} 个符合资格的舰长")
+                            logger.info(f"舰长礼物统计完成，新增 {len(eligible_records)} 个符合资格的舰长")
                         else:
-                            print("[OK] 舰长礼物统计完成，无新增符合条件的舰长")
+                            logger.info("舰长礼物统计完成，无新增符合条件的舰长")
 
             except Exception as e:
-                print(f"[ERROR] 舰长礼物统计任务出错: {e}")
+                logger.error(f"舰长礼物统计任务出错: {e}", exc_info=True)
 
             # 每秒检查一次
             time.sleep(1)
@@ -402,7 +404,7 @@ def start_guard_gift_scheduler(app):
     # 启动后台线程
     thread = threading.Thread(target=scheduler, daemon=True)
     thread.start()
-    print("[OK] 舰长礼物统计定时任务已启动（每月15日4点和月末最后一秒执行）")
+    logger.info("舰长礼物统计定时任务已启动（每月15日4点和月末最后一秒执行）")
 
 
 def register_admins():
@@ -424,7 +426,7 @@ def register_admins():
             # 用户已存在，添加管理员角色（如果还没有）
             if not user.has_role('admin'):
                 user.add_role('admin')
-                print(f"[OK] 已为现有用户 {uid} 添加管理员角色")
+                logger.info(f"已为现有用户 {uid} 添加管理员角色")
         else:
             # 用户不存在，创建新用户
             # 检查是否是舰长/陪伴榜用户，从数据库获取舰长信息
@@ -448,10 +450,10 @@ def register_admins():
                 user.add_role('admiral')
 
             db.session.add(user)
-            print(f"[OK] 已创建管理员用户 {uid} ({nickname})")
+            logger.info(f"已创建管理员用户 {uid} ({nickname})")
 
     db.session.commit()
-    print(f"\n[OK] 管理员注册完成，共处理 {len(admin_uids)} 个管理员")
+    logger.info(f"管理员注册完成，共处理 {len(admin_uids)} 个管理员")
 
 
 if __name__ == '__main__':
@@ -494,20 +496,20 @@ if __name__ == '__main__':
                 ssl_context.load_cert_chain(Config.SSL_CERT_FILE, Config.SSL_KEY_FILE)
                 ssl_available = True
             except ssl.SSLError as e:
-                print(f"[错误] 加载 SSL 证书失败: {e}")
+                logger.error(f"加载 SSL 证书失败: {e}")
         else:
-            print(f"[错误] SSL 证书文件不存在:")
+            logger.error(f"SSL 证书文件不存在:")
             if not cert_exists:
-                print(f"  - 证书文件: {Config.SSL_CERT_FILE}")
+                logger.error(f"  - 证书文件: {Config.SSL_CERT_FILE}")
             if not key_exists:
-                print(f"  - 密钥文件: {Config.SSL_KEY_FILE}")
+                logger.error(f"  - 密钥文件: {Config.SSL_KEY_FILE}")
 
     if ssl_available:
-        print(f"[OK] 启用 HTTPS 支持")
-        print(f"  - HTTP 端口: {Config.PORT}")
-        print(f"  - HTTPS 端口: {Config.SSL_PORT}")
-        print(f"  - SSL 证书: {Config.SSL_CERT_FILE}")
-        print(f"  - SSL 密钥: {Config.SSL_KEY_FILE}")
+        logger.info(f"启用 HTTPS 支持")
+        logger.info(f"  - HTTP 端口: {Config.PORT}")
+        logger.info(f"  - HTTPS 端口: {Config.SSL_PORT}")
+        logger.info(f"  - SSL 证书: {Config.SSL_CERT_FILE}")
+        logger.info(f"  - SSL 密钥: {Config.SSL_KEY_FILE}")
 
         # 启动 HTTP 服务器（主线程）
         http_thread = threading.Thread(
@@ -542,10 +544,10 @@ if __name__ == '__main__':
                 import time
                 time.sleep(1)
         except KeyboardInterrupt:
-            print("\n[OK] 服务器已停止")
+            logger.info("服务器已停止")
     else:
         # 仅启动 HTTP 服务器（默认行为）
-        print(f"[OK] 仅启用 HTTP 支持（端口: {Config.PORT}）")
+        logger.info(f"仅启用 HTTP 支持（端口: {Config.PORT}）")
         socketio.run(
             app_instance,
             host=Config.HOST,

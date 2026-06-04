@@ -43,8 +43,8 @@ COPY storage/   ./storage/
 COPY static/    ./static/
 COPY templates/ ./templates/
 
-# 创建数据目录（volume 挂载后会覆盖，这里只是保证目录存在）
-RUN mkdir -p data
+# 创建数据和日志目录（volume 挂载后会覆盖，这里只是保证目录存在）
+RUN mkdir -p data logs
 
 # 非 root 用户运行（安全最佳实践）
 RUN useradd -r -s /bin/false appuser \
