@@ -8,8 +8,6 @@ from logging.handlers import RotatingFileHandler
 from config import BASE_DIR
 
 LOG_DIR = os.path.join(BASE_DIR, 'logs')
-os.makedirs(LOG_DIR, exist_ok=True)
-
 ERROR_LOG_FILE = os.path.join(LOG_DIR, 'error.log')
 
 LOG_FORMAT = '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
@@ -23,6 +21,12 @@ def setup_logging():
     global _initialized
     if _initialized:
         return
+
+    # 确保日志目录存在
+    try:
+        os.makedirs(LOG_DIR, exist_ok=True)
+    except OSError:
+        pass  # 目录已存在或无权限创建，继续尝试
 
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.DEBUG)
@@ -43,15 +47,19 @@ def setup_logging():
     has_file = any(isinstance(h, RotatingFileHandler) for h in root_logger.handlers)
 
     if not has_file:
-        file_handler = RotatingFileHandler(
-            ERROR_LOG_FILE,
-            maxBytes=10 * 1024 * 1024,
-            backupCount=5,
-            encoding='utf-8'
-        )
-        file_handler.setLevel(logging.ERROR)
-        file_handler.setFormatter(logging.Formatter(LOG_FORMAT, DATE_FORMAT))
-        root_logger.addHandler(file_handler)
+        try:
+            file_handler = RotatingFileHandler(
+                ERROR_LOG_FILE,
+                maxBytes=10 * 1024 * 1024,
+                backupCount=5,
+                encoding='utf-8'
+            )
+            file_handler.setLevel(logging.ERROR)
+            file_handler.setFormatter(logging.Formatter(LOG_FORMAT, DATE_FORMAT))
+            root_logger.addHandler(file_handler)
+        except (OSError, PermissionError):
+            # 无法创建日志文件，仅使用控制台输出
+            pass
 
     _initialized = True
 
