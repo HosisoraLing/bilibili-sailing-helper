@@ -112,7 +112,7 @@ wait_for_service() {
     info "等待服务就绪..."
     local retry=0
     while [ $retry -lt 15 ]; do
-        if curl -s -o /dev/null -w "%{http_code}" http://localhost:7111/ 2>/dev/null | grep -q "200\|302"; then
+        if curl -s -o /dev/null -w "%{http_code}" http://localhost:80/ 2>/dev/null | grep -q "200\|302"; then
             success "服务就绪"
             return 0
         fi
@@ -127,7 +127,7 @@ show_status() {
     echo ""
     docker compose ps 2>/dev/null
     echo ""
-    echo "访问: http://localhost:7111"
+    echo "访问: http://localhost"
     echo ""
     echo "常用命令:"
     echo "  日志:   docker compose logs -f"
