@@ -5,6 +5,9 @@ FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
+# 使用国内镜像源
+RUN sed -i s/deb.debian.org/mirrors.aliyun.com/g /etc/apt/sources.list.d/debian.sources
+
 # 安装系统依赖（blivedm 需要 git，cryptography 需要 gcc）
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
@@ -15,8 +18,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # 先复制 requirements 利用 Docker 层缓存
 COPY requirements.txt .
 
-# 安装 Python 依赖到 /install 目录，避免污染系统 Python
-RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+# 使用国内pip镜像源
+RUN pip install --no-cache-dir --prefix=/install -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
 
 
 # ============================================================
@@ -25,6 +28,9 @@ RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 FROM python:3.11-slim AS runtime
 
 WORKDIR /app
+
+# 使用国内镜像源
+RUN sed -i s/deb.debian.org/mirrors.aliyun.com/g /etc/apt/sources.list.d/debian.sources
 
 # 运行时只需 git（blivedm 运行时可能需要）
 RUN apt-get update && apt-get install -y --no-install-recommends \
