@@ -55,8 +55,11 @@ prepare_dirs() {
     
     mkdir -p data logs
     
-    # 设置权限（容器内appuser需要写入权限）
+    # 设置目录权限（容器内appuser需要写入权限）
     chmod 777 data logs
+    
+    # 设置目录内文件权限
+    chmod -R 666 data/* 2>/dev/null || true
     
     success "目录准备完成"
 }
