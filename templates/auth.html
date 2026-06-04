@@ -283,7 +283,7 @@
 
     // WebSocket connection
     const socket = io({
-        transports: ['websocket', 'polling'],
+        transports: ['polling'],
         reconnection: true,
         reconnectionAttempts: 3,
         reconnectionDelay: 1000,
