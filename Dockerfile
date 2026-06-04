@@ -18,8 +18,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # 先复制 requirements 利用 Docker 层缓存
 COPY requirements.txt .
 
-# 使用国内pip镜像源
-RUN pip install --no-cache-dir --prefix=/install -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
+# 使用阿里云pip镜像源（清华源偶发403）
+RUN pip install --no-cache-dir --prefix=/install \
+    -i https://mirrors.aliyun.com/pypi/simple/ \
+    --trusted-host mirrors.aliyun.com \
+    --retries 3 \
+    -r requirements.txt
 
 
 # ============================================================

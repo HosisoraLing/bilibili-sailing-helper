@@ -553,5 +553,6 @@ if __name__ == '__main__':
             host=Config.HOST,
             port=Config.PORT,
             debug=Config.DEBUG,
-            use_reloader=False
+            use_reloader=False,
+            allow_unsafe_werkzeug=True
         )

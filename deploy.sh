@@ -1,166 +1,156 @@
 #!/bin/bash
-# B站舰礼助手 - 一键Docker部署脚本
+# B站舰礼助手 - Docker 部署脚本
+# 用法:
+#   ./deploy.sh              # 普通部署（利用缓存，代码变更秒级构建）
+#   ./deploy.sh --no-cache   # 强制全量重建（依赖变更时使用）
+#   ./deploy.sh --pull       # 更新基础镜像（python:3.11-slim）
+#   ./deploy.sh --logs       # 部署后自动跟踪日志
 
 set -e
 
-# 颜色定义
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# 打印带颜色的消息
-info() { echo -e "${BLUE}[INFO]${NC} $1"; }
-success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
-warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
-error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
+info()    { echo -e "${BLUE}[INFO]${NC} $1"; }
+success() { echo -e "${GREEN}[OK]${NC} $1"; }
+warn()    { echo -e "${YELLOW}[WARN]${NC} $1"; }
+error()   { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 
-# 检查Docker是否安装
+# 解析参数
+NO_CACHE=false
+PULL_BASE=false
+FOLLOW_LOGS=false
+for arg in "$@"; do
+    case "$arg" in
+        --no-cache)  NO_CACHE=true ;;
+        --pull)      PULL_BASE=true ;;
+        --logs)      FOLLOW_LOGS=true ;;
+        -h|--help)
+            echo "用法: ./deploy.sh [选项]"
+            echo "  --no-cache   强制全量重建（requirements.txt 变更时使用）"
+            echo "  --pull       更新基础镜像"
+            echo "  --logs       部署后跟踪日志"
+            exit 0
+            ;;
+        *) warn "未知参数: $arg" ;;
+    esac
+done
+
+# ---------- 检查环境 ----------
 check_docker() {
-    if ! command -v docker &> /dev/null; then
-        error "Docker 未安装，请先安装 Docker"
-    fi
-    
-    if ! command -v docker compose &> /dev/null && ! command -v docker-compose &> /dev/null; then
-        error "Docker Compose 未安装，请先安装 Docker Compose"
-    fi
-    
-    # 检查Docker服务是否运行
-    if ! docker info &> /dev/null; then
-        error "Docker 服务未启动，请启动 Docker 服务"
-    fi
-    
-    success "Docker 环境检查通过"
+    command -v docker &> /dev/null || error "Docker 未安装"
+    docker info &> /dev/null || error "Docker 服务未启动"
+    success "Docker 环境正常"
 }
 
-# 检查配置文件
+# ---------- 检查配置 ----------
 check_config() {
     if [ ! -f "settings.json" ]; then
         if [ -f "settings.json.example" ]; then
-            warn "settings.json 不存在，正在从示例文件创建..."
+            warn "settings.json 不存在，从示例文件创建..."
             cp settings.json.example settings.json
-            warn "请编辑 settings.json 填写你的配置后重新运行此脚本"
+            warn "请编辑 settings.json 后重新运行"
             exit 0
         else
-            error "settings.json 和 settings.json.example 都不存在"
+            error "settings.json 不存在"
         fi
     fi
-    success "配置文件检查通过"
+    success "配置文件就绪"
 }
 
-# 创建必要的目录并设置权限
+# ---------- 准备目录 & 权限 ----------
 prepare_dirs() {
-    info "准备数据和日志目录..."
-    
     mkdir -p data logs
-    
-    # 设置目录权限（容器内appuser需要写入权限）
+    # 容器内 appuser 需要写入权限
     chmod 777 data logs
-    
-    # 设置目录内文件权限
-    chmod -R 666 data/* 2>/dev/null || true
-    
-    success "目录准备完成"
+    chmod 666 data/* 2>/dev/null || true
+    success "目录权限就绪"
 }
 
-# 停止旧容器
-stop_old_container() {
-    if docker ps -a --format '{{.Names}}' | grep -q '^bilibili-sailing-helper$'; then
-        info "停止旧容器..."
-        docker compose down 2>/dev/null || docker-compose down 2>/dev/null
-        success "旧容器已停止"
-    fi
-}
-
-# 构建镜像
+# ---------- 构建镜像 ----------
 build_image() {
-    info "开始构建 Docker 镜像（首次构建可能需要较长时间）..."
-    
-    if command -v docker compose &> /dev/null; then
-        docker compose build --no-cache
+    local build_args=""
+
+    if $NO_CACHE; then
+        info "全量重建（--no-cache）..."
+        build_args="--no-cache"
     else
-        docker-compose build --no-cache
+        info "增量构建（利用 Docker 层缓存）..."
     fi
-    
+
+    if $PULL_BASE; then
+        info "拉取最新基础镜像..."
+        docker compose pull 2>/dev/null || true
+    fi
+
+    docker compose build $build_args
     success "镜像构建完成"
 }
 
-# 启动服务
+# ---------- 启动服务 ----------
 start_service() {
-    info "启动服务..."
-    
-    if command -v docker compose &> /dev/null; then
-        docker compose up -d
+    # 检测是否有代码/配置变更，决定是否需要重建
+    local containers
+    containers=$(docker compose ps -q 2>/dev/null)
+
+    if [ -z "$containers" ]; then
+        info "首次启动..."
+        docker compose up -d --build
     else
-        docker-compose up -d
+        info "重启服务..."
+        docker compose up -d
     fi
-    
+
     success "服务已启动"
 }
 
-# 等待服务就绪
+# ---------- 等待就绪 ----------
 wait_for_service() {
-    info "等待服务启动..."
-    
-    local max_retries=30
+    info "等待服务就绪..."
     local retry=0
-    
-    while [ $retry -lt $max_retries ]; do
-        if curl -s -o /dev/null -w "%{http_code}" http://localhost:7111/ | grep -q "200\|302"; then
-            success "服务已就绪"
+    while [ $retry -lt 15 ]; do
+        if curl -s -o /dev/null -w "%{http_code}" http://localhost:7111/ 2>/dev/null | grep -q "200\|302"; then
+            success "服务就绪"
             return 0
         fi
-        
         retry=$((retry + 1))
         sleep 2
     done
-    
-    warn "服务启动超时，请检查日志: docker compose logs"
+    warn "启动超时，检查日志: docker compose logs"
 }
 
-# 显示服务状态
+# ---------- 状态展示 ----------
 show_status() {
     echo ""
-    echo "=========================================="
-    echo "       服务部署完成"
-    echo "=========================================="
+    docker compose ps 2>/dev/null
     echo ""
-    
-    # 获取容器状态
-    if command -v docker compose &> /dev/null; then
-        docker compose ps
-    else
-        docker-compose ps
-    fi
-    
-    echo ""
-    echo "访问地址: http://localhost:7111"
+    echo "访问: http://localhost:7111"
     echo ""
     echo "常用命令:"
-    echo "  查看日志: docker compose logs -f"
-    echo "  停止服务: docker compose down"
-    echo "  重启服务: docker compose restart"
-    echo "  查看错误日志: docker compose exec app cat /app/logs/error.log"
+    echo "  日志:   docker compose logs -f"
+    echo "  停止:   docker compose down"
+    echo "  重启:   docker compose restart"
+    echo "  错误:   docker compose logs --tail=50 app"
     echo ""
 }
 
-# 主函数
+# ---------- 主流程 ----------
 main() {
-    echo "=========================================="
-    echo "   B站舰礼助手 - Docker 一键部署"
-    echo "=========================================="
+    echo "========== B站舰礼助手 =========="
     echo ""
-    
+
     check_docker
     check_config
     prepare_dirs
-    stop_old_container
     build_image
     start_service
     wait_for_service
     show_status
+
+    $FOLLOW_LOGS && docker compose logs -f
 }
 
-# 运行主函数
 main
