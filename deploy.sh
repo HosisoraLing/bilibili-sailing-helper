@@ -49,6 +49,18 @@ check_config() {
     success "配置文件检查通过"
 }
 
+# 创建必要的目录并设置权限
+prepare_dirs() {
+    info "准备数据和日志目录..."
+    
+    mkdir -p data logs
+    
+    # 设置权限（容器内appuser需要写入权限）
+    chmod 777 data logs
+    
+    success "目录准备完成"
+}
+
 # 停止旧容器
 stop_old_container() {
     if docker ps -a --format '{{.Names}}' | grep -q '^bilibili-sailing-helper$'; then
@@ -139,6 +151,7 @@ main() {
     
     check_docker
     check_config
+    prepare_dirs
     stop_old_container
     build_image
     start_service
