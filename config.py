@@ -53,8 +53,10 @@ ANCHOR_LIVE_URL = f"https://live.bilibili.com/{ROOM_ID_STR}"
 
 # ================= B站登录凭证 =================
 
+import urllib.parse
+
 bili_cfg = settings.get('bilibili', {})
-SESSDATA = bili_cfg.get('SESSDATA', '')
+SESSDATA = urllib.parse.unquote(bili_cfg.get('SESSDATA', ''))
 BILI_JCT = bili_cfg.get('bili_jct', '')
 BUVID3 = bili_cfg.get('buvid3', '')
 
