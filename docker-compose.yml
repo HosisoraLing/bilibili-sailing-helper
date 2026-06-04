@@ -14,11 +14,11 @@ services:
       # settings.json 含密钥，bind mount 而非打入镜像
       - ./settings.json:/app/settings.json:ro
 
-      # SQLite 数据库持久化（bind mount）
+      # SQLite 数据库持久化
       - ./data:/app/data
 
       # 日志持久化
-      - sailing-logs:/app/logs
+      - ./logs:/app/logs
 
       # SSL 证书（可选，不配置 SSL 时此行无影响）
       # - ./ssl/:/app/ssl/:ro
@@ -44,5 +44,3 @@ services:
           memory: 128M
 
 volumes:
-  sailing-logs:
-    driver: local
