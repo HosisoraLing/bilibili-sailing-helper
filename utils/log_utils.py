@@ -61,6 +61,10 @@ def setup_logging():
             # 无法创建日志文件，仅使用控制台输出
             pass
 
+    # 过滤 blivedm 的 "unknown cmd" 噪音日志
+    blivedm_logger = logging.getLogger('blivedm')
+    blivedm_logger.setLevel(logging.ERROR)
+
     _initialized = True
 
 
