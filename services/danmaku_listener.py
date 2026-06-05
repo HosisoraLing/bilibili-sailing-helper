@@ -178,8 +178,11 @@ def _run_listener_forever():
         try:
             loop.run_until_complete(_run_client())
             delay = 3
+            logger.warning("弹幕客户端正常退出，%d秒后重连", delay)
+        except asyncio.CancelledError:
+            logger.warning("弹幕客户端被取消，%d秒后重连", delay)
         except Exception:
-            logger.exception("❌ 弹幕监听异常，重连中")
+            logger.exception("❌ 弹幕监听异常，%d秒后重连", delay)
 
         if _stop_event.is_set():
             break
@@ -190,12 +193,26 @@ def _run_listener_forever():
     loop.close()
     _listener_loop = None
 
+
+def _watchdog():
+    """守护线程：检测弹幕监听线程存活状态，死了就重启"""
+    while not _stop_event.is_set():
+        time.sleep(30)
+        if _stop_event.is_set():
+            break
+        if _listener_thread is None or not _listener_thread.is_alive():
+            logger.warning("⚠️ 弹幕监听线程已停止，正在重启...")
+            start_danmaku_auth_listener(_flask_app, _socketio)
+
 # =========================
 # 对外接口
 # =========================
 
+_watchdog_thread: Optional[threading.Thread] = None
+
+
 def start_danmaku_auth_listener(app_instance, socketio_instance=None):
-    global _listener_thread, _flask_app, _socketio
+    global _listener_thread, _watchdog_thread, _flask_app, _socketio
 
     _flask_app = app_instance
     _socketio = socketio_instance
@@ -213,6 +230,15 @@ def start_danmaku_auth_listener(app_instance, socketio_instance=None):
     _listener_thread.start()
 
     logger.warning("🚀 弹幕鉴权监听线程已启动")
+
+    if _watchdog_thread is None or not _watchdog_thread.is_alive():
+        _watchdog_thread = threading.Thread(
+            target=_watchdog,
+            daemon=True,
+            name="DanmakuWatchdog"
+        )
+        _watchdog_thread.start()
+        logger.warning("🐕 弹幕监听看门狗已启动")
 
 def stop_danmaku_auth_listener():
     _stop_event.set()
