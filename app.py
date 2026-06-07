@@ -446,6 +446,33 @@ def start_guard_gift_scheduler(app):
     logger.info("舰长礼物统计定时任务已启动（每天凌晨2点、每月15日4点和月末最后一秒执行）")
 
 
+def start_session_cleanup_scheduler(app):
+    """
+    启动session清理定时任务
+    - 每10分钟清理过期的鉴权session
+    """
+    import threading
+    import time
+    from services.auth_service import cleanup_expired_sessions
+
+    def scheduler():
+        while True:
+            try:
+                time.sleep(600)  # 每10分钟执行一次
+                
+                with app.app_context():
+                    cleaned = cleanup_expired_sessions()
+                    if cleaned > 0:
+                        logger.info(f"清理了 {cleaned} 个过期鉴权session")
+                        
+            except Exception as e:
+                logger.error(f"Session清理任务出错: {e}", exc_info=True)
+
+    thread = threading.Thread(target=scheduler, daemon=True)
+    thread.start()
+    logger.info("Session清理定时任务已启动（每10分钟执行一次）")
+
+
 def start_auto_update_scheduler(app):
     """
     启动自动更新检查定时任务
@@ -594,6 +621,10 @@ if __name__ == '__main__':
     # 启动舰长礼物统计定时任务
     with app_instance.app_context():
         start_guard_gift_scheduler(app_instance)
+
+    # 启动session清理定时任务
+    with app_instance.app_context():
+        start_session_cleanup_scheduler(app_instance)
 
     # 启动自动更新检查任务
     with app_instance.app_context():

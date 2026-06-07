@@ -101,7 +101,12 @@ class AuthDMHandler(blivedm.BaseHandler):
                         _authed_uids.discard(uid)
                     return
 
-                mark_auth_success(session)
+                # 标记鉴权成功（带并发保护）
+                if not mark_auth_success(session):
+                    # session已被处理或过期
+                    with _authed_lock:
+                        _authed_uids.discard(uid)
+                    return
 
                 # 获取鉴权模式
                 auth_mode = get_auth_mode(uid_str)
