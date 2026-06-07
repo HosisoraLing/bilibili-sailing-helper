@@ -94,6 +94,7 @@ class AuthDMHandler(blivedm.BaseHandler):
                 return
 
             # Flask 上下文内完成鉴权
+            redirect_url = None
             with _flask_app.app_context():
                 session = get_active_auth_session(uid_str)
                 if not session or session.is_expired():
@@ -128,6 +129,10 @@ class AuthDMHandler(blivedm.BaseHandler):
 
                 # 清除鉴权模式
                 clear_auth_mode(uid_str)
+
+            # 确保redirect_url已设置
+            if not redirect_url:
+                redirect_url = f'/login?uid={uid_str}&auto_login=true'
 
             logger.warning(f"✅ 鉴权成功：{uname}({uid})")
             logger.warning(f"跳转地址：{redirect_url}")
