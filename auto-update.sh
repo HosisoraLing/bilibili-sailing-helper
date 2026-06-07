@@ -77,17 +77,28 @@ pull_update() {
 rebuild_docker() {
     info "重建Docker镜像..."
     
+    # 停止并删除旧容器
     if command -v docker compose &> /dev/null; then
-        docker compose build --no-cache
         docker compose down
+        docker compose build --no-cache
         docker compose up -d
     else
-        docker-compose build --no-cache
         docker-compose down
+        docker-compose build --no-cache
         docker-compose up -d
     fi
     
     success "Docker服务已重启"
+}
+
+# 检查是否需要重建Docker
+check_docker_rebuild() {
+    if [ -f "/tmp/need_rebuild" ]; then
+        info "检测到需要重建Docker镜像"
+        rm -f /tmp/need_rebuild
+        return 0
+    fi
+    return 1
 }
 
 # 重启服务（非Docker）
@@ -139,6 +150,13 @@ main() {
         exit 1
     fi
     
+    # 检查是否需要重建Docker（由应用内部触发）
+    if check_docker_rebuild; then
+        rebuild_docker
+        check_health
+        exit 0
+    fi
+    
     # 检查更新
     if ! check_update; then
         exit 0
@@ -174,6 +192,9 @@ main() {
 case "${1:-}" in
     --check)
         check_update
+        ;;
+    --check-rebuild)
+        check_docker_rebuild && rebuild_docker
         ;;
     --force)
         pull_update
