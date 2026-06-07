@@ -133,26 +133,8 @@ show_status() {
     echo "  日志:   docker compose logs -f"
     echo "  停止:   docker compose down"
     echo "  重启:   docker compose restart"
-    echo "  更新:   ./auto-update.sh"
     echo "  错误:   docker compose logs --tail=50 app"
     echo ""
-    
-    # 添加自动更新cron任务
-    add_cron_job
-}
-
-# 添加cron任务
-add_cron_job() {
-    CRON_CMD="*/5 * * * * cd $(pwd) && ./auto-update.sh --check-rebuild >> /tmp/auto-update.log 2>&1"
-    
-    # 检查是否已存在
-    if crontab -l 2>/dev/null | grep -q "auto-update.sh --check-rebuild"; then
-        echo "[INFO] cron任务已存在"
-    else
-        echo "[INFO] 添加自动更新cron任务..."
-        (crontab -l 2>/dev/null; echo "$CRON_CMD") | crontab -
-        echo "[SUCCESS] cron任务已添加（每5分钟检查一次）"
-    fi
 }
 
 # ---------- 主流程 ----------

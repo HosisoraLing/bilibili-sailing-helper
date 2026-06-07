@@ -500,23 +500,8 @@ def start_auto_update_scheduler(app):
                                 )
                                 
                                 if pull_result.returncode == 0:
-                                    logger.info("代码更新成功")
-                                    
-                                    # 检查是否在Docker环境中
-                                    import os
-                                    is_docker = os.path.exists('/.dockerenv')
-                                    
-                                    if is_docker:
-                                        # Docker环境：触发热重载（通过修改文件触发watchdog）
-                                        logger.info("Docker环境检测到，代码将在下次容器重启时生效")
-                                        # 创建标记文件，提示需要重建镜像
-                                        with open('/tmp/need_rebuild', 'w') as f:
-                                            f.write(datetime.now().isoformat())
-                                    else:
-                                        # 非Docker环境：直接重启
-                                        logger.info("非Docker环境，将在5秒后重启服务...")
-                                        time.sleep(5)
-                                        os.execv(sys.executable, ['python'] + sys.argv)
+                                    logger.info("代码更新成功，将在下次启动时生效")
+                                    # 注意：不自动重启，需要手动重启或通过Docker自动重启
                                 else:
                                     logger.error(f"代码更新失败: {pull_result.stderr}")
                             else:
