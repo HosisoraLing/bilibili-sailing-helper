@@ -54,7 +54,7 @@ class AuthDMHandler(blivedm.BaseHandler):
         uname = message.uname
         text = message.msg.strip()
 
-        # ✅ 控制台只打印这一行
+        # 控制台打印弹幕
         print(f"{uid} | {uname} : {text}", flush=True)
 
         # 已鉴权 UID 直接忽略
@@ -72,16 +72,33 @@ class AuthDMHandler(blivedm.BaseHandler):
         input_code = m.group(1)
         uid_str = str(uid)
 
-        # Check for auth
-        correct_code = get_cached_code(uid_str)
-        if correct_code and input_code.lower() == correct_code.lower():
+        # 立即将uid标记为正在鉴权，防止重复处理
+        with _authed_lock:
+            if uid in _authed_uids:
+                return
+            # 预先添加到已鉴权集合，防止竞态条件
+            _authed_uids.add(uid)
+
+        try:
+            # 检查验证码
+            correct_code = get_cached_code(uid_str)
+            if not correct_code or input_code.lower() != correct_code.lower():
+                # 验证码不匹配，移除预添加的标记
+                with _authed_lock:
+                    _authed_uids.discard(uid)
+                return
+
             if not _flask_app:
+                with _authed_lock:
+                    _authed_uids.discard(uid)
                 return
 
             # Flask 上下文内完成鉴权
             with _flask_app.app_context():
                 session = get_active_auth_session(uid_str)
                 if not session or session.is_expired():
+                    with _authed_lock:
+                        _authed_uids.discard(uid)
                     return
 
                 mark_auth_success(session)
@@ -96,23 +113,16 @@ class AuthDMHandler(blivedm.BaseHandler):
                 user = User.query.filter_by(uid=uid_str).first()
 
                 if reset_mode:
-                    # 密码重置模式：跳转到重置密码页面
                     redirect_url = f'/reset-password?uid={uid_str}'
                 elif login_mode:
-                    # 鉴权登录模式：跳转到登录页（自动登录）
                     redirect_url = f'/login?uid={uid_str}&auto_login=true'
                 elif user and user.password_hash:
-                    # 有密码：跳转到登录页（自动登录）
                     redirect_url = f'/login?uid={uid_str}&auto_login=true'
                 else:
-                    # 无密码：跳转到注册页（设置密码）
                     redirect_url = f'/register?uid={uid_str}'
 
                 # 清除鉴权模式
                 clear_auth_mode(uid_str)
-
-            with _authed_lock:
-                _authed_uids.add(uid)
 
             logger.warning(f"✅ 鉴权成功：{uname}({uid})")
             logger.warning(f"跳转地址：{redirect_url}")
@@ -128,7 +138,12 @@ class AuthDMHandler(blivedm.BaseHandler):
                     logger.warning(f"WebSocket事件已发送到房间：auth_{uid_str}")
                 except Exception as e:
                     logger.warning(f"Failed to emit WebSocket event: {e}")
-            return
+
+        except Exception as e:
+            logger.error(f"鉴权处理异常: {e}", exc_info=True)
+            # 发生异常时移除预添加的标记
+            with _authed_lock:
+                _authed_uids.discard(uid)
 
 # =========================
 # blivedm 客户端生命周期
