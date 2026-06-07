@@ -285,7 +285,96 @@ class GuardGiftService:
         return csv_content
 
     @staticmethod
-    def get_available_months() -> List[str]:
+    def update_historical_months(months_back: int = 6) -> List[GuardGiftRecord]:
+        """
+        更新历史月份的舰长礼物记录
+        
+        根据当前陪伴天数反推历史月份是否符合资格，并创建/更新记录
+        
+        Args:
+            months_back: 向前回溯的月数，默认6个月
+            
+        Returns:
+            List[GuardGiftRecord]: 新增的记录列表
+        """
+        from sqlalchemy import distinct
+        
+        today = date.today()
+        current_month = today.strftime('%Y-%m')
+        
+        # 获取所有在舰舰长
+        guards = Guard.query.filter_by(in_guard=True).all()
+        
+        new_records = []
+        
+        # 获取已有记录的月份
+        existing_months = set(
+            m[0] for m in db.session.query(distinct(GuardGiftRecord.month)).all()
+        )
+        
+        for guard in guards:
+            if not guard.accompany_days or guard.accompany_days <= 0:
+                continue
+            
+            # 回溯每个月份
+            for i in range(1, months_back + 1):
+                # 计算目标月份
+                target_date = today.replace(day=1) - timedelta(days=i * 30)
+                target_month = target_date.strftime('%Y-%m')
+                
+                # 跳过当前月份（由其他方法处理）
+                if target_month == current_month:
+                    continue
+                
+                # 获取该月最后一天
+                year, month = map(int, target_month.split('-'))
+                month_last_day = GuardGiftService.get_last_day_of_month(year, month)
+                
+                # 计算从该月最后一天到今天的天数差
+                days_diff = (today - month_last_day).days
+                
+                # 计算当时的陪伴天数
+                days_at_month = guard.accompany_days - days_diff
+                
+                if days_at_month <= 0:
+                    continue
+                
+                # 判断当时是否符合资格
+                # 使用简化规则：陪伴天数 % 30 的余数 <= 当月天数
+                remainder = days_at_month % 30
+                if remainder == 0:
+                    # 30的倍数，需要特殊处理
+                    # 简化：如果当时陪伴天数 >= 30 且在该月内达到30的倍数
+                    is_eligible = (days_at_month >= 30) and (month_last_day.day >= 30)
+                else:
+                    is_eligible = remainder <= month_last_day.day
+                
+                if is_eligible:
+                    # 检查是否已存在记录
+                    existing = GuardGiftRecord.query.filter_by(
+                        uid=guard.uid,
+                        month=target_month
+                    ).first()
+                    
+                    if not existing:
+                        # 创建新记录
+                        record = GuardGiftRecord(
+                            uid=guard.uid,
+                            nickname=guard.nickname,
+                            month=target_month,
+                            guard_level=guard.guard_level,
+                            accompany_days=days_at_month,
+                            received=False,
+                            created_at=get_beijing_now(),
+                            updated_at=get_beijing_now()
+                        )
+                        db.session.add(record)
+                        new_records.append(record)
+        
+        if new_records:
+            db.session.commit()
+        
+        return new_records
         """
         获取所有有记录的月份列表
 

@@ -389,11 +389,18 @@ def start_guard_gift_scheduler(app):
                 if is_15th_4am or is_last_day_last_second:
                     with app.app_context():
                         logger.info(f"开始执行舰长礼物统计任务（{'每月15日4点' if is_15th_4am else '月末最后一秒'}）...")
+                        
+                        # 统计当月
                         eligible_records = GuardGiftService.calculate_monthly_eligible_guards()
                         if eligible_records:
-                            logger.info(f"舰长礼物统计完成，新增 {len(eligible_records)} 个符合资格的舰长")
+                            logger.info(f"当月舰长礼物统计完成，新增 {len(eligible_records)} 个符合资格的舰长")
                         else:
-                            logger.info("舰长礼物统计完成，无新增符合条件的舰长")
+                            logger.info("当月舰长礼物统计完成，无新增符合条件的舰长")
+                        
+                        # 更新历史月份
+                        historical_records = GuardGiftService.update_historical_months()
+                        if historical_records:
+                            logger.info(f"历史月份更新完成，新增 {len(historical_records)} 条记录")
 
             except Exception as e:
                 logger.error(f"舰长礼物统计任务出错: {e}", exc_info=True)

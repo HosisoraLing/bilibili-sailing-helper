@@ -1296,7 +1296,16 @@ def admin_calculate_gifts():
         # 手动执行舰长礼物统计
         eligible_records = GuardGiftService.calculate_monthly_eligible_guards()
         count = len(eligible_records)
-        return jsonify({'success': True, 'count': count})
+        
+        # 同时更新历史月份
+        historical_records = GuardGiftService.update_historical_months()
+        historical_count = len(historical_records)
+        
+        return jsonify({
+            'success': True, 
+            'count': count,
+            'historical_count': historical_count
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
