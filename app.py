@@ -353,6 +353,7 @@ def start_guards_scheduler(app):
 def start_guard_gift_scheduler(app):
     """
     启动舰长礼物统计定时任务
+    - 每天凌晨2点执行（自动更新当月和历史月份）
     - 每月15日凌晨4点执行
     - 每月最后一日的最后一秒执行
     """
@@ -361,7 +362,13 @@ def start_guard_gift_scheduler(app):
     from datetime import datetime
     from services.guard_gift_service import GuardGiftService
 
+    # 记录上次执行日期，避免同一天重复执行
+    last_daily_run = None
+    last_monthly_run = None
+
     def scheduler():
+        nonlocal last_daily_run, last_monthly_run
+        
         while True:
             try:
                 now = datetime.now()
@@ -369,12 +376,17 @@ def start_guard_gift_scheduler(app):
                 current_hour = now.hour
                 current_minute = now.minute
                 current_second = now.second
+                today_str = now.strftime('%Y-%m-%d')
+                month_str = now.strftime('%Y-%m')
 
                 # 获取当前月份的最后一天
                 year = now.year
                 month = now.month
                 last_day = GuardGiftService.get_last_day_of_month(year, month)
 
+                # 检查是否是每天凌晨2点（每日更新）
+                is_daily_2am = (current_hour == 2 and current_minute == 0)
+                
                 # 检查是否是每月15日凌晨4点
                 is_15th_4am = (current_day == 15 and current_hour == 4 and current_minute == 0)
 
@@ -386,9 +398,27 @@ def start_guard_gift_scheduler(app):
                     current_second == 59
                 )
 
-                if is_15th_4am or is_last_day_last_second:
+                # 每日更新（凌晨2点）
+                if is_daily_2am and last_daily_run != today_str:
                     with app.app_context():
-                        logger.info(f"开始执行舰长礼物统计任务（{'每月15日4点' if is_15th_4am else '月末最后一秒'}）...")
+                        logger.info("开始执行每日舰长礼物统计...")
+                        
+                        # 统计当月
+                        eligible_records = GuardGiftService.calculate_monthly_eligible_guards()
+                        if eligible_records:
+                            logger.info(f"当月舰长礼物统计完成，新增 {len(eligible_records)} 个符合资格的舰长")
+                        
+                        # 更新历史月份
+                        historical_records = GuardGiftService.update_historical_months()
+                        if historical_records:
+                            logger.info(f"历史月份更新完成，新增 {len(historical_records)} 条记录")
+                        
+                        last_daily_run = today_str
+
+                # 每月特殊时间点更新
+                if (is_15th_4am or is_last_day_last_second) and last_monthly_run != month_str:
+                    with app.app_context():
+                        logger.info(f"开始执行月度舰长礼物统计任务（{'每月15日4点' if is_15th_4am else '月末最后一秒'}）...")
                         
                         # 统计当月
                         eligible_records = GuardGiftService.calculate_monthly_eligible_guards()
@@ -401,6 +431,8 @@ def start_guard_gift_scheduler(app):
                         historical_records = GuardGiftService.update_historical_months()
                         if historical_records:
                             logger.info(f"历史月份更新完成，新增 {len(historical_records)} 条记录")
+                        
+                        last_monthly_run = month_str
 
             except Exception as e:
                 logger.error(f"舰长礼物统计任务出错: {e}", exc_info=True)
@@ -411,7 +443,88 @@ def start_guard_gift_scheduler(app):
     # 启动后台线程
     thread = threading.Thread(target=scheduler, daemon=True)
     thread.start()
-    logger.info("舰长礼物统计定时任务已启动（每月15日4点和月末最后一秒执行）")
+    logger.info("舰长礼物统计定时任务已启动（每天凌晨2点、每月15日4点和月末最后一秒执行）")
+
+
+def start_auto_update_scheduler(app):
+    """
+    启动自动更新检查定时任务
+    - 每天凌晨3点检查GitHub更新
+    - 发现更新后自动拉取并重启
+    """
+    import threading
+    import time
+    import subprocess
+    from datetime import datetime
+
+    last_check_date = None
+
+    def scheduler():
+        nonlocal last_check_date
+        
+        while True:
+            try:
+                now = datetime.now()
+                today_str = now.strftime('%Y-%m-%d')
+                
+                # 每天凌晨3点检查更新
+                if now.hour == 3 and now.minute == 0 and last_check_date != today_str:
+                    logger.info("开始检查GitHub更新...")
+                    
+                    try:
+                        # 检查是否有更新
+                        result = subprocess.run(
+                            ['git', 'fetch', 'origin', 'main'],
+                            capture_output=True, text=True, timeout=30
+                        )
+                        
+                        if result.returncode == 0:
+                            # 比较本地和远程
+                            local = subprocess.run(
+                                ['git', 'rev-parse', 'HEAD'],
+                                capture_output=True, text=True
+                            ).stdout.strip()
+                            
+                            remote = subprocess.run(
+                                ['git', 'rev-parse', 'origin/main'],
+                                capture_output=True, text=True
+                            ).stdout.strip()
+                            
+                            if local != remote:
+                                logger.info(f"发现新版本，开始自动更新...")
+                                
+                                # 拉取更新
+                                pull_result = subprocess.run(
+                                    ['git', 'pull', 'origin', 'main'],
+                                    capture_output=True, text=True, timeout=60
+                                )
+                                
+                                if pull_result.returncode == 0:
+                                    logger.info("代码更新成功，将在下次启动时生效")
+                                    # 注意：不自动重启，需要手动重启或通过Docker自动重启
+                                else:
+                                    logger.error(f"代码更新失败: {pull_result.stderr}")
+                            else:
+                                logger.info("已是最新版本")
+                        else:
+                            logger.warning(f"检查更新失败: {result.stderr}")
+                    
+                    except subprocess.TimeoutExpired:
+                        logger.warning("检查更新超时")
+                    except Exception as e:
+                        logger.error(f"检查更新异常: {e}")
+                    
+                    last_check_date = today_str
+
+            except Exception as e:
+                logger.error(f"自动更新检查任务出错: {e}", exc_info=True)
+
+            # 每分钟检查一次
+            time.sleep(60)
+
+    thread = threading.Thread(target=scheduler, daemon=True)
+    thread.start()
+    logger.info("自动更新检查任务已启动（每天凌晨3点检查）")
 
 
 def register_admins():
@@ -481,6 +594,10 @@ if __name__ == '__main__':
     # 启动舰长礼物统计定时任务
     with app_instance.app_context():
         start_guard_gift_scheduler(app_instance)
+
+    # 启动自动更新检查任务
+    with app_instance.app_context():
+        start_auto_update_scheduler(app_instance)
 
     from services.danmaku_listener import start_danmaku_auth_listener
     start_danmaku_auth_listener(app_instance, socketio)
