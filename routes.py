@@ -1031,19 +1031,31 @@ def admin_guard_gifts():
 @require_admin
 def admin_export_guard_gifts():
 
-    # Get month parameter
+    # Get month parameter (None means export all months)
     month = request.args.get('month')
-    if not month:
-        month = GuardGiftService.get_current_month()
-
+    
     # Get filter type
     filter_type = request.args.get('filter', 'all')  # all, eligible, received
 
     # Load records based on filter
     if filter_type == 'eligible':
-        records = AdminService.get_eligible_guard_gift_records(month)
+        if month:
+            records = AdminService.get_eligible_guard_gift_records(month)
+        else:
+            # 获取所有月份的未领取记录
+            records = GuardGiftRecord.query.filter_by(received=False).order_by(
+                GuardGiftRecord.month.desc(),
+                GuardGiftRecord.guard_level.desc()
+            ).all()
     elif filter_type == 'received':
-        records = AdminService.get_received_guard_gift_records(month)
+        if month:
+            records = AdminService.get_received_guard_gift_records(month)
+        else:
+            # 获取所有月份的已领取记录
+            records = GuardGiftRecord.query.filter_by(received=True).order_by(
+                GuardGiftRecord.month.desc(),
+                GuardGiftRecord.guard_level.desc()
+            ).all()
     else:
         records = AdminService.get_all_guard_gift_records(month)
 
@@ -1051,7 +1063,8 @@ def admin_export_guard_gifts():
     csv_content = AdminService.generate_guard_gift_csv(records)
 
     # Return CSV file
-    return create_csv_response(csv_content, f'guard_gifts_{month}')
+    filename = f'guard_gifts_{month}' if month else 'guard_gifts_all'
+    return create_csv_response(csv_content, filename)
 
 
 # =========================

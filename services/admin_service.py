@@ -221,18 +221,21 @@ class AdminService:
     @staticmethod
     def get_all_guard_gift_records(month: Optional[str] = None) -> List[GuardGiftRecord]:
         """
-        获取所有舰长礼物记录
+        获取舰长礼物记录
 
         Args:
-            month: 月份，格式：YYYY-MM，默认为当前月份
+            month: 月份，格式：YYYY-MM，默认为当前月份。如果为None，返回所有月份。
 
         Returns:
             List[GuardGiftRecord]: 舰长礼物记录列表
         """
-        if month is None:
-            month = GuardGiftService.get_current_month()
-
-        return GuardGiftRecord.query.filter_by(month=month).order_by(
+        query = GuardGiftRecord.query
+        
+        if month is not None:
+            query = query.filter_by(month=month)
+        
+        return query.order_by(
+            GuardGiftRecord.month.desc(),
             GuardGiftRecord.guard_level.desc(),
             GuardGiftRecord.created_at.desc()
         ).all()
