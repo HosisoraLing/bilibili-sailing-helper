@@ -11,8 +11,8 @@ services:
       - "443:443"      # HTTPS（如启用 SSL）
 
     volumes:
-      # settings.json 含密钥，bind mount 而非打入镜像
-      - ./settings.json:/app/settings.json:ro
+      # settings.json 含密钥，bind mount（可写，扫码登录需要写入Cookie）
+      - ./settings.json:/app/settings.json
 
       # SQLite 数据库持久化
       - ./data:/app/data

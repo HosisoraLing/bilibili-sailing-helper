@@ -171,19 +171,48 @@ class CookieService:
                     logger.warning(f"提取二维码失败: {e}")
                     page.screenshot(path=QR_IMAGE_PATH)
                 
-                # 等待用户登录
+                # 等待用户扫码登录（通过URL变化检测）
                 max_wait = 300
                 start_time = time.time()
                 
+                logger.info("二维码已就绪，等待用户扫码...")
+                
                 while time.time() - start_time < max_wait:
-                    cookies = {c['name']: c['value'] for c in context.cookies()}
-                    
-                    if 'SESSDATA' in cookies and cookies['SESSDATA'] and len(cookies['SESSDATA']) > 10:
-                        logger.info("登录成功！")
-                        sessdata = cookies['SESSDATA']
-                        bili_jct = cookies.get('bili_jct', '')
-                        browser.close()
-                        return sessdata, bili_jct
+                    try:
+                        # 检查URL是否变化（登录成功后会跳转）
+                        current_url = page.url
+                        if 'passport.bilibili.com/login' not in current_url:
+                            logger.info(f"检测到页面跳转: {current_url}")
+                            # 登录成功，访问主站获取cookies
+                            page.goto('https://www.bilibili.com')
+                            page.wait_for_load_state('networkidle')
+                            time.sleep(2)
+                        
+                        cookies = {c['name']: c['value'] for c in context.cookies()}
+                        
+                        if 'SESSDATA' in cookies and cookies['SESSDATA'] and len(cookies['SESSDATA']) > 10:
+                            logger.info(f"登录成功！获取到SESSDATA")
+                            sessdata = cookies['SESSDATA']
+                            bili_jct = cookies.get('bili_jct', '')
+                            browser.close()
+                            return sessdata, bili_jct
+                        
+                        # 尝试检测页面上的登录成功提示
+                        success_elem = page.query_selector('.login-success, .logged-in, [class*="success"]')
+                        if success_elem:
+                            logger.info("检测到登录成功提示，刷新页面获取cookies")
+                            page.goto('https://www.bilibili.com')
+                            page.wait_for_load_state('networkidle')
+                            time.sleep(2)
+                            cookies = {c['name']: c['value'] for c in context.cookies()}
+                            if 'SESSDATA' in cookies and cookies['SESSDATA'] and len(cookies['SESSDATA']) > 10:
+                                logger.info(f"登录成功！获取到SESSDATA")
+                                sessdata = cookies['SESSDATA']
+                                bili_jct = cookies.get('bili_jct', '')
+                                browser.close()
+                                return sessdata, bili_jct
+                    except Exception as e:
+                        logger.warning(f"检测登录状态时出错: {e}")
                     
                     time.sleep(2)
                 

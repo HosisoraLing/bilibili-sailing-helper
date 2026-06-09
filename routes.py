@@ -1962,13 +1962,16 @@ def admin_cookie_status():
     has_sessdata = bool(bilibili.get('SESSDATA'))
     has_buvid3 = bool(bilibili.get('buvid3'))
     
-    # 验证SESSDATA是否有效
+    # 验证SESSDATA是否有效（只在有SESSDATA时验证）
     is_valid = False
     username = None
     if has_sessdata:
-        is_valid, result = CookieService.validate_cookie(bilibili['SESSDATA'])
-        if is_valid:
-            username = result
+        try:
+            is_valid, result = CookieService.validate_cookie(bilibili['SESSDATA'])
+            if is_valid:
+                username = result
+        except Exception as e:
+            logger.warning(f"验证Cookie失败: {e}")
     
     # 获取弹幕监听状态
     listener_status = get_listener_status()
@@ -2031,22 +2034,33 @@ def admin_start_qr_login():
     if not csrf_token or not UserService.verify_csrf_token(csrf_token):
         return jsonify({'error': 'CSRF token invalid'}), 403
     
+    # 清除之前的二维码
+    import os
+    QR_PATH = '/tmp/bilibili_qr.png'
+    if os.path.exists(QR_PATH):
+        os.remove(QR_PATH)
+    
     def do_login():
         try:
+            logger.info("开始扫码登录流程...")
             sessdata, bili_jct = CookieService.get_sessdata_by_qr()
             if sessdata:
+                logger.info(f"获取到SESSDATA，长度: {len(sessdata)}")
                 settings = CookieService.load_settings()
                 settings.setdefault('bilibili', {})['SESSDATA'] = sessdata
                 if bili_jct:
                     settings['bilibili']['bili_jct'] = bili_jct
                 CookieService.save_settings(settings)
+                logger.info("Cookie已保存到settings.json")
                 
                 # 重启弹幕监听
                 restart_listener()
+                logger.info("弹幕监听已重启")
+            else:
+                logger.warning("扫码登录未获取到SESSDATA")
         except Exception as e:
             logger.error(f"扫码登录失败: {e}", exc_info=True)
     
-    # 在后台线程执行
     thread = threading.Thread(target=do_login, daemon=True)
     thread.start()
     
