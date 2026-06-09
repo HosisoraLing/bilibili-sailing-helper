@@ -120,48 +120,53 @@ class CookieService:
                 # 打开B站登录页面
                 page.goto('https://passport.bilibili.com/login')
                 
-                # 等待二维码加载
-                try:
-                    page.wait_for_selector('img[src^="data:image"], canvas', timeout=15000)
-                    time.sleep(2)
-                except Exception as e:
-                    logger.warning(f"等待二维码元素超时: {e}")
-                    page.screenshot(path=QR_IMAGE_PATH)
-                    logger.info(f"已截取整个页面到: {QR_IMAGE_PATH}")
+                # 等待页面完全加载
+                page.wait_for_load_state('networkidle')
+                time.sleep(3)
                 
                 # 尝试提取二维码图片
                 try:
                     import base64
                     
-                    # 查找base64编码的图片
-                    images = page.query_selector_all('img[src^="data:image"]')
-                    qr_saved = False
+                    # 多次尝试获取有效的二维码
+                    for attempt in range(3):
+                        # 查找base64编码的图片
+                        images = page.query_selector_all('img[src^="data:image"]')
+                        
+                        for img in images:
+                            src = img.get_attribute('src') or ''
+                            if src.startswith('data:image') and len(src) > 1000:  # 过滤小图标
+                                # 提取base64数据
+                                header, data = src.split(',', 1)
+                                img_bytes = base64.b64decode(data)
+                                
+                                # 检查是否是有效的二维码（至少100x100像素）
+                                if len(img_bytes) > 1000:
+                                    # 保存图片
+                                    with open(QR_IMAGE_PATH, 'wb') as f:
+                                        f.write(img_bytes)
+                                    
+                                    logger.info(f"二维码已保存到: {QR_IMAGE_PATH} (尝试 {attempt + 1})")
+                                    break
+                        else:
+                            # 没有找到合适的图片，等待后重试
+                            time.sleep(2)
+                            page.reload()
+                            page.wait_for_load_state('networkidle')
+                            time.sleep(3)
+                            continue
+                        break
                     
-                    for img in images:
-                        src = img.get_attribute('src') or ''
-                        if src.startswith('data:image'):
-                            # 提取base64数据
-                            header, data = src.split(',', 1)
-                            img_bytes = base64.b64decode(data)
-                            
-                            # 保存图片
-                            with open(QR_IMAGE_PATH, 'wb') as f:
-                                f.write(img_bytes)
-                            
-                            logger.info(f"二维码已保存到: {QR_IMAGE_PATH}")
-                            qr_saved = True
-                            break
-                    
-                    if not qr_saved:
-                        # 尝试截取canvas元素
+                    # 如果base64方式失败，尝试截取canvas
+                    if not os.path.exists(QR_IMAGE_PATH):
                         canvas = page.query_selector('canvas')
                         if canvas:
                             canvas.screenshot(path=QR_IMAGE_PATH)
                             logger.info(f"canvas二维码已保存到: {QR_IMAGE_PATH}")
                         else:
-                            # 截取页面中心区域
-                            page.screenshot(path=QR_IMAGE_PATH, clip={'x': 250, 'y': 200, 'width': 300, 'height': 300})
-                            logger.info(f"已截取页面区域到: {QR_IMAGE_PATH}")
+                            # 最后尝试截取整个页面
+                            page.screenshot(path=QR_IMAGE_PATH)
+                            logger.info(f"已截取整个页面到: {QR_IMAGE_PATH}")
                 except Exception as e:
                     logger.warning(f"提取二维码失败: {e}")
                     page.screenshot(path=QR_IMAGE_PATH)
