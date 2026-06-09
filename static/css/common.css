@@ -813,6 +813,7 @@ body.admin-layout {
     text-align: center;
     font-size: 13px;
     color: var(--text-secondary);
+    width: 100%;
 }
 
 .page-footer a {
