@@ -8,7 +8,7 @@ import aiohttp
 import blivedm
 import blivedm.models.web as web_models
 
-from config import ROOM_ID, SESSDATA, BUVID3
+from config import ROOM_ID, SESSDATA, BUVID3, BILI_JCT
 from services.auth_service import (
     get_active_auth_session,
     get_cached_code,
