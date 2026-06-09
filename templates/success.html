@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if submitted %}地址已更新{% else %}提交成功{% endif %}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/fonts/fonts.css">
+    <link rel="stylesheet" href="/static/css/common.css">
+    <style>
+        .container {
+            max-width: 450px;
+            padding: 40px 30px;
+            text-align: center;
+        }
+
+        .success-icon {
+            font-size: 70px;
+            margin-bottom: 20px;
+            display: inline-block;
+            animation: bounceIn 0.6s ease both;
+        }
+
+        h1 {
+            font-size: 24px;
+            color: var(--text-primary);
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .message {
+            font-size: 16px;
+            color: var(--text-secondary);
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+
+        .highlight {
+            color: #e74c3c;
+            font-weight: 600;
+            display: inline-block;
+            animation: heartBeat 1.5s ease-in-out infinite;
+        }
+
+        .success-checkmark {
+            font-size: 14px;
+            color: var(--success);
+            margin-top: 15px;
+            opacity: 0;
+            animation: fadeIn 0.5s ease 0.3s forwards;
+        }
+
+        .confetti {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+            animation: confettiFall 3s linear infinite;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .flash-tip {
+            background: #fffbeb;
+            border: 1px solid #fbbf24;
+            color: #92400e;
+            padding: 12px;
+            border-radius: var(--radius-sm);
+            margin-top: 20px;
+            font-size: 13px;
+            animation: fadeIn 1s ease both;
+        }
+    </style>
+</head>
+<body>
+    <div class="container animate-slideUp">
+        <div class="success-icon">✅</div>
+
+        <h1>
+            {% if submitted %}
+                地址已更新
+            {% else %}
+                提交成功
+            {% endif %}
+        </h1>
+
+        <p class="message">
+            {% if submitted %}
+                您的收货信息已成功更新
+            {% else %}
+                感谢支持 <span class="highlight">小蝰</span> ❤️
+            {% endif %}
+        </p>
+
+        <div class="success-checkmark">
+            <i class="fas fa-check-circle"></i> 信息已妥善保存
+        </div>
+
+        <div class="actions mt-20">
+            <a href="/" class="btn btn-primary">
+                <i class="fas fa-home"></i> 返回首页
+            </a>
+            {% if not submitted %}
+                <a href="/?uid={{ uid }}" class="btn btn-ghost">
+                    <i class="fas fa-search"></i> 检查已提交信息
+                </a>
+            {% endif %}
+        </div>
+
+        {% if not submitted %}
+        <div class="flash-tip">
+            💡 提示：您可以通过UID重新进入页面查看或修改地址
+        </div>
+        {% endif %}
+    </div>
+
+    <script>
+        function createConfetti() {
+            const colors = ['#f39c12', '#e74c3c', '#3498db', '#2ecc71', '#9b59b6', '#667eea', '#fa709a'];
+            const container = document.body;
+
+            for (let i = 0; i < 20; i++) {
+                setTimeout(() => {
+                    const confetti = document.createElement('div');
+                    confetti.className = 'confetti';
+                    confetti.style.left = Math.random() * 100 + '%';
+                    confetti.style.background = colors[Math.floor(Math.random() * colors.length)];
+                    confetti.style.animationDelay = Math.random() * 2 + 's';
+                    confetti.style.animationDuration = (Math.random() * 2 + 2) + 's';
+                    container.appendChild(confetti);
+
+                    setTimeout(() => {
+                        if (confetti.parentNode) confetti.parentNode.removeChild(confetti);
+                    }, 4000);
+                }, i * 80);
+            }
+        }
+
+        window.addEventListener('load', () => {
+            setTimeout(createConfetti, 300);
+        });
+
+        const flashTip = document.querySelector('.flash-tip');
+        if (flashTip) {
+            setTimeout(() => {
+                flashTip.style.opacity = '0';
+                flashTip.style.transition = 'opacity 0.5s';
+                setTimeout(() => flashTip.remove(), 500);
+            }, 5000);
+        }
+    </script>
+    <div class="page-footer">
+        <a href="https://github.com/HosisoraLing/bilibili-sailing-helper" target="_blank">
+            <i class="fab fa-github"></i> bilibili-sailing-helper
+        </a>
+        <span> | AGPLv3 Licensed</span>
+    </div>
+</body>
+</html>

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>已提交信息 - 舰长地址收集系统</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/fonts/fonts.css">
+    <link rel="stylesheet" href="/static/css/common.css">
+    <style>
+        .container {
+            max-width: 550px;
+        }
+
+        .full-address {
+            background: white;
+            padding: 15px;
+            border-radius: var(--radius-sm);
+            border-left: 4px solid var(--primary);
+            margin-top: 15px;
+            font-size: 15px;
+            line-height: 1.6;
+            color: var(--text-primary);
+        }
+    </style>
+</head>
+<body>
+    <div class="container animate-slideUp">
+        <div class="card-header">
+            <h2>📋 已提交信息</h2>
+            <div class="nickname">舰长 {{ nickname }}</div>
+            <a href="/logout" class="btn-pill mt-10" style="display: inline-block;">
+                <i class="fas fa-sign-out-alt"></i> 退出登录
+            </a>
+        </div>
+
+        <div class="card-body stagger">
+            <div class="alert alert-info mb-20">
+                <i class="fas fa-check-circle"></i>
+                您的地址信息已成功提交
+                <span class="badge badge-success" style="margin-left: 8px;">已提交</span>
+            </div>
+
+            <div class="info-card">
+                <div class="info-row">
+                    <div class="info-label">收件人</div>
+                    <div class="info-value">{{ address.receiver or '未填写' }}</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">手机号</div>
+                    <div class="info-value">{{ address.phone or '未填写' }}</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">地区</div>
+                    <div class="info-value">
+                        {{ address.province or '' }}{{ address.city if address.city else '' }}{{ address.area if address.area else '' }}
+                        {% if not address.province %}
+                            <span class="info-value empty">未填写</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="full-address">
+                <strong>详细地址：</strong><br>
+                {% if address.address %}
+                    {{ address.address }}
+                {% else %}
+                    <span class="info-value empty">未填写</span>
+                {% endif %}
+            </div>
+
+            <div class="info-card mt-15">
+                <div class="info-row">
+                    <div class="info-label">提交时间</div>
+                    <div class="info-value">
+                        {{ address.submitted_at.strftime('%Y-%m-%d %H:%M') if address.submitted_at else '未知' }}
+                    </div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">UID</div>
+                    <div class="info-value">{{ address.uid }}</div>
+                </div>
+            </div>
+
+            <div class="actions mt-20">
+                <a href="/?force_form=1" class="btn btn-pink">
+                    <i class="fas fa-edit"></i> 更新信息
+                </a>
+                <a href="/" class="btn btn-light">
+                    <i class="fas fa-arrow-left"></i> 返回首页
+                </a>
+            </div>
+
+            <a href="/logout" class="btn btn-ghost btn-block btn-sm mt-15">
+                <i class="fas fa-sign-out-alt"></i> 退出登录
+            </a>
+        </div>
+    </div>
+</body>
+</html>

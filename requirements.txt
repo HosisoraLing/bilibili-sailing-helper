@@ -1,0 +1,32 @@
+# Flask 核心依赖
+Flask>=3.0,<4.0
+Flask-SQLAlchemy>=3.1,<4.0
+Flask-Login>=0.6,<1.0
+Flask-SocketIO>=5.3.0,<6.0.0
+
+# 数据库
+SQLAlchemy>=2.0,<2.1
+
+# HTTP 请求
+requests>=2.31,<3.0
+aiohttp>=3.8.0,<4.0.0
+
+# B站弹幕监听
+blivedm @ git+https://github.com/xfgryujk/blivedm.git
+
+# 安全
+Werkzeug>=2.3.0,<4.0.0
+python-socketio>=5.8.0,<6.0.0
+
+# WebSocket支持
+websocket-client>=1.6.0,<2.0.0
+
+# 工具库
+python-dotenv>=1.0.0,<2.0.0
+
+# 开发依赖（可选）
+# pytest>=7.4.0
+# pytest-flask>=1.2.0
+# black>=23.0.0
+# flake8>=6.0.0
+playwright>=1.40.0

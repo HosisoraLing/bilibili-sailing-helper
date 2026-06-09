@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>管理员面板</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/fonts/fonts.css">
+    <link rel="stylesheet" href="/static/css/common.css">
+    <style>
+        body {
+            align-items: flex-start;
+            padding: 20px;
+        }
+
+        .page-container {
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        /* Header card */
+        .header {
+            background: white;
+            border-radius: var(--radius-xl);
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: var(--shadow-lg);
+            position: relative;
+            overflow: hidden;
+            animation: slideUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: linear-gradient(90deg, var(--bg-start) 0%, var(--bg-end) 100%);
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .title h2 {
+            font-size: 24px;
+            color: var(--text-primary);
+            font-weight: 700;
+        }
+
+        .uid-info {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .uid-info strong {
+            color: var(--primary);
+            font-weight: 700;
+        }
+
+        .stats {
+            display: flex;
+            gap: 15px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+
+        .stat-card {
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .admin-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+
+        /* Content card */
+        .content-card {
+            background: white;
+            border-radius: var(--radius-xl);
+            padding: 30px;
+            box-shadow: var(--shadow-lg);
+            position: relative;
+            overflow: hidden;
+            animation: slideUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
+        }
+
+        .content-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: linear-gradient(90deg, var(--bg-start) 0%, var(--bg-end) 100%);
+        }
+
+        .content-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .content-header h3 {
+            font-size: 18px;
+            color: var(--text-primary);
+            font-weight: 700;
+        }
+
+        .search-box input {
+            padding: 8px 12px;
+            border: 2px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            min-width: 200px;
+            transition: var(--transition);
+            font-family: var(--font-family);
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.12);
+        }
+
+        /* Table action cell */
+        .action-cell {
+            white-space: nowrap;
+            display: flex;
+            gap: 6px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+        }
+
+        .empty-state i {
+            font-size: 40px;
+            margin-bottom: 10px;
+            opacity: 0.5;
+        }
+
+        /* Sortable headers */
+        th.sortable {
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+            padding-right: 25px;
+        }
+
+        th.sortable:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        th.sortable::after {
+            content: '\f0dc';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            position: absolute;
+            right: 8px;
+            opacity: 0.5;
+            font-size: 12px;
+        }
+
+        th.sortable.asc::after { content: '\f0de'; opacity: 1; }
+        th.sortable.desc::after { content: '\f0de'; opacity: 1; }
+
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 13px;
+        }
+
+        /* Import Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.2s ease;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: var(--radius-md);
+            padding: 30px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: var(--shadow-lg);
+            animation: slideUp 0.3s ease;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            color: var(--text-primary);
+            font-size: 20px;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: var(--text-muted);
+            transition: var(--transition);
+        }
+
+        .modal-close:hover {
+            color: var(--text-primary);
+        }
+
+        @media (max-width: 768px) {
+            .header-top {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .admin-actions {
+                width: 100%;
+            }
+
+            .admin-actions .btn {
+                flex: 1;
+                justify-content: center;
+                font-size: 13px;
+                padding: 10px 12px;
+            }
+
+            .stats {
+                flex-direction: column;
+            }
+
+            .stat-card {
+                min-width: 100%;
+            }
+
+            .content-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .search-box {
+                width: 100%;
+            }
+
+            .search-box input {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<input type="hidden" name="secure_token" value="{{ secure_token() }}">
+
+<div class="page-container">
+    <!-- 弹幕监听状态提示 -->
+    <div id="listenerAlert" style="display:none; background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%); color: white; padding: 15px 20px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);">
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <i class="fas fa-exclamation-triangle" style="font-size: 20px;"></i>
+                <div>
+                    <strong>弹幕监听未正常运行</strong>
+                    <div id="listenerAlertMsg" style="font-size: 13px; opacity: 0.9; margin-top: 3px;">请重新登录B站账号以恢复弹幕鉴权功能</div>
+                </div>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button onclick="startQrLogin()" style="background: white; color: #ff6b6b; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                    <i class="fas fa-qrcode"></i> 扫码登录
+                </button>
+                <button onclick="restartListener()" style="background: rgba(255,255,255,0.2); color: white; border: 2px solid rgba(255,255,255,0.5); padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                    <i class="fas fa-sync-alt"></i> 重启监听
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 二维码显示区域 -->
+    <div id="qrCodeArea" style="display:none; background: white; padding: 20px; border-radius: 12px; margin-bottom: 20px; text-align: center; box-shadow: var(--shadow-lg);">
+        <h3 style="margin-bottom: 15px;"><i class="fas fa-qrcode"></i> 扫码登录B站</h3>
+        <p style="color: #666; margin-bottom: 15px;">请使用B站APP扫描二维码登录</p>
+        <img id="qrCodeImage" src="" alt="二维码" style="max-width: 300px; border: 1px solid #eee; border-radius: 8px;">
+        <div id="qrStatus" style="margin-top: 15px; color: #666;">等待扫码...</div>
+    </div>
+
+    <div class="header">
+        <div class="header-top">
+            <div class="title">
+                <i class="fas fa-user-shield" style="font-size: 24px; color: var(--primary);"></i>
+                <h2>管理员面板</h2>
+                <span class="badge badge-primary">ADMIN</span>
+            </div>
+            <div class="uid-info">
+                登录 UID: <strong>{{ uid }}</strong> | 昵称: <strong>{{ nickname }}</strong>
+            </div>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-value">{{ total_count }}</div>
+                <div class="stat-label">总提交地址数</div>
+            </div>
+        </div>
+
+        <div class="admin-actions">
+            <a href="/admin/guards" class="btn btn-primary btn-sm">
+                <i class="fas fa-users"></i> 舰长列表
+            </a>
+            <a href="/admin/guard-gifts" class="btn btn-primary btn-sm">
+                <i class="fas fa-gift"></i> 舰长礼物统计
+            </a>
+            <a href="/admin/companion-ranking" class="btn btn-primary btn-sm">
+                <i class="fas fa-crown"></i> 陪伴榜
+            </a>
+            <a href="/admin/add-address" class="btn btn-success btn-sm">
+                <i class="fas fa-plus"></i> 新增地址
+            </a>
+            <button class="btn btn-light btn-sm" onclick="openImportModal()">
+                <i class="fas fa-file-import"></i> 导入地址 CSV
+            </button>
+            <a href="/admin/export/csv" class="btn btn-light btn-sm">
+                <i class="fas fa-file-csv"></i> 导出地址 CSV
+            </a>
+            <a href="/?uid={{ uid }}" class="btn btn-light btn-sm">
+                <i class="fas fa-arrow-left"></i> 返回普通页面
+            </a>
+            <a href="/logout" class="btn btn-light btn-sm">
+                <i class="fas fa-sign-out-alt"></i> 退出登录
+            </a>
+        </div>
+    </div>
+
+    <div class="content-card">
+        <div class="content-header">
+            <h3><i class="fas fa-list"></i> 已提交地址列表</h3>
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="搜索 UID 或昵称..." onkeyup="filterTable()">
+            </div>
+        </div>
+
+        <div class="table-wrap">
+            <table id="addressTable">
+                <thead>
+                    <tr>
+                        <th>序号</th>
+                        <th class="sortable" data-sort="uid">UID</th>
+                        <th class="sortable" data-sort="nickname">昵称</th>
+                        <th class="sortable" data-sort="guard_level">身份</th>
+                        <th class="sortable" data-sort="receiver">收件人</th>
+                        <th class="sortable" data-sort="phone">手机号</th>
+                        <th class="sortable" data-sort="area">地区</th>
+                        <th class="sortable" data-sort="address">详细地址</th>
+                        <th class="sortable no-wrap" data-sort="submitted_at">提交时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if addresses %}
+                        {% for addr in addresses %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td class="no-wrap">{{ addr.uid }}</td>
+                                <td class="truncate">{{ addr.nickname }}</td>
+                                <td class="no-wrap">
+                                    {% if addr.guard_level == 'admiral' %}
+                                        <span style="color: #e53e3e; font-weight: 700;">总督</span>
+                                    {% elif addr.guard_level == 'captain' %}
+                                        <span style="color: #dd6b20; font-weight: 700;">提督</span>
+                                    {% else %}
+                                        <span style="color: #1a2a6c;">舰长</span>
+                                    {% endif %}
+                                </td>
+                                <td class="truncate">{{ addr.receiver or '未填写' }}</td>
+                                <td class="no-wrap">{{ addr.phone or '未填写' }}</td>
+                                <td class="truncate">
+                                    {% if addr.province or addr.city or addr.area %}
+                                        {{ addr.province or '' }}{{ addr.city if addr.city else '' }}{{ addr.area if addr.area else '' }}
+                                    {% else %}
+                                        未填写
+                                    {% endif %}
+                                </td>
+                                <td class="truncate" title="{{ addr.address or '未填写' }}">
+                                    {{ addr.address or '未填写' }}
+                                </td>
+                                <td class="no-wrap">
+                                    {{ addr.submitted_at.strftime('%Y-%m-%d %H:%M') if addr.submitted_at else '-' }}
+                                </td>
+                                <td class="action-cell">
+                                    <a href="/admin/edit-address/{{ addr.id }}?uid={{ uid }}" class="btn-edit">
+                                        <i class="fas fa-edit"></i> 编辑
+                                    </a>
+                                    <button class="btn-delete btn-small" onclick="deleteAddress({{ addr.id }})">
+                                        <i class="fas fa-trash"></i> 删除
+                                    </button>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="10" class="empty-state">
+                                <i class="fas fa-inbox"></i>
+                                <p>暂无提交的地址信息</p>
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="footer">
+        <i class="fas fa-shield-alt"></i> 管理员权限 - 请妥善保管数据
+        <br>
+        <a href="https://github.com/HosisoraLing/bilibili-sailing-helper" target="_blank" style="color: inherit;">
+            <i class="fab fa-github"></i> bilibili-sailing-helper
+        </a>
+        <span> | AGPLv3 Licensed</span>
+    </div>
+</div>
+
+<!-- Import CSV Modal -->
+<div id="importModal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3><i class="fas fa-file-import"></i> 导入CSV</h3>
+            <button class="modal-close" onclick="closeImportModal()">&times;</button>
+        </div>
+        <div class="form-group">
+            <label>选择CSV文件</label>
+            <input type="file" id="csvFile" accept=".csv">
+        </div>
+        <div class="tips mb-20">
+            <strong>CSV格式要求：</strong>
+            - UID, 昵称, 收件人, 手机号, 省, 市, 区, 详细地址<br>
+            - 第一行必须是表头<br>
+            - UID和昵称为必填项
+        </div>
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+            <button class="btn btn-ghost btn-sm" onclick="closeImportModal()">取消</button>
+            <button class="btn btn-primary btn-sm" onclick="importCSV()">确认导入</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentSort = { column: null, direction: 'asc' };
+
+    function filterTable() {
+        const filter = document.getElementById("searchInput").value.toLowerCase();
+        const rows = document.getElementById("addressTable").getElementsByTagName("tr");
+
+        for (let i = 1; i < rows.length; i++) {
+            const cells = rows[i].getElementsByTagName("td");
+            let found = false;
+            for (let j = 0; j < cells.length; j++) {
+                if (cells[j] && (cells[j].textContent || '').toLowerCase().indexOf(filter) > -1) {
+                    found = true;
+                    break;
+                }
+            }
+            rows[i].style.display = found ? "" : "none";
+        }
+    }
+
+    function sortTable(column, direction) {
+        const tbody = document.getElementById("addressTable").getElementsByTagName("tbody")[0];
+        const rows = Array.from(tbody.getElementsByTagName("tr"));
+
+        const columnMap = {
+            'uid': 1, 'nickname': 2, 'guard_level': 3, 'receiver': 4,
+            'phone': 5, 'area': 6, 'address': 7, 'submitted_at': 8
+        };
+        const colIndex = columnMap[column];
+        if (colIndex === undefined) return;
+
+        rows.sort((a, b) => {
+            let aVal = a.getElementsByTagName("td")[colIndex].textContent.trim();
+            let bVal = b.getElementsByTagName("td")[colIndex].textContent.trim();
+
+            if (column === 'uid') {
+                aVal = parseInt(aVal) || 0;
+                bVal = parseInt(bVal) || 0;
+            } else if (column === 'guard_level') {
+                const order = { '总督': 0, '提督': 1, '舰长': 2 };
+                aVal = order[aVal] !== undefined ? order[aVal] : 99;
+                bVal = order[bVal] !== undefined ? order[bVal] : 99;
+            }
+
+            if (aVal < bVal) return direction === 'asc' ? -1 : 1;
+            if (aVal > bVal) return direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+
+        rows.forEach(row => tbody.appendChild(row));
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const headers = document.querySelectorAll('th.sortable');
+        headers.forEach(header => {
+            header.addEventListener('click', function() {
+                const column = this.getAttribute('data-sort');
+                let direction = 'asc';
+                if (currentSort.column === column) {
+                    direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+                }
+                headers.forEach(h => h.classList.remove('asc', 'desc'));
+                this.classList.add(direction);
+                currentSort = { column, direction };
+                sortTable(column, direction);
+            });
+        });
+    });
+
+    function openImportModal() {
+        document.getElementById('importModal').style.display = 'flex';
+    }
+
+    function closeImportModal() {
+        document.getElementById('importModal').style.display = 'none';
+        document.getElementById('csvFile').value = '';
+    }
+
+    function importCSV() {
+        const file = document.getElementById('csvFile').files[0];
+        if (!file) {
+            alert('请选择CSV文件！');
+            return;
+        }
+
+        const csrfToken = document.querySelector('input[name="csrf_token"]')?.value || '';
+        const formData = new FormData();
+        formData.append('csv_file', file);
+
+        fetch('/admin/import/csv?type=address', {
+            method: 'POST',
+            headers: { 'X-CSRF-Token': csrfToken },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('导入成功！\n新增: ' + data.added + ' 条\n更新: ' + data.updated + ' 条\n跳过: ' + data.skipped + ' 条');
+                location.reload();
+            } else {
+                alert('导入失败：' + data.error);
+            }
+        })
+        .catch(() => {
+            alert('请求失败，请稍后重试');
+        });
+    }
+
+    function deleteAddress(addressId) {
+        if (!confirm('确定要删除该地址吗？此操作不可恢复！')) {
+            return;
+        }
+
+        const csrfToken = document.querySelector('input[name="csrf_token"]')?.value || '';
+        const secureToken = document.querySelector('input[name="secure_token"]')?.value || '';
+
+        fetch(`/admin/delete-address/${addressId}`, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-Token': csrfToken,
+                'X-Secure-Token': secureToken,
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('删除成功！');
+                location.reload();
+            } else {
+                alert('删除失败：' + (data.error || '未知错误'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('请求失败，请稍后重试');
+        });
+    }
+
+    // ========== 弹幕监听状态检查 ==========
+    
+    function checkListenerStatus() {
+        fetch('/admin/cookie/status')
+            .then(response => response.json())
+            .then(data => {
+                const alertEl = document.getElementById('listenerAlert');
+                const alertMsgEl = document.getElementById('listenerAlertMsg');
+                
+                // 检查是否需要显示警告
+                const needsWarning = !data.is_valid || !data.listener.is_running;
+                
+                if (needsWarning) {
+                    alertEl.style.display = 'block';
+                    
+                    if (!data.is_valid) {
+                        alertMsgEl.textContent = 'Cookie无效或已过期，请重新登录B站账号';
+                    } else if (!data.listener.is_running) {
+                        alertMsgEl.textContent = '弹幕监听线程未运行，请重启监听';
+                    }
+                } else {
+                    alertEl.style.display = 'none';
+                }
+            })
+            .catch(error => {
+                console.error('检查状态失败:', error);
+            });
+    }
+    
+    function startQrLogin() {
+        const csrfToken = document.querySelector('input[name="csrf_token"]')?.value || '';
+        const qrArea = document.getElementById('qrCodeArea');
+        const qrImage = document.getElementById('qrCodeImage');
+        const qrStatus = document.getElementById('qrStatus');
+        
+        qrArea.style.display = 'block';
+        qrStatus.textContent = '正在启动扫码登录，请稍候...';
+        
+        fetch('/admin/cookie/start-qr-login', {
+            method: 'POST',
+            headers: {
+                'X-CSRF-Token': csrfToken,
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // 轮询获取二维码（最多等30秒）
+                let qrRetry = 0;
+                const qrInterval = setInterval(() => {
+                    qrRetry++;
+                    fetch('/admin/cookie/qrcode?t=' + Date.now())
+                        .then(resp => {
+                            if (resp.ok) return resp.blob();
+                            throw new Error('not ready');
+                        })
+                        .then(blob => {
+                            clearInterval(qrInterval);
+                            qrImage.src = URL.createObjectURL(blob);
+                            qrStatus.textContent = '请使用B站APP扫描二维码';
+                        })
+                        .catch(() => {
+                            if (qrRetry >= 15) {
+                                clearInterval(qrInterval);
+                                qrStatus.textContent = '❌ 二维码生成超时，请重试';
+                                qrStatus.style.color = '#e53e3e';
+                            } else {
+                                qrStatus.textContent = '正在生成二维码... (' + qrRetry + ')';
+                            }
+                        });
+                }, 2000);
+                
+                // 轮询检查登录状态
+                let checkCount = 0;
+                const checkInterval = setInterval(() => {
+                    checkCount++;
+                    
+                    fetch('/admin/cookie/status')
+                        .then(response => response.json())
+                        .then(statusData => {
+                            if (statusData.is_valid) {
+                                clearInterval(checkInterval);
+                                const username = statusData.username || '用户';
+                                qrStatus.innerHTML = '✅ 登录成功！欢迎回来，<strong>' + username + '</strong>';
+                                qrStatus.style.color = '#48bb78';
+                                
+                                // 显示成功提示框
+                                const alertDiv = document.getElementById('listenerAlert');
+                                alertDiv.style.display = 'none';
+                                
+                                // 显示toast提示
+                                showToast('✅ 登录成功！Cookie已更新，弹幕监听已重启');
+                                
+                                // 3秒后刷新页面
+                                setTimeout(() => {
+                                    location.reload();
+                                }, 3000);
+                            }
+                        });
+                    
+                    // 5分钟后停止
+                    if (checkCount > 150) {
+                        clearInterval(checkInterval);
+                        qrStatus.textContent = '❌ 扫码超时，请重试';
+                        qrStatus.style.color = '#e53e3e';
+                    }
+                }, 2000);
+            } else {
+                qrStatus.textContent = '❌ 启动失败: ' + (data.error || '未知错误');
+                qrStatus.style.color = '#e53e3e';
+            }
+        })
+        .catch(error => {
+            qrStatus.textContent = '❌ 请求失败';
+            qrStatus.style.color = '#e53e3e';
+        });
+    }
+    
+    function restartListener() {
+        const csrfToken = document.querySelector('input[name="csrf_token"]')?.value || '';
+        
+        fetch('/admin/cookie/restart-listener', {
+            method: 'POST',
+            headers: {
+                'X-CSRF-Token': csrfToken,
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('弹幕监听已重启');
+                // 3秒后检查状态
+                setTimeout(checkListenerStatus, 3000);
+            } else {
+                alert('重启失败: ' + (data.error || '未知错误'));
+            }
+        })
+        .catch(error => {
+            alert('请求失败');
+        });
+    }
+    
+    // 页面加载时检查状态
+    checkListenerStatus();
+    // 每30秒检查一次
+    setInterval(checkListenerStatus, 30000);
+    
+    // Toast提示函数
+    function showToast(message, duration = 5000) {
+        const toast = document.createElement('div');
+        toast.style.cssText = 'position:fixed;top:20px;right:20px;background:linear-gradient(135deg, #48bb78 0%, #38a169 100%);color:white;padding:16px 24px;border-radius:12px;box-shadow:0 8px 24px rgba(72, 187, 120, 0.3);z-index:10000;font-weight:600;font-size:15px;animation:slideIn 0.3s ease;max-width:400px;';
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transition = 'opacity 0.5s';
+            setTimeout(() => toast.remove(), 500);
+        }, duration);
+    }
+</script>
+
+<style>
+    @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+</style>
+
+</body>
+</html>

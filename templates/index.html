@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>舰长地址填写</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/fonts/fonts.css">
+    <link rel="stylesheet" href="/static/css/common.css">
+    <style>
+        .container {
+            padding: 40px 30px;
+            text-align: center;
+        }
+
+        h2 {
+            font-size: 22px;
+            color: var(--text-primary);
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 25px;
+            line-height: 1.6;
+        }
+
+        .uid-input {
+            width: 100%;
+            padding: 14px 15px;
+            border: 2px solid var(--border-light);
+            border-radius: var(--radius-sm);
+            font-size: 16px;
+            outline: none;
+            transition: var(--transition);
+            background: #fafafa;
+            font-family: var(--font-family);
+        }
+
+        .uid-input:focus {
+            border-color: var(--primary);
+            background: white;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.12);
+        }
+
+        .error {
+            margin-top: 15px;
+            font-size: 14px;
+            color: var(--error);
+            display: none;
+            animation: shake 0.3s ease;
+        }
+
+        .bottom-links {
+            margin-top: 20px;
+            border-top: 1px solid var(--border-light);
+            padding-top: 15px;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+        }
+
+        .bottom-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 500;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .bottom-links a:hover {
+            color: var(--primary);
+        }
+
+        .bottom-links a.danger {
+            color: var(--error);
+        }
+
+        .bottom-links a.danger:hover {
+            color: #c53030;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container animate-slideUp">
+    <h2>📦 舰长地址填写</h2>
+
+    <p class="subtitle">
+        请输入您的 B 站 UID，<br>
+        用于校验舰长身份并填写收货地址
+    </p>
+
+    <input
+        type="text"
+        class="uid-input"
+        id="uidInput"
+        placeholder="请输入 UID（纯数字）"
+        inputmode="numeric"
+        onkeypress="if(event.key === 'Enter') jump()"
+    >
+
+    <button class="btn btn-gradient btn-block mt-20" onclick="jump()">开始填写</button>
+
+    <div id="errorMsg" class="error"></div>
+
+    <input type="hidden" id="csrfTokenInput" value="{{ csrf_token() }}">
+
+    <div class="tips mt-25">
+        <strong>💡 使用说明</strong>
+        <ul style="padding-left: 18px; margin-top: 6px;">
+            <li style="margin: 5px 0;">UID 为您的 B 站账号数字 ID</li>
+            <li style="margin: 5px 0;">仅限 {{ config.ANCHOR_NICKNAME }} 的舰长填写</li>
+            <li style="margin: 5px 0;">如遇问题，请联系 @星空凌Official</li>
+        </ul>
+    </div>
+
+    {% if current_user.is_authenticated %}
+    <div class="bottom-links">
+        <a href="/logout" class="danger">
+            <i class="fas fa-sign-out-alt"></i> 退出登录
+        </a>
+        {% if current_user.is_admin() %}
+        <a href="/admin/panel">
+            <i class="fas fa-user-shield"></i> 管理员面板
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <div class="page-footer">
+        <a href="https://github.com/HosisoraLing/bilibili-sailing-helper" target="_blank">
+            <i class="fab fa-github"></i> bilibili-sailing-helper
+        </a>
+        <span> | AGPLv3 Licensed</span>
+    </div>
+</div>
+
+<script>
+    function jump() {
+        const uid = document.getElementById('uidInput').value.trim();
+        const errorMsg = document.getElementById('errorMsg');
+
+        errorMsg.style.display = 'none';
+
+        if (!uid) {
+            errorMsg.textContent = '请输入 UID';
+            errorMsg.style.display = 'block';
+            return;
+        }
+
+        if (!/^\d+$/.test(uid)) {
+            errorMsg.textContent = 'UID 必须是纯数字';
+            errorMsg.style.display = 'block';
+            return;
+        }
+
+        window.location.href = '/?uid=' + uid;
+    }
+</script>
+
+</body>
+</html>

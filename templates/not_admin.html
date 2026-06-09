@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>非管理员</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/fonts/fonts.css">
+    <link rel="stylesheet" href="/static/css/common.css">
+    <style>
+        .container {
+            padding: 40px 30px;
+            text-align: center;
+        }
+
+        .icon {
+            font-size: 60px;
+            margin-bottom: 15px;
+        }
+
+        h1 {
+            font-size: 24px;
+            color: var(--text-primary);
+            margin-bottom: 10px;
+        }
+
+        .message {
+            color: var(--text-secondary);
+            font-size: 15px;
+            line-height: 1.6;
+            margin-bottom: 25px;
+        }
+
+        .uid-display {
+            background: var(--bg-light);
+            padding: 10px 15px;
+            border-radius: var(--radius-sm);
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+            color: var(--primary);
+            margin: 15px 0;
+            display: inline-block;
+        }
+
+        .warning-tips {
+            background: #fff5f5;
+            border-left: 4px solid var(--error);
+            padding: 15px;
+            border-radius: var(--radius-sm);
+            margin-top: 25px;
+            font-size: 13px;
+            color: #742a2a;
+            text-align: left;
+        }
+
+        .warning-tips strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container animate-slideUp">
+    <div class="icon">🚫</div>
+    <h1>无管理员权限</h1>
+    <p class="message">
+        您的 UID <span class="uid-display">{{ uid }}</span> 不在管理员列表中
+    </p>
+
+    <div class="warning-tips">
+        <strong>💡 如何成为管理员？</strong>
+        请联系管理员在 setting.json 的 "admin.uids" 配置中添加您的 B 站 UID
+    </div>
+
+    <div class="actions mt-25">
+        <a href="/" class="btn btn-primary">
+            <i class="fas fa-home"></i> 返回首页
+        </a>
+        <a href="/" class="btn btn-ghost">
+            <i class="fas fa-sign-in-alt"></i> 重新登录
+        </a>
+    </div>
+</div>
+
+</body>
+</html>
