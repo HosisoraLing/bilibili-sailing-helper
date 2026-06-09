@@ -1946,6 +1946,75 @@ def admin_import_csv():
 
 
 # =========================
+# Cookie管理接口（管理员）
+# =========================
+
+@admin_bp.route('/cookie/status')
+@require_admin
+def admin_cookie_status():
+    """获取Cookie状态"""
+    from services.cookie_service import CookieService
+    
+    settings = CookieService.load_settings()
+    bilibili = settings.get('bilibili', {})
+    
+    has_sessdata = bool(bilibili.get('SESSDATA'))
+    has_buvid3 = bool(bilibili.get('buvid3'))
+    
+    # 验证SESSDATA是否有效
+    is_valid = False
+    username = None
+    if has_sessdata:
+        is_valid, result = CookieService.validate_cookie(bilibili['SESSDATA'])
+        if is_valid:
+            username = result
+    
+    return jsonify({
+        'has_sessdata': has_sessdata,
+        'has_buvid3': has_buvid3,
+        'is_valid': is_valid,
+        'username': username
+    })
+
+
+@admin_bp.route('/cookie/refresh-buvid3', methods=['POST'])
+@require_admin
+def admin_refresh_buvid3():
+    """刷新buvid3"""
+    from services.cookie_service import CookieService
+    
+    csrf_token = request.headers.get('X-CSRF-Token')
+    if not csrf_token or not UserService.verify_csrf_token(csrf_token):
+        return jsonify({'error': 'CSRF token invalid'}), 403
+    
+    success = CookieService.auto_update_buvid3()
+    
+    if success:
+        return jsonify({'success': True, 'message': 'buvid3刷新成功'})
+    else:
+        return jsonify({'error': 'buvid3刷新失败，请检查playwright是否安装'}), 500
+
+
+@admin_bp.route('/cookie/qrcode')
+@require_admin
+def admin_cookie_qrcode():
+    """获取登录二维码"""
+    import os
+    from flask import send_file
+    from services.cookie_service import CookieService
+    
+    QR_IMAGE_PATH = '/tmp/bilibili_qr.png'
+    
+    # 检查二维码是否存在
+    if os.path.exists(QR_IMAGE_PATH):
+        # 检查是否是最近5分钟生成的
+        if time.time() - os.path.getmtime(QR_IMAGE_PATH) < 300:
+            return send_file(QR_IMAGE_PATH, mimetype='image/png')
+    
+    return jsonify({'error': '二维码不存在或已过期，请先启动扫码登录'}), 404
+
+
+# =========================
 # 注册蓝图
 # =========================
 

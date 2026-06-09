@@ -46,6 +46,15 @@ check_docker() {
     success "Docker 环境正常"
 }
 
+# ---------- 拉取最新代码 ----------
+pull_latest_code() {
+    if [ -d ".git" ]; then
+        info "拉取最新代码..."
+        git pull origin main 2>/dev/null || warn "git pull 失败，使用本地代码继续"
+        success "代码更新完成"
+    fi
+}
+
 # ---------- 检查配置 ----------
 check_config() {
     if [ ! -f "settings.json" ]; then
@@ -143,6 +152,7 @@ main() {
     echo ""
 
     check_docker
+    pull_latest_code
     check_config
     prepare_dirs
     build_image

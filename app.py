@@ -626,6 +626,11 @@ if __name__ == '__main__':
     with app_instance.app_context():
         start_session_cleanup_scheduler(app_instance)
 
+    # 启动Cookie自动刷新任务
+    with app_instance.app_context():
+        from services.cookie_service import CookieService
+        CookieService.start_auto_refresh_scheduler(app_instance)
+
     # 启动自动更新检查任务
     with app_instance.app_context():
         start_auto_update_scheduler(app_instance)
