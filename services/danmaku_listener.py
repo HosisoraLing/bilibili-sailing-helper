@@ -8,7 +8,7 @@ import aiohttp
 import blivedm
 import blivedm.models.web as web_models
 
-from config import ROOM_ID, SESSDATA, BUVID3, BILI_JCT
+from config import ROOM_ID, SESSDATA, BUVID3
 from services.auth_service import (
     get_active_auth_session,
     get_cached_code,
@@ -303,4 +303,54 @@ def clear_auth_mode(uid: str):
     with _auth_mode_lock:
         _auth_modes.pop(uid, None)
 
+
+def get_listener_status() -> dict:
+    """
+    获取弹幕监听状态
+    
+    Returns:
+        dict: 包含以下字段
+            - is_running: 是否正在运行
+            - thread_alive: 线程是否存活
+            - has_session: 是否有HTTP会话
+            - last_check: 最后检查时间
+    """
+    global _listener_thread, _current_client, _http_session
+    
+    is_running = _listener_thread is not None and _listener_thread.is_alive()
+    has_session = _http_session is not None
+    
+    return {
+        'is_running': is_running,
+        'thread_alive': is_running,
+        'has_session': has_session,
+        'last_check': get_beijing_now().isoformat()
+    }
+
+
+def restart_listener():
+    """
+    重启弹幕监听
+    
+    Returns:
+        bool: 是否成功重启
+    """
+    global _flask_app, _socketio
+    
+    try:
+        logger.info("正在重启弹幕监听...")
+        
+        # 停止当前监听
+        stop_danmaku_auth_listener()
+        time.sleep(2)
+        
+        # 重新启动
+        if _flask_app:
+            start_danmaku_auth_listener(_flask_app, _socketio)
+            return True
+        
+        return False
+    except Exception as e:
+        logger.error(f"重启弹幕监听失败: {e}", exc_info=True)
+        return False
 

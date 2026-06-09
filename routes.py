@@ -1952,8 +1952,9 @@ def admin_import_csv():
 @admin_bp.route('/cookie/status')
 @require_admin
 def admin_cookie_status():
-    """获取Cookie状态"""
+    """获取Cookie和弹幕监听状态"""
     from services.cookie_service import CookieService
+    from services.danmaku_listener import get_listener_status
     
     settings = CookieService.load_settings()
     bilibili = settings.get('bilibili', {})
@@ -1969,11 +1970,15 @@ def admin_cookie_status():
         if is_valid:
             username = result
     
+    # 获取弹幕监听状态
+    listener_status = get_listener_status()
+    
     return jsonify({
         'has_sessdata': has_sessdata,
         'has_buvid3': has_buvid3,
         'is_valid': is_valid,
-        'username': username
+        'username': username,
+        'listener': listener_status
     })
 
 
@@ -2000,8 +2005,8 @@ def admin_refresh_buvid3():
 def admin_cookie_qrcode():
     """获取登录二维码"""
     import os
+    import time
     from flask import send_file
-    from services.cookie_service import CookieService
     
     QR_IMAGE_PATH = '/tmp/bilibili_qr.png'
     
@@ -2012,6 +2017,58 @@ def admin_cookie_qrcode():
             return send_file(QR_IMAGE_PATH, mimetype='image/png')
     
     return jsonify({'error': '二维码不存在或已过期，请先启动扫码登录'}), 404
+
+
+@admin_bp.route('/cookie/start-qr-login', methods=['POST'])
+@require_admin
+def admin_start_qr_login():
+    """启动扫码登录"""
+    import threading
+    from services.cookie_service import CookieService
+    from services.danmaku_listener import restart_listener
+    
+    csrf_token = request.headers.get('X-CSRF-Token')
+    if not csrf_token or not UserService.verify_csrf_token(csrf_token):
+        return jsonify({'error': 'CSRF token invalid'}), 403
+    
+    def do_login():
+        try:
+            sessdata, bili_jct = CookieService.get_sessdata_by_qr()
+            if sessdata:
+                settings = CookieService.load_settings()
+                settings.setdefault('bilibili', {})['SESSDATA'] = sessdata
+                if bili_jct:
+                    settings['bilibili']['bili_jct'] = bili_jct
+                CookieService.save_settings(settings)
+                
+                # 重启弹幕监听
+                restart_listener()
+        except Exception as e:
+            logger.error(f"扫码登录失败: {e}", exc_info=True)
+    
+    # 在后台线程执行
+    thread = threading.Thread(target=do_login, daemon=True)
+    thread.start()
+    
+    return jsonify({'success': True, 'message': '扫码登录已启动，请查看二维码'})
+
+
+@admin_bp.route('/cookie/restart-listener', methods=['POST'])
+@require_admin
+def admin_restart_listener():
+    """重启弹幕监听"""
+    from services.danmaku_listener import restart_listener
+    
+    csrf_token = request.headers.get('X-CSRF-Token')
+    if not csrf_token or not UserService.verify_csrf_token(csrf_token):
+        return jsonify({'error': 'CSRF token invalid'}), 403
+    
+    success = restart_listener()
+    
+    if success:
+        return jsonify({'success': True, 'message': '弹幕监听已重启'})
+    else:
+        return jsonify({'error': '重启失败'}), 500
 
 
 # =========================

@@ -289,6 +289,35 @@
 <input type="hidden" name="secure_token" value="{{ secure_token() }}">
 
 <div class="page-container">
+    <!-- 弹幕监听状态提示 -->
+    <div id="listenerAlert" style="display:none; background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%); color: white; padding: 15px 20px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);">
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <i class="fas fa-exclamation-triangle" style="font-size: 20px;"></i>
+                <div>
+                    <strong>弹幕监听未正常运行</strong>
+                    <div id="listenerAlertMsg" style="font-size: 13px; opacity: 0.9; margin-top: 3px;">请重新登录B站账号以恢复弹幕鉴权功能</div>
+                </div>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button onclick="startQrLogin()" style="background: white; color: #ff6b6b; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                    <i class="fas fa-qrcode"></i> 扫码登录
+                </button>
+                <button onclick="restartListener()" style="background: rgba(255,255,255,0.2); color: white; border: 2px solid rgba(255,255,255,0.5); padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                    <i class="fas fa-sync-alt"></i> 重启监听
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 二维码显示区域 -->
+    <div id="qrCodeArea" style="display:none; background: white; padding: 20px; border-radius: 12px; margin-bottom: 20px; text-align: center; box-shadow: var(--shadow-lg);">
+        <h3 style="margin-bottom: 15px;"><i class="fas fa-qrcode"></i> 扫码登录B站</h3>
+        <p style="color: #666; margin-bottom: 15px;">请使用B站APP扫描二维码登录</p>
+        <img id="qrCodeImage" src="" alt="二维码" style="max-width: 300px; border: 1px solid #eee; border-radius: 8px;">
+        <div id="qrStatus" style="margin-top: 15px; color: #666;">等待扫码...</div>
+    </div>
+
     <div class="header">
         <div class="header-top">
             <div class="title">
@@ -581,6 +610,128 @@
             alert('请求失败，请稍后重试');
         });
     }
+
+    // ========== 弹幕监听状态检查 ==========
+    
+    function checkListenerStatus() {
+        fetch('/admin/cookie/status')
+            .then(response => response.json())
+            .then(data => {
+                const alertEl = document.getElementById('listenerAlert');
+                const alertMsgEl = document.getElementById('listenerAlertMsg');
+                
+                // 检查是否需要显示警告
+                const needsWarning = !data.is_valid || !data.listener.is_running;
+                
+                if (needsWarning) {
+                    alertEl.style.display = 'block';
+                    
+                    if (!data.is_valid) {
+                        alertMsgEl.textContent = 'Cookie无效或已过期，请重新登录B站账号';
+                    } else if (!data.listener.is_running) {
+                        alertMsgEl.textContent = '弹幕监听线程未运行，请重启监听';
+                    }
+                } else {
+                    alertEl.style.display = 'none';
+                }
+            })
+            .catch(error => {
+                console.error('检查状态失败:', error);
+            });
+    }
+    
+    function startQrLogin() {
+        const csrfToken = document.querySelector('input[name="csrf_token"]')?.value || '';
+        const qrArea = document.getElementById('qrCodeArea');
+        const qrImage = document.getElementById('qrCodeImage');
+        const qrStatus = document.getElementById('qrStatus');
+        
+        qrArea.style.display = 'block';
+        qrStatus.textContent = '正在启动扫码登录...';
+        
+        fetch('/admin/cookie/start-qr-login', {
+            method: 'POST',
+            headers: {
+                'X-CSRF-Token': csrfToken,
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // 轮询获取二维码
+                setTimeout(() => {
+                    qrImage.src = '/admin/cookie/qrcode?t=' + Date.now();
+                    qrStatus.textContent = '请使用B站APP扫描二维码';
+                }, 2000);
+                
+                // 轮询检查登录状态
+                let checkCount = 0;
+                const checkInterval = setInterval(() => {
+                    checkCount++;
+                    
+                    fetch('/admin/cookie/status')
+                        .then(response => response.json())
+                        .then(statusData => {
+                            if (statusData.is_valid) {
+                                clearInterval(checkInterval);
+                                qrStatus.textContent = '✅ 登录成功！';
+                                qrStatus.style.color = '#48bb78';
+                                
+                                // 2秒后刷新页面
+                                setTimeout(() => {
+                                    location.reload();
+                                }, 2000);
+                            }
+                        });
+                    
+                    // 5分钟后停止
+                    if (checkCount > 150) {
+                        clearInterval(checkInterval);
+                        qrStatus.textContent = '❌ 扫码超时，请重试';
+                        qrStatus.style.color = '#e53e3e';
+                    }
+                }, 2000);
+            } else {
+                qrStatus.textContent = '❌ 启动失败: ' + (data.error || '未知错误');
+                qrStatus.style.color = '#e53e3e';
+            }
+        })
+        .catch(error => {
+            qrStatus.textContent = '❌ 请求失败';
+            qrStatus.style.color = '#e53e3e';
+        });
+    }
+    
+    function restartListener() {
+        const csrfToken = document.querySelector('input[name="csrf_token"]')?.value || '';
+        
+        fetch('/admin/cookie/restart-listener', {
+            method: 'POST',
+            headers: {
+                'X-CSRF-Token': csrfToken,
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('弹幕监听已重启');
+                // 3秒后检查状态
+                setTimeout(checkListenerStatus, 3000);
+            } else {
+                alert('重启失败: ' + (data.error || '未知错误'));
+            }
+        })
+        .catch(error => {
+            alert('请求失败');
+        });
+    }
+    
+    // 页面加载时检查状态
+    checkListenerStatus();
+    // 每30秒检查一次
+    setInterval(checkListenerStatus, 30000);
 </script>
 
 </body>
