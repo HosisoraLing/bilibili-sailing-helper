@@ -281,13 +281,14 @@
         });
     }
 
-    // WebSocket connection
+    // WebSocket connection - 尝试WebSocket，失败回退到polling
     const socket = io({
-        transports: ['polling'],
+        transports: ['websocket', 'polling'],
         reconnection: true,
-        reconnectionAttempts: 3,
+        reconnectionAttempts: 5,
         reconnectionDelay: 1000,
-        reconnectionDelayMax: 5000
+        reconnectionDelayMax: 5000,
+        timeout: 10000
     });
 
     // 轮询备用机制
