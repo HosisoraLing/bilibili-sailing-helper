@@ -167,13 +167,22 @@ class AuthDMHandler(blivedm.BaseHandler):
 async def _run_client():
     global _current_client, _http_session
 
+    # 每次启动时重新读取最新的Cookie
+    import config as config_module
+    from services.cookie_service import CookieService
+    settings = CookieService.load_settings()
+    bili = settings.get('bilibili', {})
+    sessdata = bili.get('SESSDATA', '') or config_module.SESSDATA
+    buvid3 = bili.get('buvid3', '') or config_module.BUVID3
+    bili_jct = bili.get('bili_jct', '') or config_module.BILI_JCT
+    
     room_id = int(ROOM_ID)
 
     cookie_jar = aiohttp.CookieJar()
     cookie_jar.update_cookies({
-        "SESSDATA": SESSDATA,
-        "buvid3": BUVID3,
-        "bili_jct": BILI_JCT,
+        "SESSDATA": sessdata,
+        "buvid3": buvid3,
+        "bili_jct": bili_jct,
     })
 
     _http_session = aiohttp.ClientSession(cookie_jar=cookie_jar)
