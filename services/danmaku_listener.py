@@ -16,8 +16,12 @@ from services.auth_service import (
     mark_auth_success,
 )
 from utils.log_utils import get_logger
+import logging
 
 logger = get_logger(__name__)
+
+# 抑制blivedm的unknown cmd噪音日志
+logging.getLogger("blivedm").setLevel(logging.ERROR)
 
 # =========================
 # 全局状态
