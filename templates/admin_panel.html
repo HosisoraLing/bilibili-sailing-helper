@@ -652,7 +652,7 @@
         const qrStatus = document.getElementById('qrStatus');
         
         qrArea.style.display = 'block';
-        qrStatus.textContent = '正在启动扫码登录...';
+        qrStatus.textContent = '正在启动扫码登录，请稍候...';
         
         fetch('/admin/cookie/start-qr-login', {
             method: 'POST',
@@ -664,10 +664,29 @@
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                // 轮询获取二维码
-                setTimeout(() => {
-                    qrImage.src = '/admin/cookie/qrcode?t=' + Date.now();
-                    qrStatus.textContent = '请使用B站APP扫描二维码';
+                // 轮询获取二维码（最多等30秒）
+                let qrRetry = 0;
+                const qrInterval = setInterval(() => {
+                    qrRetry++;
+                    fetch('/admin/cookie/qrcode?t=' + Date.now())
+                        .then(resp => {
+                            if (resp.ok) return resp.blob();
+                            throw new Error('not ready');
+                        })
+                        .then(blob => {
+                            clearInterval(qrInterval);
+                            qrImage.src = URL.createObjectURL(blob);
+                            qrStatus.textContent = '请使用B站APP扫描二维码';
+                        })
+                        .catch(() => {
+                            if (qrRetry >= 15) {
+                                clearInterval(qrInterval);
+                                qrStatus.textContent = '❌ 二维码生成超时，请重试';
+                                qrStatus.style.color = '#e53e3e';
+                            } else {
+                                qrStatus.textContent = '正在生成二维码... (' + qrRetry + ')';
+                            }
+                        });
                 }, 2000);
                 
                 // 轮询检查登录状态
