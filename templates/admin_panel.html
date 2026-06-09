@@ -699,13 +699,21 @@
                         .then(statusData => {
                             if (statusData.is_valid) {
                                 clearInterval(checkInterval);
-                                qrStatus.textContent = '✅ 登录成功！';
+                                const username = statusData.username || '用户';
+                                qrStatus.innerHTML = '✅ 登录成功！欢迎回来，<strong>' + username + '</strong>';
                                 qrStatus.style.color = '#48bb78';
                                 
-                                // 2秒后刷新页面
+                                // 显示成功提示框
+                                const alertDiv = document.getElementById('listenerAlert');
+                                alertDiv.style.display = 'none';
+                                
+                                // 显示toast提示
+                                showToast('✅ 登录成功！Cookie已更新，弹幕监听已重启');
+                                
+                                // 3秒后刷新页面
                                 setTimeout(() => {
                                     location.reload();
-                                }, 2000);
+                                }, 3000);
                             }
                         });
                     
@@ -756,7 +764,28 @@
     checkListenerStatus();
     // 每30秒检查一次
     setInterval(checkListenerStatus, 30000);
+    
+    // Toast提示函数
+    function showToast(message, duration = 5000) {
+        const toast = document.createElement('div');
+        toast.style.cssText = 'position:fixed;top:20px;right:20px;background:linear-gradient(135deg, #48bb78 0%, #38a169 100%);color:white;padding:16px 24px;border-radius:12px;box-shadow:0 8px 24px rgba(72, 187, 120, 0.3);z-index:10000;font-weight:600;font-size:15px;animation:slideIn 0.3s ease;max-width:400px;';
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transition = 'opacity 0.5s';
+            setTimeout(() => toast.remove(), 500);
+        }, duration);
+    }
 </script>
+
+<style>
+    @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+</style>
 
 </body>
 </html>
