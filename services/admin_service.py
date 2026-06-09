@@ -29,12 +29,12 @@ class AdminService:
     @staticmethod
     def get_address_by_id(address_id: int) -> Optional[Address]:
         """根据 ID 获取地址"""
-        return Address.query.get(address_id)
+        return db.session.get(Address, address_id)
 
     @staticmethod
     def delete_address(address_id: int) -> bool:
         """删除地址"""
-        address = Address.query.get(address_id)
+        address = db.session.get(Address, address_id)
         if address:
             db.session.delete(address)
             db.session.commit()
