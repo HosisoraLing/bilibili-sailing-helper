@@ -122,31 +122,48 @@ class CookieService:
                 
                 # 等待二维码加载
                 try:
-                    page.wait_for_selector('img[src*="qr"], canvas, .login-scan-box', timeout=15000)
+                    page.wait_for_selector('img[src^="data:image"], canvas', timeout=15000)
                     time.sleep(2)
                 except Exception as e:
                     logger.warning(f"等待二维码元素超时: {e}")
                     page.screenshot(path=QR_IMAGE_PATH)
                     logger.info(f"已截取整个页面到: {QR_IMAGE_PATH}")
                 
-                # 尝试截取二维码元素
+                # 尝试提取二维码图片
                 try:
-                    # 尝试多种选择器
-                    qr_element = None
-                    for selector in ['img[src*="qr"]', 'canvas', '.login-scan-box img']:
-                        qr_element = page.query_selector(selector)
-                        if qr_element:
+                    import base64
+                    
+                    # 查找base64编码的图片
+                    images = page.query_selector_all('img[src^="data:image"]')
+                    qr_saved = False
+                    
+                    for img in images:
+                        src = img.get_attribute('src') or ''
+                        if src.startswith('data:image'):
+                            # 提取base64数据
+                            header, data = src.split(',', 1)
+                            img_bytes = base64.b64decode(data)
+                            
+                            # 保存图片
+                            with open(QR_IMAGE_PATH, 'wb') as f:
+                                f.write(img_bytes)
+                            
+                            logger.info(f"二维码已保存到: {QR_IMAGE_PATH}")
+                            qr_saved = True
                             break
                     
-                    if qr_element:
-                        qr_element.screenshot(path=QR_IMAGE_PATH)
-                        logger.info(f"二维码已保存到: {QR_IMAGE_PATH}")
-                    else:
-                        # 截取页面中心区域
-                        page.screenshot(path=QR_IMAGE_PATH, clip={'x': 250, 'y': 200, 'width': 300, 'height': 300})
-                        logger.info(f"已截取页面区域到: {QR_IMAGE_PATH}")
+                    if not qr_saved:
+                        # 尝试截取canvas元素
+                        canvas = page.query_selector('canvas')
+                        if canvas:
+                            canvas.screenshot(path=QR_IMAGE_PATH)
+                            logger.info(f"canvas二维码已保存到: {QR_IMAGE_PATH}")
+                        else:
+                            # 截取页面中心区域
+                            page.screenshot(path=QR_IMAGE_PATH, clip={'x': 250, 'y': 200, 'width': 300, 'height': 300})
+                            logger.info(f"已截取页面区域到: {QR_IMAGE_PATH}")
                 except Exception as e:
-                    logger.warning(f"截取二维码失败: {e}")
+                    logger.warning(f"提取二维码失败: {e}")
                     page.screenshot(path=QR_IMAGE_PATH)
                 
                 # 等待用户登录
