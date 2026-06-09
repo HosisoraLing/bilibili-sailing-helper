@@ -727,8 +727,8 @@ def admin_export_csv():
     if not month:
         month = GuardGiftService.get_current_month()
 
-    # Get filter type - 默认导出可领取的舰长地址
-    filter_type = request.args.get('filter', 'eligible')  # eligible, all
+    # Get filter type - 默认导出所有地址
+    filter_type = request.args.get('filter', 'all')  # eligible, all
 
     # Load addresses based on filter
     if filter_type == 'eligible':
