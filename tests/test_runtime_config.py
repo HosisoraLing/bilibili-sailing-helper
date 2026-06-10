@@ -122,6 +122,9 @@ def test_admin_panel_displays_runtime_diagnostics():
     assert "retry_count" in admin_source
     assert "active_cookie_version" in admin_source
     assert "worker_cookie_version" in admin_source
+    admin_actions = admin_source.split('<div class="admin-actions">', 1)[1].split("</div>", 1)[0]
+    assert "startQrLogin()" in admin_actions
+    assert "切换B站账号" in admin_actions
 
 
 class FakeCookieProvider:

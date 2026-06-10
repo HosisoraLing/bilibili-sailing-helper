@@ -165,6 +165,65 @@ def test_admin_cookie_status_reports_runtime_health_and_next_action(client, app,
     assert payload["listener"]["role"] == "danmaku-worker"
 
 
+def test_admin_cookie_status_reports_rescan_action_for_bilibili_rejected_worker(
+    client,
+    app,
+    monkeypatch,
+):
+    with app.app_context():
+        admin = User(uid="admin-risk", nickname="admin")
+        admin.add_role("admin")
+        db.session.add(admin)
+        db.session.add(
+            CookieMetadata(
+                role="admin",
+                status="valid",
+                cookie_version=7,
+                masked_uid="98***76",
+                last_validated_at=get_beijing_now(),
+            )
+        )
+        db.session.add(
+            RuntimeStatus(
+                role="danmaku-worker",
+                instance_id="worker-rejected",
+                state="bilibili_rejected",
+                cookie_version=7,
+                last_error="B站直播接口返回 -352，请扫码授权其他账号",
+                heartbeat_at=get_beijing_now() - timedelta(seconds=5),
+            )
+        )
+        db.session.add(
+            RuntimeStatus(
+                role="scheduler",
+                instance_id="scheduler-1",
+                state="running",
+                heartbeat_at=get_beijing_now() - timedelta(seconds=5),
+            )
+        )
+        db.session.commit()
+        admin_id = admin.id
+
+    with client.session_transaction() as flask_session:
+        flask_session["_user_id"] = str(admin_id)
+
+    monkeypatch.setattr(
+        "services.cookie_service.CookieService.load_settings",
+        lambda: {"bilibili": {"SESSDATA": "sess", "bili_jct": "csrf"}},
+    )
+    monkeypatch.setattr(
+        "services.cookie_service.CookieService.validate_cookie",
+        lambda _sessdata: (True, "tester"),
+    )
+
+    response = client.get("/admin/cookie/status")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["runtime"]["next_action"] == "请扫码授权其他 B 站账号"
+    assert payload["runtime"]["roles"]["danmaku-worker"]["state"] == "bilibili_rejected"
+
+
 def test_auth_status_reports_listener_unavailable_for_pending_session(client, app):
     with app.app_context():
         db.session.add(
@@ -222,6 +281,67 @@ def test_auth_status_reports_retrying_for_reconnecting_worker(client, app):
     payload = response.get_json()
     assert payload["status"] == "retrying"
     assert payload["retry_count"] == 2
+
+
+def test_auth_status_reports_rescan_action_for_bilibili_rejected_worker(client, app):
+    with app.app_context():
+        db.session.add(
+            AuthSession(
+                uid="risk-user",
+                code="vc-risk",
+                status="pending",
+                expires_at=get_beijing_now() + timedelta(minutes=5),
+            )
+        )
+        db.session.add(
+            RuntimeStatus(
+                role="danmaku-worker",
+                instance_id="worker-rejected",
+                state="bilibili_rejected",
+                cookie_version=7,
+                last_error="B站直播接口返回 -352，请扫码授权其他账号",
+                heartbeat_at=get_beijing_now() - timedelta(seconds=3),
+            )
+        )
+        db.session.commit()
+
+    response = client.get("/auth/status?uid=risk-user")
+
+    assert response.status_code == 503
+    payload = response.get_json()
+    assert payload["status"] == "listener_unavailable"
+    assert payload["next_action"] == "管理员需要扫码授权其他 B 站账号"
+    assert payload["last_error"] == "B站直播接口返回 -352，请扫码授权其他账号"
+
+
+def test_auth_status_keeps_rescan_action_for_stale_bilibili_rejected_worker(client, app):
+    with app.app_context():
+        db.session.add(
+            AuthSession(
+                uid="stale-risk-user",
+                code="vc-stale-risk",
+                status="pending",
+                expires_at=get_beijing_now() + timedelta(minutes=5),
+            )
+        )
+        db.session.add(
+            RuntimeStatus(
+                role="danmaku-worker",
+                instance_id="worker-stale-rejected",
+                state="bilibili_rejected",
+                cookie_version=7,
+                last_error="B站直播接口返回 -352，请扫码授权其他账号",
+                heartbeat_at=get_beijing_now() - timedelta(seconds=120),
+            )
+        )
+        db.session.commit()
+
+    response = client.get("/auth/status?uid=stale-risk-user")
+
+    assert response.status_code == 503
+    payload = response.get_json()
+    assert payload["status"] == "listener_unavailable"
+    assert payload["next_action"] == "管理员需要扫码授权其他 B 站账号"
 
 
 def test_auth_status_reports_delivery_delay_for_queue_full_worker(client, app):

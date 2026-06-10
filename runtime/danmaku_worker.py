@@ -29,6 +29,10 @@ def cookie_header(cookie: dict[str, str]) -> str:
     )
 
 
+def is_bilibili_live_rejected(exc: Exception) -> bool:
+    return "-352" in str(exc)
+
+
 async def default_websocket_factory(url: str):
     session = aiohttp.ClientSession()
     try:
@@ -98,6 +102,37 @@ async def monitor_cookie_version(
                 cookie_version=latest.version,
             )
             await close_websocket(websocket)
+            return
+
+
+async def wait_for_new_cookie_version(
+    *,
+    cookie_provider: RuntimeCookieProvider,
+    current_version: int,
+    webhook: InternalWebhookClient,
+    instance_id: str,
+    poll_interval: float,
+    sleep=asyncio.sleep,
+):
+    while True:
+        await sleep(poll_interval)
+        try:
+            latest = await cookie_provider.fetch_latest()
+        except Exception as exc:
+            await webhook.report_heartbeat(
+                role="danmaku-worker",
+                instance_id=instance_id,
+                state="cookie_poll_error",
+                last_error=str(exc),
+            )
+            continue
+        if RuntimeCookieProvider.should_reload(current_version, latest):
+            await webhook.report_heartbeat(
+                role="danmaku-worker",
+                instance_id=instance_id,
+                state="cookie_reloading",
+                cookie_version=latest.version,
+            )
             return
 
 
@@ -213,6 +248,23 @@ async def run_worker_loop(
         except WorkerStop:
             return
         except Exception as exc:
+            if is_bilibili_live_rejected(exc):
+                await webhook.report_heartbeat(
+                    role="danmaku-worker",
+                    instance_id=instance_id,
+                    state="bilibili_rejected",
+                    cookie_version=current_version,
+                    last_error="B站直播接口返回 -352，请扫码授权其他账号",
+                )
+                await wait_for_new_cookie_version(
+                    cookie_provider=cookie_provider,
+                    current_version=current_version,
+                    webhook=webhook,
+                    instance_id=instance_id,
+                    poll_interval=reconnect_delay,
+                    sleep=idle_sleep,
+                )
+                continue
             await webhook.report_heartbeat(
                 role="danmaku-worker",
                 instance_id=instance_id,
