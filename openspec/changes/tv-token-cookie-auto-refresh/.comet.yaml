@@ -1,5 +1,5 @@
 workflow: full
-phase: verify
+phase: archive
 context_compression: off
 build_mode: executing-plans
 build_pause: null
@@ -11,11 +11,11 @@ auto_transition: true
 base_ref: e360536529050e7551362a20272f525f595274d1
 design_doc: docs/superpowers/specs/2026-06-10-tv-token-cookie-auto-refresh-design.md
 plan: docs/superpowers/plans/2026-06-10-tv-token-cookie-auto-refresh.md
-verify_result: pending
-verification_report: null
-branch_status: pending
+verify_result: pass
+verification_report: docs/superpowers/verification/2026-06-10-tv-token-cookie-auto-refresh.md
+branch_status: handled
 created_at: 2026-06-10
-verified_at: null
+verified_at: 2026-06-10
 archived: false
 handoff_context: openspec/changes/tv-token-cookie-auto-refresh/.comet/handoff/design-context.json
 handoff_hash: 351ebec2c5ec6ff6cf585ec1b9125225bc5e279132e4ccbff621f9c8f198d2e6
