@@ -105,12 +105,6 @@ def login():
 
         password = request.form.get('password', '')
 
-        # 验证密码强度（防止弱密码）
-        is_valid, msg = UserService.validate_password_strength(password)
-        if not is_valid:
-            flash(msg, 'error')
-            return render_template('login.html', uid=uid, nickname=user.nickname if user else '')
-
         if user.check_password(password):
             # 登录成功，重置速率限制
             UserService.reset_login_rate_limit(uid)
