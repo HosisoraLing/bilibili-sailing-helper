@@ -10,7 +10,10 @@ STATIC_DIR = os.path.join(BASE_DIR, 'static')
 os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(STATIC_DIR, exist_ok=True)
 
-SETTINGS_PATH = os.path.join(BASE_DIR, 'settings.json')
+SETTINGS_PATH = os.environ.get(
+    'BILIBILI_SAILING_SETTINGS',
+    os.path.join(BASE_DIR, 'settings.json')
+)
 
 # 安全地加载配置文件
 try:

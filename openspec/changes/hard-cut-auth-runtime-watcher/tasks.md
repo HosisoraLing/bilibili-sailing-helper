@@ -1,10 +1,10 @@
 ## 1. State Model And Tests
 
 - [ ] 1.1 Inventory current auth, Cookie, listener, scheduler, auto-update, Docker port, and healthcheck code paths.
-- [ ] 1.2 Add DB schema/models for QR login tasks, Cookie integrity metadata, auth attempts/success transitions, scheduler jobs, and runtime role status.
+- [x] 1.2 Add DB schema/models for QR login tasks, Cookie integrity metadata, auth attempts/success transitions, scheduler jobs, and runtime role status.
 - [ ] 1.3 Design internal API contracts for danmaku event reporting, role heartbeat/status, scheduler job requests/results, and shared-secret authentication.
-- [ ] 1.4 Configure SQLite for web/app-owned writes, including short transactions, busy timeout, and WAL if compatible with deployment.
-- [ ] 1.5 Add focused tests for pending, success, expired, duplicate, and consumed auth session states.
+- [x] 1.4 Configure SQLite for web/app-owned writes, including short transactions, busy timeout, and WAL if compatible with deployment.
+- [x] 1.5 Add focused tests for pending, success, expired, duplicate, and consumed auth session states.
 - [ ] 1.6 Add tests for internal API authentication, runtime status heartbeat, stale heartbeat, last error, delivery error, and role separation fields.
 
 ## 2. Browserless QR Login

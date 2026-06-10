@@ -3,11 +3,27 @@ from datetime import datetime, timezone, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 import json
 import logging
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
 
 # 设置日志
 logger = logging.getLogger(__name__)
 
 db = SQLAlchemy(session_options={"expire_on_commit": False})
+
+
+@event.listens_for(Engine, "connect")
+def configure_sqlite_connection(dbapi_connection, connection_record):
+    if dbapi_connection.__class__.__module__.startswith("sqlite3"):
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("PRAGMA busy_timeout=5000")
+            try:
+                cursor.execute("PRAGMA journal_mode=WAL")
+            except Exception as exc:
+                logger.warning("SQLite WAL mode unavailable: %s", exc)
+        finally:
+            cursor.close()
 
 # =========================
 # 北京时间工具
@@ -191,6 +207,7 @@ class AuthSession(db.Model):
     id = db.Column(db.Integer, primary_key=True)
 
     uid = db.Column(db.String(32), nullable=False, index=True)
+    code = db.Column(db.String(32), index=True)
 
     # pending / success / expired
     status = db.Column(
@@ -201,6 +218,9 @@ class AuthSession(db.Model):
 
     expires_at = db.Column(db.DateTime, nullable=False)
     created_at = db.Column(db.DateTime, default=get_beijing_now)
+    succeeded_at = db.Column(db.DateTime)
+    consumed_at = db.Column(db.DateTime)
+    last_attempt_at = db.Column(db.DateTime)
 
     def is_expired(self) -> bool:
         """
@@ -210,12 +230,143 @@ class AuthSession(db.Model):
 
     def mark_success(self):
         self.status = 'success'
+        self.succeeded_at = get_beijing_now()
 
     def mark_expired(self):
         self.status = 'expired'
 
     def __repr__(self):
         return f"<AuthSession uid={self.uid} status={self.status}>"
+
+
+# =========================
+# B站二维码登录任务表
+# =========================
+class QrLoginTask(db.Model):
+    __tablename__ = 'qr_login_tasks'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    task_id = db.Column(db.String(64), nullable=False, unique=True, index=True)
+    status = db.Column(db.String(32), nullable=False, default='pending', index=True)
+    role = db.Column(db.String(32), index=True)
+    qrcode_key = db.Column(db.String(128), index=True)
+    qr_url = db.Column(db.String(512))
+    payload_json = db.Column(db.Text)
+    error_message = db.Column(db.String(512))
+    created_at = db.Column(db.DateTime, default=get_beijing_now)
+    updated_at = db.Column(
+        db.DateTime,
+        default=get_beijing_now,
+        onupdate=get_beijing_now
+    )
+    expires_at = db.Column(db.DateTime)
+    completed_at = db.Column(db.DateTime)
+
+    def __repr__(self):
+        return f"<QrLoginTask task_id={self.task_id} status={self.status}>"
+
+
+# =========================
+# Cookie 完整性元数据表
+# =========================
+class CookieMetadata(db.Model):
+    __tablename__ = 'cookie_metadata'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    role = db.Column(db.String(32), nullable=False, index=True)
+    status = db.Column(db.String(32), nullable=False, default='unknown', index=True)
+    source = db.Column(db.String(32))
+    masked_uid = db.Column(db.String(32), index=True)
+    payload_json = db.Column(db.Text)
+    last_validated_at = db.Column(db.DateTime)
+    last_error = db.Column(db.String(512))
+    created_at = db.Column(db.DateTime, default=get_beijing_now)
+    updated_at = db.Column(
+        db.DateTime,
+        default=get_beijing_now,
+        onupdate=get_beijing_now
+    )
+
+    def __repr__(self):
+        return f"<CookieMetadata role={self.role} status={self.status}>"
+
+
+# =========================
+# 鉴权尝试记录表
+# =========================
+class AuthAttempt(db.Model):
+    __tablename__ = 'auth_attempts'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    session_id = db.Column(db.Integer, db.ForeignKey('auth_sessions.id'), index=True)
+    uid = db.Column(db.String(32), nullable=False, index=True)
+    status = db.Column(db.String(32), nullable=False, index=True)
+    code = db.Column(db.String(32), index=True)
+    nickname = db.Column(db.String(64))
+    room_id = db.Column(db.String(32), index=True)
+    payload_json = db.Column(db.Text)
+    error_message = db.Column(db.String(512))
+    created_at = db.Column(db.DateTime, default=get_beijing_now)
+
+    def __repr__(self):
+        return f"<AuthAttempt uid={self.uid} status={self.status}>"
+
+
+# =========================
+# 运行时角色状态表
+# =========================
+class RuntimeStatus(db.Model):
+    __tablename__ = 'runtime_statuses'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    role = db.Column(db.String(32), nullable=False, index=True)
+    instance_id = db.Column(db.String(64), nullable=False, index=True)
+    state = db.Column(db.String(32), nullable=False, default='unknown', index=True)
+    payload_json = db.Column(db.Text)
+    last_error = db.Column(db.String(512))
+    last_event_at = db.Column(db.DateTime)
+    heartbeat_at = db.Column(db.DateTime, default=get_beijing_now, index=True)
+    created_at = db.Column(db.DateTime, default=get_beijing_now)
+    updated_at = db.Column(
+        db.DateTime,
+        default=get_beijing_now,
+        onupdate=get_beijing_now
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint('role', 'instance_id', name='uix_runtime_role_instance'),
+    )
+
+    def __repr__(self):
+        return f"<RuntimeStatus role={self.role} instance={self.instance_id} state={self.state}>"
+
+
+# =========================
+# 调度任务状态表
+# =========================
+class SchedulerJob(db.Model):
+    __tablename__ = 'scheduler_jobs'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    job_id = db.Column(db.String(64), nullable=False, unique=True, index=True)
+    job_type = db.Column(db.String(64), nullable=False, index=True)
+    status = db.Column(db.String(32), nullable=False, default='pending', index=True)
+    requested_by = db.Column(db.String(64), index=True)
+    payload_json = db.Column(db.Text)
+    result_json = db.Column(db.Text)
+    last_error = db.Column(db.String(512))
+    created_at = db.Column(db.DateTime, default=get_beijing_now)
+    updated_at = db.Column(
+        db.DateTime,
+        default=get_beijing_now,
+        onupdate=get_beijing_now
+    )
+    scheduled_at = db.Column(db.DateTime, index=True)
+    started_at = db.Column(db.DateTime)
+    finished_at = db.Column(db.DateTime)
+
+    def __repr__(self):
+        return f"<SchedulerJob job_id={self.job_id} status={self.status}>"
 
 
 # =========================

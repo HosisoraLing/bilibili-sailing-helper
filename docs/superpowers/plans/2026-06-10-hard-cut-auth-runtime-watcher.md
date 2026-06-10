@@ -47,7 +47,7 @@ base-ref: 80b9c3b16cb08c0ccec876c1203b23e47500a952
 - Modify: `db/init_db.py`
 - Modify: `services/auth_service.py`
 
-- [ ] **Step 1: Add pytest dependencies**
+- [x] **Step 1: Add pytest dependencies**
 
 Add active dependency lines to `requirements.txt`:
 
@@ -56,7 +56,7 @@ pytest>=7.4.0,<9.0.0
 pytest-flask>=1.2.0,<2.0.0
 ```
 
-- [ ] **Step 2: Create isolated test fixture**
+- [x] **Step 2: Create isolated test fixture**
 
 Create `tests/conftest.py` with an app fixture that uses temporary SQLite:
 
@@ -87,7 +87,7 @@ def client(app):
     return app.test_client()
 ```
 
-- [ ] **Step 3: Write failing auth state tests**
+- [x] **Step 3: Write failing auth state tests**
 
 Create `tests/test_auth_state.py`:
 
@@ -129,7 +129,7 @@ def test_duplicate_success_only_wins_once(app):
         assert mark_auth_success(session) is False
 ```
 
-- [ ] **Step 4: Run tests and verify failure**
+- [x] **Step 4: Run tests and verify failure**
 
 Run:
 
@@ -139,15 +139,15 @@ pytest tests/test_auth_state.py -q
 
 Expected now: fail if the fixture cannot create app with temporary DB or if auth code remains memory-only in ways that block DB-backed flows.
 
-- [ ] **Step 5: Add state models**
+- [x] **Step 5: Add state models**
 
 Extend `db/models.py` with models for QR login, Cookie metadata, auth attempts, runtime status, and scheduler jobs. Use simple columns only: string status, timestamps, JSON text for payloads, and indexes on role/job/session identifiers.
 
-- [ ] **Step 6: Make auth code durable**
+- [x] **Step 6: Make auth code durable**
 
 Update `AuthSession` to store `code`, `succeeded_at`, `consumed_at`, and an optional `last_attempt_at`. Update `create_auth_session()` and `mark_auth_success()` so the code is attached to the DB session and success transition is atomic from pending to success.
 
-- [ ] **Step 7: Run focused tests**
+- [x] **Step 7: Run focused tests**
 
 Run:
 
@@ -157,7 +157,7 @@ pytest tests/test_auth_state.py -q
 
 Expected: all tests pass.
 
-- [ ] **Step 8: Commit Task 1**
+- [x] **Step 8: Commit Task 1**
 
 ```bash
 git add requirements.txt db/models.py db/init_db.py services/auth_service.py tests/conftest.py tests/test_auth_state.py

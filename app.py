@@ -232,6 +232,32 @@ def run_migrations():
             conn.commit()
             logger.info("Migration completed: guard_gift_records table created")
 
+    # Check auth_sessions table for durable auth state columns
+    if 'auth_sessions' in inspector.get_table_names():
+        columns = {col['name']: col for col in inspector.get_columns('auth_sessions')}
+        auth_session_columns = {
+            'code': 'VARCHAR(32)',
+            'succeeded_at': 'DATETIME',
+            'consumed_at': 'DATETIME',
+            'last_attempt_at': 'DATETIME',
+        }
+        missing_columns = [
+            (name, ddl)
+            for name, ddl in auth_session_columns.items()
+            if name not in columns
+        ]
+        if missing_columns:
+            logger.info("Migrating: Adding durable auth state columns...")
+            with db.engine.connect() as conn:
+                for name, ddl in missing_columns:
+                    conn.execute(text(f"ALTER TABLE auth_sessions ADD COLUMN {name} {ddl}"))
+                conn.execute(text(
+                    "CREATE INDEX IF NOT EXISTS ix_auth_sessions_code "
+                    "ON auth_sessions(code)"
+                ))
+                conn.commit()
+                logger.info("Migration completed: auth_sessions durable state columns added")
+
 
 # =========================
 # 主入口
