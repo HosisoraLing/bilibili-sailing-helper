@@ -1,19 +1,23 @@
 workflow: full
-phase: open
+phase: verify
 context_compression: off
-build_mode: null
+build_mode: executing-plans
 build_pause: null
 subagent_dispatch: null
-tdd_mode: null
-isolation: null
-verify_mode: null
+tdd_mode: direct
+isolation: worktree
+verify_mode: full
 auto_transition: true
 base_ref: abfcca1eb3e178d60b1b005080a501e24880e07c
-design_doc: null
-plan: null
-verify_result: pending
-verification_report: null
+design_doc: docs/superpowers/specs/2026-06-10-modularize-routes-and-admin-v2-design.md
+plan: docs/superpowers/plans/2026-06-10-modularize-routes-and-admin-v2.md
+verify_result: pass
+verification_report: docs/superpowers/verification/2026-06-10-modularize-routes-and-admin-v2.md
 branch_status: pending
 created_at: 2026-06-10
-verified_at: null
+verified_at: 2026-06-10
 archived: false
+handoff_context: openspec/changes/modularize-routes-and-admin-v2/.comet/handoff/design-context.json
+handoff_hash: bde788b4d830fdb820e773a7cea4318c62e56fa79268c53a6c29d478f81660dc
+build_command: .venv/bin/python -m compileall app.py routes.py db services runtime tests get_cookies.py route_handlers
+verify_command: .venv/bin/python -m pytest tests/test_route_inventory.py tests/test_internal_api.py tests/test_auth_state.py tests/test_qr_login.py tests/test_browserless_qr_contract.py tests/test_cookie_runtime_contract.py

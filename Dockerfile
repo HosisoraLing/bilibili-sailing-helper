@@ -48,6 +48,7 @@ RUN useradd -m -s /bin/bash appuser
 
 COPY --chown=appuser:appuser app.py config.py routes.py decorators.py constants.py migrate.py ./
 COPY --chown=appuser:appuser db/        ./db/
+COPY --chown=appuser:appuser route_handlers/ ./route_handlers/
 COPY --chown=appuser:appuser runtime/   ./runtime/
 COPY --chown=appuser:appuser services/  ./services/
 COPY --chown=appuser:appuser utils/     ./utils/

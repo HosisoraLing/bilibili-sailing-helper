@@ -1,0 +1,14 @@
+{
+  "change": "modularize-routes-and-admin-v2",
+  "phase": "design",
+  "mode": "compact",
+  "canonical_spec": "openspec",
+  "generated_by": "comet-handoff.sh",
+  "context_hash": "bde788b4d830fdb820e773a7cea4318c62e56fa79268c53a6c29d478f81660dc",
+  "files": [
+    { "path": "openspec/changes/modularize-routes-and-admin-v2/proposal.md", "sha256": "d91a5d93257d7457f052fe6f37c446fe73e9836f767a659927ab5d532b9b763a" },
+    { "path": "openspec/changes/modularize-routes-and-admin-v2/design.md", "sha256": "f3e3ab0802d30ee61988c65ebaaf97dc582e017a161df554b9eaacdae2c97b6b" },
+    { "path": "openspec/changes/modularize-routes-and-admin-v2/tasks.md", "sha256": "2606c22bc7240a9bb4c1d1958023626a6b469b088906a605ee8a5c0d7edcbc9d" },
+    { "path": "openspec/changes/modularize-routes-and-admin-v2/specs/route-module-boundaries/spec.md", "sha256": "40a4bd1107216fd825ce31d957bbcccb512dfac5e17efa46e6051c1aaeebc71b" }
+  ]
+}
