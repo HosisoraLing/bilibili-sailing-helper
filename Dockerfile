@@ -64,7 +64,12 @@ COPY --from=builder /install /usr/local
 # 创建应用用户（带home目录）
 RUN useradd -m -s /bin/bash appuser
 
-# 复制应用代码
+# 在复制代码前安装Playwright浏览器（利用层缓存，代码改动不会触发重新下载）
+USER appuser
+RUN playwright install chromium
+
+# 切换回root复制代码并设置权限
+USER root
 COPY --chown=appuser:appuser app.py config.py routes.py decorators.py constants.py migrate.py ./
 COPY --chown=appuser:appuser db/        ./db/
 COPY --chown=appuser:appuser services/  ./services/
@@ -76,9 +81,8 @@ COPY --chown=appuser:appuser templates/ ./templates/
 # 创建数据和日志目录
 RUN mkdir -p data logs && chown -R appuser:appuser data logs
 
-# 切换到应用用户并安装Playwright浏览器
+# 切换到应用用户运行
 USER appuser
-RUN playwright install chromium
 
 EXPOSE 80 443
 
