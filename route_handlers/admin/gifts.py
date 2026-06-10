@@ -25,6 +25,8 @@ def admin_guard_gifts():
 
     # Get available months
     available_months = AdminService.get_available_months()
+    if month not in available_months:
+        available_months = [month, *available_months]
 
     return render_template(
         'admin_guard_gifts.html',
