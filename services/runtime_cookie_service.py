@@ -28,7 +28,7 @@ class RuntimeCookieService:
         cookie = RuntimeCookieService.load_cookie_settings()
         missing_keys = [
             key
-            for key in ("SESSDATA", "bili_jct", "buvid3")
+            for key in ("SESSDATA",)
             if not cookie.get(key)
         ]
         status = metadata.status
