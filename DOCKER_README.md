@@ -1,64 +1,77 @@
 # Docker 部署说明
 
-## 快速开始
+## 运行角色
 
-### 1. 准备配置文件
+当前 Docker Compose 使用三个运行角色：
 
-复制示例配置文件并填写：
+- `web`：对外提供页面、管理后台和内部 API，拥有 SQLite 业务写入。
+- `danmaku-worker`：连接 B 站直播弹幕，读取 web 提供的运行时 Cookie，通过内部 API 上报鉴权事件。
+- `scheduler`：定时触发内部任务，通过内部 API 通知 web，不直接写数据库。
+
+`web` 对外端口固定为 `7111`。
+
+## 启动
+
 ```bash
 cp settings.json.example settings.json
-# 编辑 settings.json 填写你的配置
-```
-
-### 2. 构建并启动
-
-```bash
-# 构建镜像（首次需要较长时间）
+export INTERNAL_API_SECRET="$(openssl rand -hex 32)"
 docker compose build
-
-# 启动服务
 docker compose up -d
-
-# 查看日志
-docker compose logs -f
 ```
 
-### 3. 常用命令
+`INTERNAL_API_SECRET` 必须设置，三个角色用它保护内部 API。不要把真实 secret 提交到仓库。
+
+## 常用命令
 
 ```bash
-# 停止服务
+docker compose ps
+docker compose logs -f web
+docker compose logs -f danmaku-worker
+docker compose logs -f scheduler
+docker compose restart web
+docker compose restart danmaku-worker
+docker compose restart scheduler
 docker compose down
-
-# 重启服务
-docker compose restart
-
-# 查看日志
-docker compose logs -f
-
-# 进入容器
-docker compose exec app bash
 ```
 
-## 数据持久化
+如果只有弹幕鉴权异常，优先重启 `danmaku-worker`。如果只有定时任务异常，优先重启 `scheduler`。
 
-- **数据库**: Docker volume `sailing-data` -> `/app/data`
-- **日志**: Docker volume `sailing-logs` -> `/app/logs`
-- **配置**: bind mount `./settings.json` -> `/app/settings.json`
+## 数据与配置
 
-## 查看错误日志
+- `./settings.json` 挂载到 `/app/settings.json`。
+- `./data` 挂载到 `web` 的 `/app/data`，SQLite 数据库只由 `web` 写入。
+- `./logs` 挂载到三个角色的 `/app/logs`。
+- `danmaku-worker` 和 `scheduler` 不挂载 `./data`。
+
+## SQLite 备份
+
+升级或执行结构性变更前先备份：
 
 ```bash
-# 查看容器内的错误日志
-docker compose exec app cat /app/logs/error.log
-
-# 或者从宿主机查看（如果使用默认volume）
-docker run --rm -v sailing-logs:/logs alpine cat /logs/error.log
+docker compose stop web danmaku-worker scheduler
+mkdir -p backups
+cp -a data backups/data-$(date +%Y%m%d-%H%M%S)
+docker compose up -d
 ```
 
-## SSL 配置（可选）
+## Cookie 更新
 
-1. 将证书文件放到 `ssl/` 目录
-2. 在 `settings.json` 中配置：
+管理员在后台扫码登录成功后，`web` 会更新 Cookie version。`danmaku-worker` 会通过内部 Cookie 接口检测版本变化并自动重连。
+
+## 故障定位
+
+```bash
+docker compose logs --tail=200 web
+docker compose logs --tail=200 danmaku-worker
+docker compose logs --tail=200 scheduler
+```
+
+管理后台的 Cookie 状态接口会显示角色状态、心跳年龄、最后错误、重试次数、Cookie version 和下一步建议。
+
+## SSL
+
+如需启用 SSL，在 `settings.json` 中配置证书路径，并把证书目录挂载到 `web` 容器：
+
 ```json
 {
   "ssl": {
@@ -69,21 +82,3 @@ docker run --rm -v sailing-logs:/logs alpine cat /logs/error.log
   }
 }
 ```
-3. 取消 `docker-compose.yml` 中 SSL 挂载的注释
-4. 重启服务：`docker compose restart`
-
-## 环境变量
-
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| PYTHONUNBUFFERED | Python输出不缓冲 | 1 |
-| PYTHONDONTWRITEBYTECODE | 不生成pyc文件 | 1 |
-| TZ | 时区 | Asia/Shanghai |
-
-## 资源限制
-
-默认配置：
-- 内存限制: 512MB
-- 内存预留: 128MB
-
-可在 `docker-compose.yml` 中调整 `deploy.resources` 配置。

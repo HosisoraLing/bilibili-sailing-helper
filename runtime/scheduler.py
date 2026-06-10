@@ -20,12 +20,13 @@ async def post_json(session, url: str, *, secret: str, payload: dict):
     )
     close = getattr(response, "release", None)
     try:
-        if not 200 <= int(getattr(response, "status", 0)) < 300:
+        status = int(getattr(response, "status", 200))
+        if not 200 <= status < 300:
             text = ""
             read_text = getattr(response, "text", None)
             if callable(read_text):
                 text = await read_text()
-            raise RuntimeError(f"HTTP {response.status} from {url}: {text}")
+            raise RuntimeError(f"HTTP {status} from {url}: {text}")
     finally:
         if callable(close):
             close()

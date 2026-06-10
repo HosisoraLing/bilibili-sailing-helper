@@ -43,10 +43,10 @@
 
 ## 5. Admin UX And Documentation
 
-- [ ] 5.1 Update admin status API/UI to show role, state, heartbeat age, last event time, last error, retry count, active Cookie version, stale Cookie reload state, and next suggested action.
-- [ ] 5.2 Update auth page polling responses so user-visible states distinguish waiting, success, expired, listener unavailable, and retrying.
-- [ ] 5.3 Update Docker/manual operation docs for the new roles and clarify how to restart only the failed role.
-- [ ] 5.4 Add migration/backup note for SQLite before applying the hard cut.
+- [x] 5.1 Update admin status API/UI to show role, state, heartbeat age, last event time, last error, retry count, active Cookie version, stale Cookie reload state, and next suggested action.
+- [x] 5.2 Update auth page polling responses so user-visible states distinguish waiting, success, expired, listener unavailable, and retrying.
+- [x] 5.3 Update Docker/manual operation docs for the new roles and clarify how to restart only the failed role.
+- [x] 5.4 Add migration/backup note for SQLite before applying the hard cut.
 
 ## 6. Verification
 

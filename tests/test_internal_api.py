@@ -9,6 +9,7 @@ from db.models import (
     CookieMetadata,
     RuntimeStatus,
     SchedulerJob,
+    User,
     db,
     get_beijing_now,
 )
@@ -97,6 +98,9 @@ def test_runtime_status_keeps_roles_separate(client, app):
 
 def test_admin_cookie_status_reports_runtime_health_and_next_action(client, app, monkeypatch):
     with app.app_context():
+        admin = User(uid="admin-1", nickname="admin")
+        admin.add_role("admin")
+        db.session.add(admin)
         db.session.add(
             CookieMetadata(
                 role="admin",
@@ -128,6 +132,10 @@ def test_admin_cookie_status_reports_runtime_health_and_next_action(client, app,
             )
         )
         db.session.commit()
+        admin_id = admin.id
+
+    with client.session_transaction() as flask_session:
+        flask_session["_user_id"] = str(admin_id)
 
     monkeypatch.setattr(
         "services.cookie_service.CookieService.load_settings",

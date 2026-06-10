@@ -27,9 +27,11 @@ from services.guard_service import GUARD_LEVEL_NAME_MAP
 from services.internal_api_service import (
     ConflictError,
     create_scheduler_job,
+    pending_auth_runtime_state,
     process_danmaku_auth_event,
     record_runtime_heartbeat,
     record_scheduler_result,
+    runtime_health_summary,
     verify_internal_secret,
 )
 from services.runtime_cookie_service import RuntimeCookieService
@@ -170,7 +172,9 @@ def auth_status():
         return jsonify(status='expired'), 410
 
     if session.status != 'success':
-        return jsonify(status='pending')
+        runtime_state = pending_auth_runtime_state()
+        http_status = runtime_state.pop('http_status', 200)
+        return jsonify(**runtime_state), http_status
 
     # 检查各种模式参数
     login_mode = request.args.get('login_mode') == 'true'
@@ -2016,7 +2020,8 @@ def admin_cookie_status():
         'has_buvid3': has_buvid3,
         'is_valid': is_valid,
         'username': username,
-        'listener': listener_status
+        'listener': listener_status,
+        'runtime': runtime_health_summary(),
     })
 
 

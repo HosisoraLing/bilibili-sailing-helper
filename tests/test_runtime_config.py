@@ -246,6 +246,46 @@ def test_danmaku_worker_closes_connection_when_cookie_version_changes():
     assert any(item["state"] == "cookie_reloading" for item in webhook.heartbeats)
 
 
+def test_danmaku_worker_cookie_monitor_survives_transient_fetch_failure():
+    from services.bilibili_live.cookies import RuntimeCookie
+    from runtime import danmaku_worker
+
+    class FlakyCookieProvider:
+        def __init__(self):
+            self.calls = 0
+
+        async def fetch_latest(self):
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("web restarting")
+            return RuntimeCookie(status="valid", version=2, cookie={"SESSDATA": "new"})
+
+    websocket = FakeWebSocket([])
+    websocket.closed = False
+    webhook = FakeWebhook()
+    provider = FlakyCookieProvider()
+
+    async def fast_poll(_seconds):
+        return None
+
+    asyncio.run(
+        danmaku_worker.monitor_cookie_version(
+            cookie_provider=provider,
+            current_version=1,
+            websocket=websocket,
+            webhook=webhook,
+            instance_id="worker-1",
+            poll_interval=0,
+            sleep=fast_poll,
+        )
+    )
+
+    assert provider.calls == 2
+    assert websocket.closed is True
+    assert any(item["state"] == "cookie_poll_error" for item in webhook.heartbeats)
+    assert any(item["state"] == "cookie_reloading" for item in webhook.heartbeats)
+
+
 def test_scheduler_runs_recurring_jobs_until_stopped():
     from runtime import scheduler
 

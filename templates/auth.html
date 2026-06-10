@@ -322,6 +322,15 @@
                 } else if (data.status === 'expired') {
                     stopPolling();
                     updateStatus('conn-dot--disconnected', 'status-expired', '鉴权已过期，请刷新页面重试');
+                } else if (data.status === 'listener_unavailable') {
+                    stopPolling();
+                    updateStatus('conn-dot--disconnected', 'status-expired', data.next_action || '弹幕鉴权服务暂不可用，请稍后重试');
+                } else if (data.status === 'retrying') {
+                    updateStatus('conn-dot--disconnected', 'status-pending', data.next_action || '弹幕连接正在自动重试…');
+                } else if (data.status === 'internal_delivery_delayed') {
+                    updateStatus('conn-dot--connected', 'status-pending', data.next_action || '系统正在同步鉴权结果…');
+                } else if (data.status === 'pending') {
+                    updateStatus('conn-dot--connected', 'status-pending', data.next_action || '已连接，等待弹幕鉴权…');
                 }
             } catch (e) {
                 console.error('Polling error:', e);

@@ -80,7 +80,16 @@ async def monitor_cookie_version(
 ):
     while True:
         await sleep(poll_interval)
-        latest = await cookie_provider.fetch_latest()
+        try:
+            latest = await cookie_provider.fetch_latest()
+        except Exception as exc:
+            await webhook.report_heartbeat(
+                role="danmaku-worker",
+                instance_id=instance_id,
+                state="cookie_poll_error",
+                last_error=str(exc),
+            )
+            continue
         if RuntimeCookieProvider.should_reload(current_version, latest):
             await webhook.report_heartbeat(
                 role="danmaku-worker",

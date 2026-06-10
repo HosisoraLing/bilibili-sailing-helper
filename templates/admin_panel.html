@@ -295,7 +295,7 @@
             <div style="display: flex; align-items: center; gap: 10px;">
                 <i class="fas fa-exclamation-triangle" style="font-size: 20px;"></i>
                 <div>
-                    <strong>弹幕监听未正常运行</strong>
+                    <strong>弹幕鉴权运行态需要处理</strong>
                     <div id="listenerAlertMsg" style="font-size: 13px; opacity: 0.9; margin-top: 3px;">请重新登录B站账号以恢复弹幕鉴权功能</div>
                 </div>
             </div>
@@ -304,7 +304,7 @@
                     <i class="fas fa-qrcode"></i> 扫码登录
                 </button>
                 <button onclick="restartListener()" style="background: rgba(255,255,255,0.2); color: white; border: 2px solid rgba(255,255,255,0.5); padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer;">
-                    <i class="fas fa-sync-alt"></i> 重启监听
+                    <i class="fas fa-sync-alt"></i> 查看重启方式
                 </button>
             </div>
         </div>
@@ -625,16 +625,18 @@
                 const alertEl = document.getElementById('listenerAlert');
                 const alertMsgEl = document.getElementById('listenerAlertMsg');
                 
-                // 检查是否需要显示警告
-                const needsWarning = !data.is_valid || !data.listener.is_running;
+                const runtime = data.runtime || {};
+                const worker = (runtime.roles && runtime.roles['danmaku-worker']) || {};
+                const needsWarning = !data.is_valid || runtime.next_action !== '无需操作';
                 
                 if (needsWarning) {
                     alertEl.style.display = 'block';
                     
                     if (!data.is_valid) {
                         alertMsgEl.textContent = 'Cookie无效或已过期，请重新登录B站账号';
-                    } else if (!data.listener.is_running) {
-                        alertMsgEl.textContent = '弹幕监听线程未运行，请重启监听';
+                    } else if (runtime.next_action) {
+                        const age = worker.heartbeat_age_seconds == null ? '未知' : worker.heartbeat_age_seconds + ' 秒';
+                        alertMsgEl.textContent = runtime.next_action + '；danmaku-worker 状态：' + (worker.state || 'missing') + '，心跳：' + age;
                     }
                 } else {
                     alertEl.style.display = 'none';
@@ -705,7 +707,7 @@
                                 alertDiv.style.display = 'none';
                                 
                                 // 显示toast提示
-                                showToast(statusData.restart_warning || '✅ 登录成功！Cookie已更新，弹幕监听已重启');
+                                showToast(statusData.restart_warning || '✅ 登录成功！Cookie已更新，danmaku-worker 会自动重新加载');
                                 
                                 // 3秒后刷新页面
                                 setTimeout(() => {
@@ -738,28 +740,7 @@
     }
     
     function restartListener() {
-        const csrfToken = document.querySelector('input[name="csrf_token"]')?.value || '';
-        
-        fetch('/admin/cookie/restart-listener', {
-            method: 'POST',
-            headers: {
-                'X-CSRF-Token': csrfToken,
-                'Content-Type': 'application/json'
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert('弹幕监听已重启');
-                // 3秒后检查状态
-                setTimeout(checkListenerStatus, 3000);
-            } else {
-                alert('重启失败: ' + (data.error || '未知错误'));
-            }
-        })
-        .catch(error => {
-            alert('请求失败');
-        });
+        alert('弹幕监听已迁移到 danmaku-worker 角色。请在服务器执行：docker compose restart danmaku-worker');
     }
     
     // 页面加载时检查状态

@@ -8,6 +8,7 @@ from flask import current_app
 
 from db.models import (
     AuthAttempt,
+    CookieMetadata,
     AuthSession,
     RuntimeStatus,
     SchedulerJob,
@@ -84,6 +85,120 @@ def is_runtime_status_stale(
         return True
     age = get_beijing_now() - status.heartbeat_at
     return age.total_seconds() > threshold_seconds
+
+
+def runtime_status_payload(status: RuntimeStatus | None) -> dict[str, Any]:
+    if status is None:
+        return {
+            "role": "",
+            "instance_id": "",
+            "state": "missing",
+            "heartbeat_age_seconds": None,
+            "last_event_at": "",
+            "last_error": "",
+            "delivery_error": "",
+            "retry_count": 0,
+            "cookie_version": 0,
+            "stale": True,
+        }
+
+    heartbeat_age = None
+    if status.heartbeat_at:
+        heartbeat_age = int((get_beijing_now() - status.heartbeat_at).total_seconds())
+    return {
+        "role": status.role,
+        "instance_id": status.instance_id,
+        "state": status.state,
+        "heartbeat_age_seconds": heartbeat_age,
+        "last_event_at": status.last_event_at.isoformat() if status.last_event_at else "",
+        "last_error": status.last_error or "",
+        "delivery_error": status.delivery_error or "",
+        "retry_count": int(status.retry_count or 0),
+        "cookie_version": int(status.cookie_version or 0),
+        "stale": is_runtime_status_stale(status),
+    }
+
+
+def latest_runtime_status(role: str) -> RuntimeStatus | None:
+    return RuntimeStatus.query.filter_by(role=role).order_by(
+        RuntimeStatus.heartbeat_at.desc()
+    ).first()
+
+
+def runtime_health_summary() -> dict[str, Any]:
+    worker = latest_runtime_status("danmaku-worker")
+    scheduler = latest_runtime_status("scheduler")
+    metadata = CookieMetadata.query.filter_by(role="admin").first()
+    active_cookie_version = int(metadata.cookie_version or 0) if metadata else 0
+    worker_cookie_version = int(worker.cookie_version or 0) if worker else 0
+    worker_cookie_stale = bool(
+        metadata
+        and metadata.status == "valid"
+        and worker
+        and worker_cookie_version < active_cookie_version
+    )
+
+    if metadata is None or metadata.status != "valid":
+        next_action = "重新扫码登录 B 站账号"
+    elif worker is None:
+        next_action = "启动 danmaku-worker"
+    elif worker_cookie_stale:
+        next_action = "等待 danmaku-worker 重新加载 Cookie"
+    elif worker.state in {"failed", "cookie_unavailable"} or is_runtime_status_stale(worker):
+        next_action = "检查 danmaku-worker 日志并重启该角色"
+    elif worker.state == "reconnecting":
+        next_action = "等待 danmaku-worker 自动重连"
+    elif scheduler is None or is_runtime_status_stale(scheduler):
+        next_action = "检查 scheduler 角色"
+    else:
+        next_action = "无需操作"
+
+    return {
+        "active_cookie_version": active_cookie_version,
+        "worker_cookie_version": worker_cookie_version,
+        "worker_cookie_stale": worker_cookie_stale,
+        "next_action": next_action,
+        "roles": {
+            "danmaku-worker": runtime_status_payload(worker),
+            "scheduler": runtime_status_payload(scheduler),
+        },
+    }
+
+
+def pending_auth_runtime_state() -> dict[str, Any]:
+    worker = latest_runtime_status("danmaku-worker")
+    if worker is None or is_runtime_status_stale(worker):
+        return {
+            "status": "listener_unavailable",
+            "http_status": 503,
+            "next_action": "管理员需要检查 danmaku-worker",
+        }
+    if worker.state in {"failed", "cookie_unavailable"}:
+        return {
+            "status": "listener_unavailable",
+            "http_status": 503,
+            "next_action": "管理员需要检查 danmaku-worker",
+            "last_error": worker.last_error or worker.delivery_error or "",
+        }
+    if worker.state == "delivery_error":
+        return {
+            "status": "internal_delivery_delayed",
+            "http_status": 202,
+            "next_action": "系统正在重试投递鉴权结果",
+            "retry_count": int(worker.retry_count or 0),
+        }
+    if worker.state == "reconnecting":
+        return {
+            "status": "retrying",
+            "http_status": 202,
+            "next_action": "弹幕连接正在自动重试",
+            "retry_count": int(worker.retry_count or 0),
+        }
+    return {
+        "status": "pending",
+        "http_status": 200,
+        "next_action": "请在直播间发送页面上的验证码弹幕",
+    }
 
 
 def process_danmaku_auth_event(payload: dict[str, Any]) -> dict[str, Any]:

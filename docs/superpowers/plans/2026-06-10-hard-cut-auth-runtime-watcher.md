@@ -473,19 +473,19 @@ git commit -m "feat: split runtime roles"
 - Modify: `DOCKER_README.md`
 - Modify: `openspec/changes/hard-cut-auth-runtime-watcher/tasks.md`
 
-- [ ] **Step 1: Update admin health response**
+- [x] **Step 1: Update admin health response**
 
 Admin status must show role, state, heartbeat age, last event time, last error, delivery error, retry count, active Cookie version, whether worker Cookie is stale, and next action.
 
-- [ ] **Step 2: Update auth polling response**
+- [x] **Step 2: Update auth polling response**
 
 User-facing auth status must distinguish waiting, success, expired, listener unavailable, internal delivery delayed, and retrying.
 
-- [ ] **Step 3: Update docs**
+- [x] **Step 3: Update docs**
 
 Document the role split, internal secret, Cookie reload flow after admin QR login, how to restart only `danmaku-worker` or `scheduler`, and SQLite backup before migration.
 
-- [ ] **Step 4: Run full verification**
+- [x] **Step 4: Run full verification**
 
 Run:
 
@@ -505,11 +505,11 @@ Expected:
 - worker/scheduler runtime code does not directly commit business DB state
 - QR Cookie update causes worker reload/reconnect without web in-process listener restart
 
-- [ ] **Step 5: Update OpenSpec tasks**
+- [x] **Step 5: Update OpenSpec tasks**
 
 Mark completed items in `openspec/changes/hard-cut-auth-runtime-watcher/tasks.md` only after verification evidence exists.
 
-- [ ] **Step 6: Commit Task 6**
+- [x] **Step 6: Commit Task 6**
 
 ```bash
 git add routes.py templates static DOCKER_README.md openspec/changes/hard-cut-auth-runtime-watcher/tasks.md
