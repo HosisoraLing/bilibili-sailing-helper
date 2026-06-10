@@ -144,6 +144,36 @@ EXPECTED_ROUTE_INVENTORY = {
         "methods": ["GET"],
         "blueprint": "admin",
     },
+    "admin.admin_user_add": {
+        "rule": "/admin/users/add",
+        "methods": ["POST"],
+        "blueprint": "admin",
+    },
+    "admin.admin_user_delete": {
+        "rule": "/admin/users/delete",
+        "methods": ["POST"],
+        "blueprint": "admin",
+    },
+    "admin.admin_user_edit": {
+        "rule": "/admin/users/edit",
+        "methods": ["POST"],
+        "blueprint": "admin",
+    },
+    "admin.admin_user_set_admin": {
+        "rule": "/admin/users/set-admin",
+        "methods": ["POST"],
+        "blueprint": "admin",
+    },
+    "admin.admin_user_unset_admin": {
+        "rule": "/admin/users/unset-admin",
+        "methods": ["POST"],
+        "blueprint": "admin",
+    },
+    "admin.admin_users": {
+        "rule": "/admin/users",
+        "methods": ["GET"],
+        "blueprint": "admin",
+    },
     "admin.admin_poll_qr_login": {
         "rule": "/admin/cookie/qr-login/<task_id>",
         "methods": ["GET"],
@@ -277,6 +307,8 @@ def test_admin_url_generation_is_stable(app):
         assert url_for("admin.admin_panel") == "/admin/panel"
         assert url_for("admin.admin_edit_address", address_id=12) == "/admin/edit-address/12"
         assert url_for("admin.admin_guard_get", uid="1001") == "/admin/guards/1001"
+        assert url_for("admin.admin_users") == "/admin/users"
+        assert url_for("admin.admin_user_delete") == "/admin/users/delete"
         assert url_for("admin.admin_cookie_status") == "/admin/cookie/status"
         assert (
             url_for("admin.admin_poll_qr_login", task_id="task-1")
