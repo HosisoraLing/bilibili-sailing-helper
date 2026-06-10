@@ -1,5 +1,5 @@
 workflow: full
-phase: verify
+phase: archive
 context_compression: off
 build_mode: executing-plans
 build_pause: null
@@ -13,7 +13,7 @@ design_doc: docs/superpowers/specs/2026-06-10-modularize-routes-and-admin-v2-des
 plan: docs/superpowers/plans/2026-06-10-modularize-routes-and-admin-v2.md
 verify_result: pass
 verification_report: docs/superpowers/verification/2026-06-10-modularize-routes-and-admin-v2.md
-branch_status: pending
+branch_status: handled
 created_at: 2026-06-10
 verified_at: 2026-06-10
 archived: false
