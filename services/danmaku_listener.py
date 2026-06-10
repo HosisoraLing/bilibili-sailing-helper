@@ -108,7 +108,7 @@ class AuthDMHandler(blivedm.BaseHandler):
                     return
 
                 # 标记鉴权成功（带并发保护）
-                if not mark_auth_success(session):
+                if not mark_auth_success(session, expected_code=input_code):
                     # session已被处理或过期
                     with _authed_lock:
                         _authed_uids.discard(uid)
@@ -376,4 +376,3 @@ def restart_listener():
     except Exception as e:
         logger.error(f"重启弹幕监听失败: {e}", exc_info=True)
         return False
-
