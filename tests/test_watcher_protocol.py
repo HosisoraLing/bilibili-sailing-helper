@@ -47,6 +47,12 @@ def test_unpack_packets_expands_zlib_message_batch():
     assert [json.loads(packet["body"].decode("utf-8"))["cmd"] for packet in packets] == ["A", "B"]
 
 
+def test_unpack_packets_ignores_malformed_compressed_payloads():
+    from services.bilibili_live.protocol import OP_MESSAGE, unpack_packets
+
+    assert unpack_packets(_packet(OP_MESSAGE, b"not-zlib", version=2)) == []
+
+
 def test_unpack_packets_expands_brotli_message_batch_if_available():
     brotli = pytest.importorskip("brotli")
     from services.bilibili_live.protocol import OP_MESSAGE, unpack_packets
@@ -78,6 +84,8 @@ def test_normalize_danmaku_event_extracts_stable_fields():
 def test_normalize_danmaku_event_ignores_unsupported_or_malformed_payload():
     from services.bilibili_live.events import normalize_danmaku_event
 
+    assert normalize_danmaku_event(None, room_id=100) is None
+    assert normalize_danmaku_event(["DANMU_MSG"], room_id=100) is None
     assert normalize_danmaku_event({"cmd": "SEND_GIFT", "data": {}}, room_id=100) is None
     assert normalize_danmaku_event({"cmd": "DANMU_MSG", "info": []}, room_id=100) is None
 
@@ -141,6 +149,63 @@ def test_webhook_client_retries_and_reports_delivery_error():
     asyncio.run(run_test())
 
 
+def test_webhook_client_reports_delivery_error_after_network_failures():
+    async def run_test():
+        from services.bilibili_live.webhook import InternalWebhookClient
+
+        class FakeResponse:
+            status = 200
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc_val, exc_tb):
+                return False
+
+            async def text(self):
+                return "ok"
+
+        class FakeSession:
+            def __init__(self):
+                self.calls = []
+
+            def post(self, url, headers=None, json=None, timeout=None):
+                self.calls.append({"url": url, "headers": headers, "json": json, "timeout": timeout})
+                if url.endswith("/internal/danmaku/auth-event"):
+                    raise TimeoutError("web timeout")
+                return FakeResponse()
+
+        sleep_calls = []
+
+        async def fake_sleep(delay):
+            sleep_calls.append(delay)
+
+        session = FakeSession()
+        client = InternalWebhookClient(
+            base_url="https://web.test",
+            secret="secret",
+            session=session,
+            sleep=fake_sleep,
+            max_retries=2,
+            backoff_base=0.01,
+        )
+
+        delivered = await client.deliver_auth_event({"uid": "42", "content": "vc-1"})
+
+        assert delivered is False
+        assert [call["url"] for call in session.calls] == [
+            "https://web.test/internal/danmaku/auth-event",
+            "https://web.test/internal/danmaku/auth-event",
+            "https://web.test/internal/runtime/heartbeat",
+        ]
+        assert session.calls[-1]["json"]["state"] == "delivery_error"
+        assert session.calls[-1]["json"]["delivery_error"] == "web timeout"
+        assert session.calls[-1]["json"]["retry_count"] == 2
+        assert sleep_calls == [0.01]
+
+    asyncio.run(run_test())
+
+
 def test_webhook_client_uses_bounded_local_queue():
     async def run_test():
         from services.bilibili_live.webhook import InternalWebhookClient
@@ -174,13 +239,154 @@ def test_webhook_client_uses_bounded_local_queue():
             queue_size=1,
         )
 
-        assert client.enqueue_auth_event({"uid": "1", "content": "vc-1"}) is True
-        assert client.enqueue_auth_event({"uid": "2", "content": "vc-2"}) is False
+        assert await client.enqueue_auth_event({"uid": "1", "content": "vc-1"}) is True
+        assert await client.enqueue_auth_event({"uid": "2", "content": "vc-2"}) is False
 
         delivered = await client.drain_once()
 
         assert delivered is True
-        assert session.calls[0]["json"] == {"uid": "1", "content": "vc-1"}
+        assert session.calls[-1]["json"] == {"uid": "1", "content": "vc-1"}
+
+    asyncio.run(run_test())
+
+
+def test_webhook_client_reports_queue_full_when_event_cannot_be_enqueued():
+    async def run_test():
+        from services.bilibili_live.webhook import InternalWebhookClient
+
+        class FakeResponse:
+            status = 200
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc_val, exc_tb):
+                return False
+
+            async def text(self):
+                return "ok"
+
+        class FakeSession:
+            def __init__(self):
+                self.calls = []
+
+            def post(self, url, headers=None, json=None, timeout=None):
+                self.calls.append({"url": url, "headers": headers, "json": json, "timeout": timeout})
+                return FakeResponse()
+
+        session = FakeSession()
+        client = InternalWebhookClient(
+            base_url="https://web.test",
+            secret="secret",
+            session=session,
+            queue_size=1,
+            instance_id="worker-queue",
+        )
+
+        assert await client.enqueue_auth_event({"uid": "1"}) is True
+        assert await client.enqueue_auth_event({"uid": "2"}) is False
+
+        assert session.calls == [
+            {
+                "url": "https://web.test/internal/runtime/heartbeat",
+                "headers": {"Authorization": "secret"},
+                "json": {
+                    "role": "danmaku-worker",
+                    "instance_id": "worker-queue",
+                    "state": "queue_full",
+                    "delivery_error": "auth event queue full",
+                    "retry_count": 0,
+                },
+                "timeout": 10.0,
+            }
+        ]
+
+    asyncio.run(run_test())
+
+
+def test_webhook_client_retries_request_exceptions():
+    async def run_test():
+        from services.bilibili_live.webhook import InternalWebhookClient
+
+        class FakeResponse:
+            status = 200
+
+            async def text(self):
+                return "ok"
+
+        class FakePostContext:
+            async def __aenter__(self):
+                return FakeResponse()
+
+            async def __aexit__(self, exc_type, exc_val, exc_tb):
+                return False
+
+        class FakeSession:
+            def __init__(self):
+                self.calls = 0
+
+            def post(self, url, headers=None, json=None, timeout=None):
+                self.calls += 1
+                if self.calls == 1:
+                    raise OSError("network down")
+                return FakePostContext()
+
+        sleep_calls = []
+
+        async def fake_sleep(delay):
+            sleep_calls.append(delay)
+
+        session = FakeSession()
+        client = InternalWebhookClient(
+            base_url="https://web.test",
+            secret="secret",
+            session=session,
+            sleep=fake_sleep,
+            max_retries=2,
+            backoff_base=0.01,
+        )
+
+        assert await client.deliver_auth_event({"uid": "42", "content": "vc-1"}) is True
+        assert session.calls == 2
+        assert sleep_calls == [0.01]
+
+    asyncio.run(run_test())
+
+
+def test_webhook_client_requeues_failed_drain_payload():
+    async def run_test():
+        from services.bilibili_live.webhook import InternalWebhookClient
+
+        class FakeResponse:
+            status = 503
+
+            async def text(self):
+                return "unavailable"
+
+        class FakePostContext:
+            async def __aenter__(self):
+                return FakeResponse()
+
+            async def __aexit__(self, exc_type, exc_val, exc_tb):
+                return False
+
+        class FakeSession:
+            def post(self, url, headers=None, json=None, timeout=None):
+                return FakePostContext()
+
+        client = InternalWebhookClient(
+            base_url="https://web.test",
+            secret="secret",
+            session=FakeSession(),
+            sleep=lambda delay: asyncio.sleep(0),
+            max_retries=1,
+            queue_size=1,
+        )
+
+        payload = {"uid": "42", "content": "vc-1"}
+        assert await client.enqueue_auth_event(payload) is True
+        assert await client.drain_once() is False
+        assert client.queue.get_nowait() == payload
 
     asyncio.run(run_test())
 

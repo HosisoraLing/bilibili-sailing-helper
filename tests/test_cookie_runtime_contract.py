@@ -90,6 +90,46 @@ def test_internal_runtime_cookie_returns_validated_cookie_state(client, app, mon
     assert payload["cookie"]["buvid3"] == "buvid-value"
 
 
+def test_internal_runtime_cookie_hides_incomplete_cookie_even_when_metadata_is_valid(
+    client,
+    app,
+    monkeypatch,
+):
+    from services.runtime_cookie_service import RuntimeCookieService
+
+    monkeypatch.setattr(
+        RuntimeCookieService,
+        "load_cookie_settings",
+        staticmethod(lambda: {
+            "SESSDATA": "",
+            "bili_jct": "csrf-value",
+            "buvid3": "buvid-value",
+        }),
+    )
+
+    with app.app_context():
+        db.session.add(CookieMetadata(
+            role="admin",
+            status="valid",
+            source="qr_login",
+            masked_uid="42",
+            cookie_version=7,
+            last_validated_at=get_beijing_now(),
+        ))
+        db.session.commit()
+
+    response = client.get(
+        "/internal/runtime/cookie",
+        headers={"Authorization": "test-secret"},
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["status"] == "invalid"
+    assert payload["cookie"] == {}
+    assert "缺少 SESSDATA" in payload["last_error"]
+
+
 def test_runtime_heartbeat_persists_cookie_version(client, app):
     response = client.post(
         "/internal/runtime/heartbeat",

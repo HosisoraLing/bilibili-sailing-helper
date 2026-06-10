@@ -26,8 +26,18 @@ class RuntimeCookieService:
             }
 
         cookie = RuntimeCookieService.load_cookie_settings()
+        missing_keys = [
+            key
+            for key in ("SESSDATA", "bili_jct", "buvid3")
+            if not cookie.get(key)
+        ]
+        status = metadata.status
+        last_error = metadata.last_error or ""
+        if metadata.status == "valid" and missing_keys:
+            status = "invalid"
+            last_error = f"Cookie 配置缺少 {', '.join(missing_keys)}"
         return {
-            "status": metadata.status,
+            "status": status,
             "version": int(metadata.cookie_version or 0),
             "masked_uid": metadata.masked_uid or "",
             "updated_at": metadata.updated_at.isoformat() if metadata.updated_at else "",
@@ -36,8 +46,8 @@ class RuntimeCookieService:
                 if metadata.last_validated_at
                 else ""
             ),
-            "last_error": metadata.last_error or "",
-            "cookie": cookie if metadata.status == "valid" else {},
+            "last_error": last_error,
+            "cookie": cookie if status == "valid" else {},
         }
 
 
