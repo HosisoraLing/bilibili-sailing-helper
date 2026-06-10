@@ -444,6 +444,8 @@ def test_live_api_fetches_danmu_info_with_cookie_headers():
         class FakeResponse:
             status = 200
             headers = {}
+            def __init__(self, payload):
+                self.payload = payload
 
             async def __aenter__(self):
                 return self
@@ -452,13 +454,7 @@ def test_live_api_fetches_danmu_info_with_cookie_headers():
                 return False
 
             async def json(self):
-                return {
-                    "code": 0,
-                    "data": {
-                        "token": "token",
-                        "host_list": [{"host": "broadcast.test", "wss_port": 443}],
-                    },
-                }
+                return self.payload
 
         class FakeSession:
             def __init__(self):
@@ -471,7 +467,23 @@ def test_live_api_fetches_danmu_info_with_cookie_headers():
                     "headers": headers,
                     "timeout": timeout,
                 })
-                return FakeResponse()
+                if url.endswith("/x/web-interface/nav"):
+                    return FakeResponse({
+                        "code": 0,
+                        "data": {
+                            "wbi_img": {
+                                "img_url": "https://i0.hdslb.com/bfs/wbi/7cd084941338484aae1ad9425b84077c.png",
+                                "sub_url": "https://i0.hdslb.com/bfs/wbi/4932caff0ff746eab6f01bf08b70ac45.png",
+                            }
+                        },
+                    })
+                return FakeResponse({
+                    "code": 0,
+                    "data": {
+                        "token": "token",
+                        "host_list": [{"host": "broadcast.test", "wss_port": 443}],
+                    },
+                })
 
         session = FakeSession()
         api = BilibiliLiveApi(
@@ -482,11 +494,30 @@ def test_live_api_fetches_danmu_info_with_cookie_headers():
         result = await api.get_danmu_info(room_id=123)
 
         assert result["token"] == "token"
-        assert session.calls[0]["url"].endswith("/xlive/web-room/v1/index/getDanmuInfo")
-        assert session.calls[0]["params"] == {"id": 123, "type": 0}
-        assert session.calls[0]["headers"]["Cookie"] == "SESSDATA=sess; buvid3=buvid"
+        assert session.calls[0]["url"].endswith("/x/web-interface/nav")
+        assert session.calls[1]["url"].endswith("/xlive/web-room/v1/index/getDanmuInfo")
+        assert session.calls[1]["params"]["id"] == "123"
+        assert session.calls[1]["params"]["type"] == "0"
+        assert session.calls[1]["params"]["web_location"] == "444.8"
+        assert session.calls[1]["params"]["wts"]
+        assert session.calls[1]["params"]["w_rid"]
+        assert session.calls[1]["headers"]["Cookie"] == "SESSDATA=sess; buvid3=buvid"
 
     asyncio.run(run_test())
+
+
+def test_worker_adds_ephemeral_buvid3_for_tv_cookie_without_persisted_buvid():
+    from runtime.danmaku_worker import cookie_header, runtime_live_cookie
+
+    original = {"SESSDATA": "sess", "bili_jct": "csrf", "buvid3": ""}
+
+    live_cookie = runtime_live_cookie(original)
+
+    assert original["buvid3"] == ""
+    assert live_cookie["SESSDATA"] == "sess"
+    assert live_cookie["bili_jct"] == "csrf"
+    assert live_cookie["buvid3"]
+    assert "buvid3=" in cookie_header(live_cookie)
 
 
 def test_live_client_sends_auth_payload_and_heartbeat_packets():

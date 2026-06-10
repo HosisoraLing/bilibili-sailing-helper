@@ -1,6 +1,8 @@
 import asyncio
 import json
 import os
+import random
+import time
 
 import aiohttp
 
@@ -27,6 +29,23 @@ def cookie_header(cookie: dict[str, str]) -> str:
         for key, value in cookie.items()
         if value
     )
+
+
+def generate_buvid3() -> str:
+    chars = "0123456789ABCDEF"
+
+    def rand(length: int) -> str:
+        return "".join(random.choice(chars) for _ in range(length))
+
+    suffix = f"{int(time.time() * 1000) % 100000:05d}infoc"
+    return f"{rand(8)}-{rand(4)}-{rand(4)}-{rand(4)}-{rand(12)}{suffix}"
+
+
+def runtime_live_cookie(cookie: dict[str, str]) -> dict[str, str]:
+    live_cookie = dict(cookie)
+    if not live_cookie.get("buvid3"):
+        live_cookie["buvid3"] = generate_buvid3()
+    return live_cookie
 
 
 def is_bilibili_live_rejected(exc: Exception) -> bool:
@@ -149,10 +168,11 @@ async def run_connection(
     sleep=asyncio.sleep,
 ):
     async with aiohttp.ClientSession() as session:
-        api = api_factory(session, cookie_header=cookie_header(cookie.cookie))
+        live_cookie = runtime_live_cookie(cookie.cookie)
+        api = api_factory(session, cookie_header=cookie_header(live_cookie))
         client = BilibiliLiveClient(
             room_id=room_id,
-            buvid3=cookie.cookie.get("buvid3", ""),
+            buvid3=live_cookie.get("buvid3", ""),
             cookie_version=cookie.version,
         )
         info = await api.get_danmu_info(room_id)
