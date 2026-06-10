@@ -73,6 +73,14 @@ def index():
 
         # Get existing address for pre-filling the form
         existing_address = get_user_address(uid)
+        # Eagerly load address attributes to avoid DetachedInstanceError
+        if existing_address:
+            _ = existing_address.receiver
+            _ = existing_address.phone
+            _ = existing_address.province
+            _ = existing_address.city
+            _ = existing_address.area
+            _ = existing_address.address
         return render_template('form.html', uid=uid, nickname=nickname, address=existing_address)
 
     # Not logged in - 检查是否提供了UID参数
