@@ -61,6 +61,7 @@ danmuku_test.py
 
 # Cache
 .cache/
+.codegraph/
 .mypy_cache/
 .pytest_cache/
 __pycache__/
