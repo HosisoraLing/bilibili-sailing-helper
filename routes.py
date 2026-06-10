@@ -12,6 +12,7 @@ from flask_login import login_user, current_user, logout_user
 from db.models import db, User, Address, Guard, GuardGiftRecord, get_beijing_now
 from services.address_service import save_address, get_user_address
 from services.auth_service import (
+    cleanup_expired_sessions,
     create_auth_session,
     get_active_auth_session,
     get_cached_code,
@@ -24,6 +25,20 @@ from services.user_service import UserService
 from services.admin_service import AdminService
 from services.guard_gift_service import GuardGiftService
 from services.guard_service import GUARD_LEVEL_NAME_MAP
+from services.internal_api_service import (
+    ConflictError,
+    create_scheduler_job,
+    pending_auth_runtime_state,
+    process_danmaku_auth_event,
+    record_runtime_heartbeat,
+    record_scheduler_result,
+    runtime_health_summary,
+    verify_internal_secret,
+)
+from services.runtime_cookie_service import RuntimeCookieService
+from services.bilibili_qr_service import poll_qr_login, start_qr_login
+from services.bilibili_qr_service import get_qr_login_task, render_qr_png
+from services.cookie_service import CookieService
 from utils.request_utils import get_uid_from_request
 from utils.csv_utils import create_csv_response
 from utils.cache_utils import (
@@ -42,6 +57,26 @@ from decorators import (
 # 创建蓝图
 main_bp = Blueprint('main', __name__)
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
+internal_bp = Blueprint('internal', __name__, url_prefix='/internal')
+
+
+def fetch_and_save_guards():
+    from app import fetch_and_save_guards as app_fetch_and_save_guards
+
+    return app_fetch_and_save_guards()
+
+
+def _internal_json_payload():
+    return request.get_json(silent=True) or {}
+
+
+def _internal_authorized():
+    secret = request.headers.get('Authorization')
+    return verify_internal_secret(secret)
+
+
+def _internal_unauthorized():
+    return jsonify({'error': 'invalid internal secret'}), 401
 
 
 # 主路由
@@ -116,6 +151,16 @@ def not_guard():
 
 
 # =========================
+# 开源项目说明
+# =========================
+
+@main_bp.route('/opensource')
+def opensource():
+    """开源项目使用说明页面"""
+    return render_template('opensource.html')
+
+
+# =========================
 # 鉴权状态轮询
 # =========================
 
@@ -135,7 +180,9 @@ def auth_status():
         return jsonify(status='expired'), 410
 
     if session.status != 'success':
-        return jsonify(status='pending')
+        runtime_state = pending_auth_runtime_state()
+        http_status = runtime_state.pop('http_status', 200)
+        return jsonify(**runtime_state), http_status
 
     # 检查各种模式参数
     login_mode = request.args.get('login_mode') == 'true'
@@ -1981,7 +2028,8 @@ def admin_cookie_status():
         'has_buvid3': has_buvid3,
         'is_valid': is_valid,
         'username': username,
-        'listener': listener_status
+        'listener': listener_status,
+        'runtime': runtime_health_summary(),
     })
 
 
@@ -1998,73 +2046,70 @@ def admin_refresh_buvid3():
     success = CookieService.auto_update_buvid3()
     
     if success:
-        return jsonify({'success': True, 'message': 'buvid3刷新成功'})
+        return jsonify({'success': True, 'message': 'buvid3 已存在'})
     else:
-        return jsonify({'error': 'buvid3刷新失败，请检查playwright是否安装'}), 500
+        return jsonify({'error': '当前 Cookie 缺少 buvid3，请重新扫码登录获取完整 Cookie'}), 500
 
 
-@admin_bp.route('/cookie/qrcode')
+@admin_bp.route('/cookie/qrcode/<task_id>')
 @require_admin
-def admin_cookie_qrcode():
-    """获取登录二维码"""
-    import os
-    import time
+def admin_cookie_qrcode(task_id):
+    """生成登录二维码图片"""
     from flask import send_file
-    
-    QR_IMAGE_PATH = '/tmp/bilibili_qr.png'
-    
-    # 检查二维码是否存在
-    if os.path.exists(QR_IMAGE_PATH):
-        # 检查是否是最近5分钟生成的
-        if time.time() - os.path.getmtime(QR_IMAGE_PATH) < 300:
-            return send_file(QR_IMAGE_PATH, mimetype='image/png')
-    
-    return jsonify({'error': '二维码不存在或已过期，请先启动扫码登录'}), 404
+    from io import BytesIO
+
+    task = get_qr_login_task(task_id)
+    if not task or not task.qr_url:
+        return jsonify({'error': '二维码任务不存在'}), 404
+    if task.status in {'expired', 'failed'}:
+        return jsonify({'error': '二维码已失效，请重新启动扫码登录'}), 410
+
+    return send_file(
+        BytesIO(render_qr_png(task.qr_url)),
+        mimetype='image/png',
+        max_age=0,
+    )
 
 
 @admin_bp.route('/cookie/start-qr-login', methods=['POST'])
 @require_admin
 def admin_start_qr_login():
     """启动扫码登录"""
-    import threading
-    from services.cookie_service import CookieService
-    from services.danmaku_listener import restart_listener
-    
     csrf_token = request.headers.get('X-CSRF-Token')
     if not csrf_token or not UserService.verify_csrf_token(csrf_token):
         return jsonify({'error': 'CSRF token invalid'}), 403
-    
-    # 清除之前的二维码
-    import os
-    QR_PATH = '/tmp/bilibili_qr.png'
-    if os.path.exists(QR_PATH):
-        os.remove(QR_PATH)
-    
-    def do_login():
+
+    try:
+        result = start_qr_login()
+    except Exception as e:
+        logger.error(f"启动扫码登录失败: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 502
+
+    return jsonify({'success': True, **result})
+
+
+@admin_bp.route('/cookie/qr-login/<task_id>', methods=['GET'])
+@require_admin
+def admin_poll_qr_login(task_id):
+    """轮询扫码登录状态"""
+    try:
+        result = poll_qr_login(task_id)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 404
+    except Exception as e:
+        logger.error(f"轮询扫码登录失败: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 502
+
+    if result.get('status') == 'succeeded':
         try:
-            logger.info("开始扫码登录流程...")
-            sessdata, bili_jct = CookieService.get_sessdata_by_qr()
-            if sessdata:
-                logger.info(f"获取到SESSDATA，长度: {len(sessdata)}")
-                settings = CookieService.load_settings()
-                settings.setdefault('bilibili', {})['SESSDATA'] = sessdata
-                if bili_jct:
-                    settings['bilibili']['bili_jct'] = bili_jct
-                CookieService.save_settings(settings)
-                logger.info("Cookie已保存到settings.json")
-                
-                # 重启弹幕监听
-                restart_listener()
-                logger.info("弹幕监听已重启")
-            else:
-                logger.warning("扫码登录未获取到SESSDATA")
+            from services.danmaku_listener import restart_listener
+            restart_listener()
         except Exception as e:
-            logger.error(f"扫码登录失败: {e}", exc_info=True)
-    
-    thread = threading.Thread(target=do_login, daemon=True)
-    thread.start()
-    
-    return jsonify({'success': True, 'message': '扫码登录已启动，请查看二维码'})
+            logger.warning(f"Cookie 已更新，但弹幕监听重启失败: {e}")
+            result['restart_warning'] = 'Cookie 已更新，但弹幕监听重启失败，请手动重启监听'
+
+    success_states = {'pending', 'scanned', 'succeeded'}
+    return jsonify({'success': result.get('status') in success_states, **result})
 
 
 @admin_bp.route('/cookie/restart-listener', methods=['POST'])
@@ -2086,6 +2131,139 @@ def admin_restart_listener():
 
 
 # =========================
+# 内部 API 路由
+# =========================
+
+@internal_bp.route('/runtime/heartbeat', methods=['POST'])
+def internal_runtime_heartbeat():
+    if not _internal_authorized():
+        return _internal_unauthorized()
+
+    try:
+        status = record_runtime_heartbeat(_internal_json_payload())
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+
+    return jsonify({
+        'status': 'ok',
+        'role': status.role,
+        'instance_id': status.instance_id,
+        'state': status.state,
+    })
+
+
+@internal_bp.route('/runtime/cookie', methods=['GET'])
+def internal_runtime_cookie():
+    if not _internal_authorized():
+        return _internal_unauthorized()
+
+    return jsonify(RuntimeCookieService.get_runtime_cookie_payload())
+
+
+@internal_bp.route('/danmaku/auth-event', methods=['POST'])
+def internal_danmaku_auth_event():
+    if not _internal_authorized():
+        return _internal_unauthorized()
+
+    try:
+        result = process_danmaku_auth_event(_internal_json_payload())
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+
+    return jsonify({'status': 'ok', **result})
+
+
+def run_pending_scheduler_job(job):
+    started_at = get_beijing_now().isoformat()
+    try:
+        if job.job_type == 'guard-sync':
+            fetch_and_save_guards()
+            summary = 'guard-sync completed'
+        elif job.job_type == 'guard-gift-refresh':
+            eligible_records = GuardGiftService.calculate_monthly_eligible_guards()
+            historical_records = GuardGiftService.update_historical_months()
+            summary = (
+                f"guard-gift-refresh completed: "
+                f"{len(eligible_records or [])} current, "
+                f"{len(historical_records or [])} historical"
+            )
+        elif job.job_type == 'cookie-maintenance':
+            success = CookieService.auto_update_buvid3()
+            if not success:
+                raise RuntimeError('cookie-maintenance needs QR login or valid buvid3')
+            summary = f"cookie-maintenance completed: {'success' if success else 'needs_qr_login'}"
+        elif job.job_type == 'auth-cleanup':
+            cleaned = cleanup_expired_sessions()
+            summary = f"auth-cleanup completed: {cleaned} expired sessions"
+        else:
+            return {'executed': False, 'job_status': job.status}
+    except Exception as exc:
+        record_scheduler_result({
+            'job_id': job.job_id,
+            'job_name': job.job_type,
+            'status': 'failed',
+            'started_at': started_at,
+            'finished_at': get_beijing_now().isoformat(),
+            'summary': f'{job.job_type} failed',
+            'error': str(exc),
+        })
+        return {'executed': True, 'job_status': 'failed', 'error': str(exc)}
+    else:
+        record_scheduler_result({
+            'job_id': job.job_id,
+            'job_name': job.job_type,
+            'status': 'success',
+            'started_at': started_at,
+            'finished_at': get_beijing_now().isoformat(),
+            'summary': summary,
+            'error': '',
+        })
+        return {'executed': True, 'job_status': 'success'}
+
+
+@internal_bp.route('/scheduler/job', methods=['POST'])
+def internal_scheduler_job():
+    if not _internal_authorized():
+        return _internal_unauthorized()
+
+    job = None
+    try:
+        job = create_scheduler_job(_internal_json_payload())
+    except ConflictError as exc:
+        return jsonify({'error': str(exc)}), 409
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+
+    return jsonify({
+        'status': 'ok',
+        'job_id': job.job_id,
+        'job_name': job.job_type,
+        'accepted': True,
+        'job_status': job.status,
+    })
+
+
+@internal_bp.route('/scheduler/result', methods=['POST'])
+def internal_scheduler_result():
+    if not _internal_authorized():
+        return _internal_unauthorized()
+
+    try:
+        job = record_scheduler_result(_internal_json_payload())
+    except ConflictError as exc:
+        return jsonify({'error': str(exc)}), 409
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+
+    return jsonify({
+        'status': 'ok',
+        'job_id': job.job_id,
+        'job_name': job.job_type,
+        'job_status': job.status,
+    })
+
+
+# =========================
 # 注册蓝图
 # =========================
 
@@ -2093,3 +2271,4 @@ def register_routes(app):
     """注册所有路由蓝图"""
     app.register_blueprint(main_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(internal_bp)

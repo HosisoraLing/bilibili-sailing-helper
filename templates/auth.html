@@ -171,6 +171,13 @@
     <div class="footer">
         <i class="fas fa-lock"></i> 安全验证中，请勿关闭页面
     </div>
+
+    <div class="page-footer">
+        <a href="https://github.com/HosisoraLing/bilibili-sailing-helper" target="_blank">
+            <i class="fab fa-github"></i> bilibili-sailing-helper
+        </a>
+        <span> | AGPLv3 Licensed</span>
+    </div>
 </div>
 
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
@@ -315,6 +322,15 @@
                 } else if (data.status === 'expired') {
                     stopPolling();
                     updateStatus('conn-dot--disconnected', 'status-expired', '鉴权已过期，请刷新页面重试');
+                } else if (data.status === 'listener_unavailable') {
+                    stopPolling();
+                    updateStatus('conn-dot--disconnected', 'status-expired', data.next_action || '弹幕鉴权服务暂不可用，请稍后重试');
+                } else if (data.status === 'retrying') {
+                    updateStatus('conn-dot--disconnected', 'status-pending', data.next_action || '弹幕连接正在自动重试…');
+                } else if (data.status === 'internal_delivery_delayed') {
+                    updateStatus('conn-dot--connected', 'status-pending', data.next_action || '系统正在同步鉴权结果…');
+                } else if (data.status === 'pending') {
+                    updateStatus('conn-dot--connected', 'status-pending', data.next_action || '已连接，等待弹幕鉴权…');
                 }
             } catch (e) {
                 console.error('Polling error:', e);
@@ -342,7 +358,7 @@
 
     socket.on('connect', () => {
         wsConnected = true;
-        stopPolling(); // WebSocket连接成功，停止轮询
+        startPolling(); // 轮询是 split runtime 下的权威成功检测路径
         updateStatus('conn-dot--connected', 'status-pending', '已连接，等待弹幕鉴权…');
         const urlParams = new URLSearchParams(window.location.search);
         socket.emit('join_auth', {
@@ -384,6 +400,7 @@
         }
     }, 3000); // 3秒后如果WebSocket未连接，启动轮询
 </script>
+
 
 
 </body>

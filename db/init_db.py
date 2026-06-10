@@ -1,5 +1,13 @@
 from flask import Flask
-from db.models import db
+from db.models import (
+    AuthAttempt,
+    AuthSession,
+    CookieMetadata,
+    QrLoginTask,
+    RuntimeStatus,
+    SchedulerJob,
+    db,
+)
 from config import Config
 
 

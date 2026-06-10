@@ -161,9 +161,24 @@ docker compose exec app cat /app/logs/error.log
 
 - **后端**: Flask + Flask-SocketIO + SQLAlchemy
 - **数据库**: SQLite
-- **弹幕监听**: blivedm
+- **弹幕监听**: [blivedm](https://github.com/xfgryujk/blivedm)
+- **二维码生成**: [python-qrcode](https://github.com/lincolnloop/python-qrcode)
 - **容器化**: Docker + Docker Compose
+
+## 第三方依赖
+
+| 项目 | 用途 | 许可证 |
+|------|------|--------|
+| [Flask](https://github.com/pallets/flask) | Web框架 | BSD-3-Clause |
+| [Flask-SocketIO](https://github.com/miguelgrinberg/flask-socketio) | WebSocket支持 | MIT |
+| [SQLAlchemy](https://github.com/sqlalchemy/sqlalchemy) | ORM | MIT |
+| [blivedm](https://github.com/xfgryujk/blivedm) | B站弹幕监听 | MIT |
+| [aiohttp](https://github.com/aio-libs/aiohttp) | 异步HTTP | Apache-2.0 |
+| [requests](https://github.com/psf/requests) | HTTP库 | Apache-2.0 |
+| [python-qrcode](https://github.com/lincolnloop/python-qrcode) | 二维码生成 | BSD |
+
+详见 [开源项目使用说明](/opensource)
 
 ## License
 
-MIT
+AGPLv3

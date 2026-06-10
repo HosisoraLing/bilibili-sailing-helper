@@ -295,7 +295,7 @@
             <div style="display: flex; align-items: center; gap: 10px;">
                 <i class="fas fa-exclamation-triangle" style="font-size: 20px;"></i>
                 <div>
-                    <strong>弹幕监听未正常运行</strong>
+                    <strong>弹幕鉴权运行态需要处理</strong>
                     <div id="listenerAlertMsg" style="font-size: 13px; opacity: 0.9; margin-top: 3px;">请重新登录B站账号以恢复弹幕鉴权功能</div>
                 </div>
             </div>
@@ -304,7 +304,7 @@
                     <i class="fas fa-qrcode"></i> 扫码登录
                 </button>
                 <button onclick="restartListener()" style="background: rgba(255,255,255,0.2); color: white; border: 2px solid rgba(255,255,255,0.5); padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer;">
-                    <i class="fas fa-sync-alt"></i> 重启监听
+                    <i class="fas fa-sync-alt"></i> 查看重启方式
                 </button>
             </div>
         </div>
@@ -625,16 +625,29 @@
                 const alertEl = document.getElementById('listenerAlert');
                 const alertMsgEl = document.getElementById('listenerAlertMsg');
                 
-                // 检查是否需要显示警告
-                const needsWarning = !data.is_valid || !data.listener.is_running;
+                const runtime = data.runtime || {};
+                const worker = (runtime.roles && runtime.roles['danmaku-worker']) || {};
+                const needsWarning = !data.is_valid || runtime.next_action !== '无需操作';
                 
                 if (needsWarning) {
                     alertEl.style.display = 'block';
                     
                     if (!data.is_valid) {
                         alertMsgEl.textContent = 'Cookie无效或已过期，请重新登录B站账号';
-                    } else if (!data.listener.is_running) {
-                        alertMsgEl.textContent = '弹幕监听线程未运行，请重启监听';
+                    } else if (runtime.next_action) {
+                        const age = worker.heartbeat_age_seconds == null ? '未知' : worker.heartbeat_age_seconds + ' 秒';
+                        const error = worker.last_error || worker.delivery_error || '无';
+                        const retry = worker.retry_count == null ? 0 : worker.retry_count;
+                        const lastEvent = worker.last_event_at || '无';
+                        const activeVersion = runtime.active_cookie_version || 0;
+                        const workerVersion = runtime.worker_cookie_version || 0;
+                        alertMsgEl.textContent = runtime.next_action
+                            + '；danmaku-worker 状态：' + (worker.state || 'missing')
+                            + '，心跳：' + age
+                            + '，最后弹幕：' + lastEvent
+                            + '，错误：' + error
+                            + '，重试：' + retry
+                            + '，Cookie：' + activeVersion + ' -> ' + workerVersion;
                     }
                 } else {
                     alertEl.style.display = 'none';
@@ -652,7 +665,7 @@
         const qrStatus = document.getElementById('qrStatus');
         
         qrArea.style.display = 'block';
-        qrStatus.textContent = '正在启动扫码登录，请稍候...';
+        qrStatus.textContent = '正在生成二维码...';
         
         fetch('/admin/cookie/start-qr-login', {
             method: 'POST',
@@ -661,43 +674,40 @@
                 'Content-Type': 'application/json'
             }
         })
-        .then(response => response.json())
-        .then(data => {
+        .then(response => response.json().then(data => ({status: response.status, data})))
+        .then(({status, data}) => {
             if (data.success) {
-                // 轮询获取二维码（最多等30秒）
-                let qrRetry = 0;
-                const qrInterval = setInterval(() => {
-                    qrRetry++;
-                    fetch('/admin/cookie/qrcode?t=' + Date.now())
-                        .then(resp => {
-                            if (resp.ok) return resp.blob();
-                            throw new Error('not ready');
-                        })
-                        .then(blob => {
-                            clearInterval(qrInterval);
-                            qrImage.src = URL.createObjectURL(blob);
-                            qrStatus.textContent = '请使用B站APP扫描二维码';
-                        })
-                        .catch(() => {
-                            if (qrRetry >= 15) {
-                                clearInterval(qrInterval);
-                                qrStatus.textContent = '❌ 二维码生成超时，请重试';
-                                qrStatus.style.color = '#e53e3e';
-                            } else {
-                                qrStatus.textContent = '正在生成二维码... (' + qrRetry + ')';
-                            }
-                        });
-                }, 2000);
+                qrImage.src = '/admin/cookie/qrcode/' + encodeURIComponent(data.task_id);
+                qrStatus.textContent = '请使用B站APP扫描二维码';
                 
-                // 轮询检查登录状态
                 let checkCount = 0;
                 const checkInterval = setInterval(() => {
                     checkCount++;
                     
-                    fetch('/admin/cookie/status')
-                        .then(response => response.json())
+                    fetch('/admin/cookie/qr-login/' + encodeURIComponent(data.task_id))
+                        .then(response => response.json().then(statusData => {
+                            if (!response.ok) {
+                                throw new Error(statusData.error || '扫码状态检查失败');
+                            }
+                            return statusData;
+                        }))
                         .then(statusData => {
-                            if (statusData.is_valid) {
+                            if (statusData.status === 'scanned') {
+                                qrStatus.textContent = '已扫码，请在B站APP确认登录';
+                                qrStatus.style.color = '#667eea';
+                            } else if (statusData.status === 'expired') {
+                                clearInterval(checkInterval);
+                                qrStatus.textContent = '二维码已过期，请重新扫码登录';
+                                qrStatus.style.color = '#e53e3e';
+                            } else if (statusData.status === 'failed') {
+                                clearInterval(checkInterval);
+                                qrStatus.textContent = statusData.message || statusData.error || '扫码登录失败，请重试';
+                                qrStatus.style.color = '#e53e3e';
+                            } else if (statusData.status === 'unknown') {
+                                clearInterval(checkInterval);
+                                qrStatus.textContent = statusData.message || 'B站返回了未知扫码状态，请重新开始';
+                                qrStatus.style.color = '#e53e3e';
+                            } else if (statusData.status === 'succeeded') {
                                 clearInterval(checkInterval);
                                 const username = statusData.username || '用户';
                                 qrStatus.innerHTML = '✅ 登录成功！欢迎回来，<strong>' + username + '</strong>';
@@ -708,56 +718,40 @@
                                 alertDiv.style.display = 'none';
                                 
                                 // 显示toast提示
-                                showToast('✅ 登录成功！Cookie已更新，弹幕监听已重启');
+                                showToast(statusData.restart_warning || '✅ 登录成功！Cookie已更新，danmaku-worker 会自动重新加载');
                                 
                                 // 3秒后刷新页面
                                 setTimeout(() => {
                                     location.reload();
                                 }, 3000);
                             }
+                        })
+                        .catch(error => {
+                            clearInterval(checkInterval);
+                            qrStatus.textContent = '扫码状态检查失败，请重新开始: ' + error.message;
+                            qrStatus.style.color = '#e53e3e';
                         });
                     
                     // 5分钟后停止
                     if (checkCount > 150) {
                         clearInterval(checkInterval);
-                        qrStatus.textContent = '❌ 扫码超时，请重试';
+                        qrStatus.textContent = '扫码超时，请重新开始';
                         qrStatus.style.color = '#e53e3e';
                     }
                 }, 2000);
             } else {
-                qrStatus.textContent = '❌ 启动失败: ' + (data.error || '未知错误');
+                qrStatus.textContent = '❌ ' + (data.error || '二维码生成失败');
                 qrStatus.style.color = '#e53e3e';
             }
         })
         .catch(error => {
-            qrStatus.textContent = '❌ 请求失败';
+            qrStatus.textContent = '❌ 请求失败: ' + error.message;
             qrStatus.style.color = '#e53e3e';
         });
     }
     
     function restartListener() {
-        const csrfToken = document.querySelector('input[name="csrf_token"]')?.value || '';
-        
-        fetch('/admin/cookie/restart-listener', {
-            method: 'POST',
-            headers: {
-                'X-CSRF-Token': csrfToken,
-                'Content-Type': 'application/json'
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert('弹幕监听已重启');
-                // 3秒后检查状态
-                setTimeout(checkListenerStatus, 3000);
-            } else {
-                alert('重启失败: ' + (data.error || '未知错误'));
-            }
-        })
-        .catch(error => {
-            alert('请求失败');
-        });
+        alert('弹幕监听已迁移到 danmaku-worker 角色。请在服务器执行：docker compose restart danmaku-worker');
     }
     
     // 页面加载时检查状态

@@ -50,15 +50,13 @@ logs/
 # Temporary files
 *.tmp
 *.temp
+.worktrees/
 
 # Claude files
 .claude/
 claude.md
 
-# Test files
-tests/
-test_*.py
-*_test.py
+# Local scratch test files
 danmuku_test.py
 
 # Cache
@@ -152,4 +150,4 @@ staticfiles/
 
 # Media files
 media/
-uploads/
+uploads/*.png
