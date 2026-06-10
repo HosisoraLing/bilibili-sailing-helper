@@ -65,6 +65,10 @@ def setup_logging():
     blivedm_logger = logging.getLogger('blivedm')
     blivedm_logger.setLevel(logging.WARNING)
 
+    # 过滤 werkzeug 的 WebSocket 500 错误（已知兼容性问题，auth页面有轮询备用）
+    werkzeug_logger = logging.getLogger('werkzeug')
+    werkzeug_logger.setLevel(logging.CRITICAL)
+
     _initialized = True
 
 
