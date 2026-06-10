@@ -16,7 +16,7 @@ services:
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
       - TZ=Asia/Shanghai
-      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-replace-this-internal-secret}
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:?set INTERNAL_API_SECRET}
     logging:
       driver: "json-file"
       options:
@@ -40,7 +40,7 @@ services:
       - PYTHONDONTWRITEBYTECODE=1
       - TZ=Asia/Shanghai
       - INTERNAL_API_URL=http://web:7111
-      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-replace-this-internal-secret}
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:?set INTERNAL_API_SECRET}
 
   scheduler:
     build:
@@ -59,4 +59,4 @@ services:
       - PYTHONDONTWRITEBYTECODE=1
       - TZ=Asia/Shanghai
       - INTERNAL_API_URL=http://web:7111
-      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-replace-this-internal-secret}
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:?set INTERNAL_API_SECRET}
