@@ -7,7 +7,7 @@ import logging
 # 设置日志
 logger = logging.getLogger(__name__)
 
-db = SQLAlchemy()
+db = SQLAlchemy(session_options={"expire_on_commit": False})
 
 # =========================
 # 北京时间工具
