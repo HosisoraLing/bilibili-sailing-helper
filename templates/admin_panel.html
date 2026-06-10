@@ -342,7 +342,7 @@
             </div>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; font-size: 13px; color: #4b5563;">
                 <div>账号 UID：<strong id="accountStatusUid">-</strong></div>
-                <div>Cookie：<strong id="accountStatusCookieVersion">-</strong></div>
+                <div>Cookie版本：<strong id="accountStatusCookieVersion">-</strong></div>
                 <div>Worker：<strong id="accountStatusWorker">-</strong></div>
                 <div>同步：<strong id="accountStatusReload">-</strong></div>
             </div>
@@ -648,7 +648,7 @@
         const workerVersion = runtime.worker_cookie_version || 0;
         const reloadRequestedVersion = tvAuth.reload_requested_version || 0;
         const workerState = worker.state || 'missing';
-        const heartbeatAge = worker.heartbeat_age_seconds == null ? '未知' : worker.heartbeat_age_seconds + ' 秒';
+        const lastReportAge = worker.heartbeat_age_seconds == null ? '未知' : worker.heartbeat_age_seconds + ' 秒前';
         const hasLatestCookie = activeVersion > 0 && workerVersion >= activeVersion;
 
         const authEl = document.getElementById('accountStatusAuth');
@@ -666,7 +666,7 @@
         authEl.className = 'badge ' + (tvAuth.status === 'valid' ? 'badge-success' : 'badge-primary');
         uidEl.textContent = tvAuth.masked_uid || '未授权';
         cookieEl.textContent = activeVersion ? ('当前 ' + activeVersion + ' / worker ' + workerVersion) : '无';
-        workerEl.textContent = workerState + '，心跳 ' + heartbeatAge;
+        workerEl.textContent = workerState + '，上报于 ' + lastReportAge;
 
         if (runtime.worker_cookie_stale) {
             reloadEl.textContent = '正在同步到 worker';
@@ -706,7 +706,7 @@
                     } else if (!data.is_valid) {
                         alertMsgEl.textContent = 'Cookie无效或已过期，请重新扫码授权B站账号';
                     } else if (runtime.next_action) {
-                        const age = worker.heartbeat_age_seconds == null ? '未知' : worker.heartbeat_age_seconds + ' 秒';
+                        const age = worker.heartbeat_age_seconds == null ? '未知' : worker.heartbeat_age_seconds + ' 秒前';
                         const error = worker.last_error || worker.delivery_error || '无';
                         const retry = worker.retry_count == null ? 0 : worker.retry_count;
                         const lastEvent = worker.last_event_at || '无';
@@ -717,11 +717,11 @@
                             : '';
                         alertMsgEl.textContent = runtime.next_action
                             + '；danmaku-worker 状态：' + (worker.state || 'missing')
-                            + '，心跳：' + age
+                            + '，上报于：' + age
                             + '，最后弹幕：' + lastEvent
                             + '，错误：' + error
                             + '，重试：' + retry
-                            + '，Cookie：' + activeVersion + ' -> ' + workerVersion
+                            + '，Cookie版本：' + activeVersion + ' -> ' + workerVersion
                             + tvSummary;
                     }
                 } else {

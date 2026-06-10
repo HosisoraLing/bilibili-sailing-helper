@@ -124,6 +124,8 @@ def test_admin_panel_displays_runtime_diagnostics():
     assert "retry_count" in admin_source
     assert "active_cookie_version" in admin_source
     assert "worker_cookie_version" in admin_source
+    assert "Cookie版本" in admin_source
+    assert "上报于" in admin_source
     assert 'id="accountStatusPanel"' in admin_source
     assert 'id="accountStatusUid"' in admin_source
     assert 'id="accountStatusAuth"' in admin_source
