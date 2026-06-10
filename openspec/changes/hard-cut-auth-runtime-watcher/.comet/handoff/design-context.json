@@ -1,0 +1,17 @@
+{
+  "change": "hard-cut-auth-runtime-watcher",
+  "phase": "design",
+  "mode": "compact",
+  "canonical_spec": "openspec",
+  "generated_by": "comet-handoff.sh",
+  "context_hash": "bb7d997821944dd02e37eb8330812208dc6d3aeb9e331e44efb009ac68299806",
+  "files": [
+    { "path": "openspec/changes/hard-cut-auth-runtime-watcher/proposal.md", "sha256": "92de2c43a4326b7b2b10fe636089e9a5c592d50ec6352626cbd60ffe9a7a37d3" },
+    { "path": "openspec/changes/hard-cut-auth-runtime-watcher/design.md", "sha256": "53f288210bda5cc8a2f52cfdba1699b40378bbe1550dfa551b598f40ba017c07" },
+    { "path": "openspec/changes/hard-cut-auth-runtime-watcher/tasks.md", "sha256": "466d31667eef29b18670a19714413bcd72cd1dae0400c81714136915ab4cca31" },
+    { "path": "openspec/changes/hard-cut-auth-runtime-watcher/specs/database-backed-auth/spec.md", "sha256": "b2dfd48b6b130b4a8bda396b5a0b0183e8594477726712fbf925f73d71e3d0d5" },
+    { "path": "openspec/changes/hard-cut-auth-runtime-watcher/specs/native-danmaku-watcher/spec.md", "sha256": "4010161a15ff5b85ecda9dbd9305d1caf0d55629674bedf56b55b3d189774e4c" },
+    { "path": "openspec/changes/hard-cut-auth-runtime-watcher/specs/passport-qr-login/spec.md", "sha256": "938b37e8c78cfa461ec1c00bb2034301969f012059924ad7154a803d0a6d9c69" },
+    { "path": "openspec/changes/hard-cut-auth-runtime-watcher/specs/split-runtime-roles/spec.md", "sha256": "458bacdcbfbf7892ddb8a4f1edd473e08653e51a8c91b8099f616b13ef6ef033" }
+  ]
+}

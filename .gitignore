@@ -50,6 +50,7 @@ logs/
 # Temporary files
 *.tmp
 *.temp
+.worktrees/
 
 # Claude files
 .claude/
