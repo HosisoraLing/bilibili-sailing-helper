@@ -152,4 +152,4 @@ staticfiles/
 
 # Media files
 media/
-uploads/
+uploads/*.png
