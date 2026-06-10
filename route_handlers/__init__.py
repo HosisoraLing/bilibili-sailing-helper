@@ -11,5 +11,6 @@ from route_handlers.admin import cookies as _cookies
 from route_handlers.admin import dashboard as _dashboard
 from route_handlers.admin import gifts as _gifts
 from route_handlers.admin import guards as _guards
+from route_handlers.admin import users as _users
 
 __all__ = ["admin_bp", "internal_bp", "main_bp"]

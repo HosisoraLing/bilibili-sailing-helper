@@ -151,6 +151,8 @@ class User(db.Model):
     # ===== 角色管理 =====
     def get_roles(self) -> list:
         """获取用户角色列表"""
+        if not self.roles:
+            return []
         try:
             return json.loads(self.roles)
         except json.JSONDecodeError as e:

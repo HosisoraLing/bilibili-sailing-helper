@@ -5,7 +5,7 @@
 from datetime import datetime, date
 from typing import List, Tuple, Optional
 
-from db.models import db, Address, Guard, GuardGiftRecord, get_beijing_now
+from db.models import db, User, Address, Guard, GuardGiftRecord, AuthSession, get_beijing_now
 from services.security import api_limiter, PasswordValidator
 from services.guard_gift_service import GuardGiftService
 
@@ -377,3 +377,85 @@ class AdminService:
             bool: 是否成功标记
         """
         return GuardGiftService.mark_gift_received(uid, month)
+
+    # =========================
+    # 用户管理相关功能
+    # =========================
+
+    @staticmethod
+    def get_all_users() -> List[User]:
+        """获取所有用户"""
+        return User.query.order_by(User.created_at.desc()).all()
+
+    @staticmethod
+    def get_user_by_uid(uid: str) -> Optional[User]:
+        """根据 UID 获取用户"""
+        return User.query.filter_by(uid=uid).first()
+
+    @staticmethod
+    def create_user(uid: str, nickname: str, is_admin: bool = False) -> Tuple[bool, Optional[str]]:
+        """创建用户"""
+        is_valid, msg = PasswordValidator.validate_uid(uid)
+        if not is_valid:
+            return False, msg
+
+        existing = User.query.filter_by(uid=uid).first()
+        if existing:
+            return False, f"UID {uid} 已存在"
+
+        user = User(uid=uid, nickname=nickname)
+        if is_admin:
+            user.add_role('admin')
+
+        db.session.add(user)
+        db.session.commit()
+        return True, None
+
+    @staticmethod
+    def update_user(user: User, nickname: str) -> None:
+        """更新用户信息"""
+        user.nickname = nickname
+        db.session.commit()
+
+    @staticmethod
+    def delete_user_all_records(uid: str) -> Tuple[bool, Optional[str]]:
+        """删除用户及其在系统内的关联记录"""
+        user = User.query.filter_by(uid=uid).first()
+        if not user:
+            return False, "用户不存在"
+
+        Address.query.filter_by(uid=uid).delete()
+        GuardGiftRecord.query.filter_by(uid=uid).delete()
+        AuthSession.query.filter_by(uid=uid).delete()
+
+        guard = Guard.query.filter_by(uid=uid).first()
+        if guard:
+            db.session.delete(guard)
+
+        db.session.delete(user)
+        db.session.commit()
+        return True, None
+
+    @staticmethod
+    def set_user_admin(user: User) -> None:
+        """设置用户为管理员"""
+        if not user.has_role('admin'):
+            user.add_role('admin')
+            db.session.commit()
+
+    @staticmethod
+    def unset_user_admin(user: User) -> Tuple[bool, Optional[str]]:
+        """取消用户的管理员身份"""
+        if AdminService.is_anchor(user.uid):
+            return False, "不可取消主播账号的管理员权限"
+
+        if user.has_role('admin'):
+            user.remove_role('admin')
+            db.session.commit()
+        return True, None
+
+    @staticmethod
+    def is_anchor(uid: str) -> bool:
+        """检查是否是主播账号"""
+        from config import RUID_INT
+        return str(uid) == str(RUID_INT)
