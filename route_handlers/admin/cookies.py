@@ -105,14 +105,6 @@ def admin_poll_qr_login(task_id):
         logger.error(f"轮询扫码登录失败: {e}", exc_info=True)
         return jsonify({'error': str(e)}), 502
 
-    if result.get('status') == 'succeeded':
-        try:
-            from services.danmaku_listener import restart_listener
-            restart_listener()
-        except Exception as e:
-            logger.warning(f"Cookie 已更新，但弹幕监听重启失败: {e}")
-            result['restart_warning'] = 'Cookie 已更新，但弹幕监听重启失败，请手动重启监听'
-
     success_states = {'pending', 'scanned', 'succeeded'}
     return jsonify({'success': result.get('status') in success_states, **result})
 
@@ -145,14 +137,6 @@ def admin_poll_tv_qr_login(task_id):
     except Exception as e:
         logger.error(f"轮询 TV 授权扫码失败: {e}", exc_info=True)
         return jsonify({'error': str(e)}), 502
-
-    if result.get('status') == 'succeeded':
-        try:
-            from services.danmaku_listener import restart_listener
-            restart_listener()
-        except Exception as e:
-            logger.warning(f"Cookie 已更新，但弹幕监听重启失败: {e}")
-            result['restart_warning'] = 'Cookie 已更新，但弹幕监听重启失败，请手动重启监听'
 
     success_states = {'pending', 'scanned', 'succeeded'}
     return jsonify({'success': result.get('status') in success_states, **result})

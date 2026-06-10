@@ -52,6 +52,15 @@ def is_bilibili_live_rejected(exc: Exception) -> bool:
     return "-352" in str(exc)
 
 
+def default_cookie_poll_interval(environ=os.environ) -> float:
+    raw = environ.get("DANMAKU_COOKIE_POLL_INTERVAL_SECONDS", "10")
+    try:
+        interval = float(raw)
+    except (TypeError, ValueError):
+        return 10.0
+    return max(interval, 1.0)
+
+
 async def default_websocket_factory(url: str):
     session = aiohttp.ClientSession()
     try:
@@ -164,7 +173,7 @@ async def run_connection(
     api_factory=BilibiliLiveApi,
     websocket_factory=default_websocket_factory,
     instance_id: str,
-    cookie_poll_interval: float = 30.0,
+    cookie_poll_interval: float = 10.0,
     sleep=asyncio.sleep,
 ):
     async with aiohttp.ClientSession() as session:
@@ -238,6 +247,7 @@ async def run_worker_loop(
     websocket_factory=default_websocket_factory,
     instance_id: str,
     reconnect_delay: float = 5.0,
+    cookie_poll_interval: float = 10.0,
     idle_sleep=asyncio.sleep,
 ):
     current_version = 0
@@ -263,6 +273,7 @@ async def run_worker_loop(
                 api_factory=api_factory,
                 websocket_factory=websocket_factory,
                 instance_id=instance_id,
+                cookie_poll_interval=cookie_poll_interval,
             )
             await idle_sleep(reconnect_delay)
         except WorkerStop:
@@ -300,6 +311,7 @@ async def run():
     secret = os.environ.get("INTERNAL_API_SECRET", "")
     instance_id = os.environ.get("RUNTIME_INSTANCE_ID", "danmaku-worker")
     room_id = int(os.environ.get("BILIBILI_ROOM_ID") or ROOM_ID_INT)
+    cookie_poll_interval = default_cookie_poll_interval()
 
     async with aiohttp.ClientSession() as session:
         cookie_provider = RuntimeCookieProvider(
@@ -318,6 +330,7 @@ async def run():
             cookie_provider=cookie_provider,
             webhook=webhook,
             instance_id=instance_id,
+            cookie_poll_interval=cookie_poll_interval,
         )
 
 

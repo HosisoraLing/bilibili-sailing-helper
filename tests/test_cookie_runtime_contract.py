@@ -257,6 +257,7 @@ def test_worker_cookie_provider_detects_reload(monkeypatch):
 
     assert first.version == 1
     assert second.version == 2
+    assert second.reload_requested_version == 2
     assert provider.should_reload(current_version=1, latest=second) is True
 
 
@@ -317,3 +318,5 @@ def test_legacy_runtime_cookie_schema_is_migrated(app):
         }
         assert "cookie_version" in cookie_columns
         assert "cookie_version" in runtime_columns
+        assert "reload_requested_version" in cookie_columns
+        assert "reload_requested_at" in cookie_columns

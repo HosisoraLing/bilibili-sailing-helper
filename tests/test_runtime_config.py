@@ -43,6 +43,8 @@ def test_worker_and_scheduler_do_not_mount_database_for_writes():
     for section in (worker_section, scheduler_section):
         assert "./data:/app/data" not in section
         assert "./data:/app/data:rw" not in section
+        assert "healthcheck:" in section
+        assert "disable: true" in section
 
 
 def test_scheduler_entrypoint_uses_internal_api_not_business_writers():
@@ -122,6 +124,13 @@ def test_admin_panel_displays_runtime_diagnostics():
     assert "retry_count" in admin_source
     assert "active_cookie_version" in admin_source
     assert "worker_cookie_version" in admin_source
+    assert 'id="accountStatusPanel"' in admin_source
+    assert 'id="accountStatusUid"' in admin_source
+    assert 'id="accountStatusAuth"' in admin_source
+    assert 'id="accountStatusCookieVersion"' in admin_source
+    assert 'id="accountStatusWorker"' in admin_source
+    assert 'id="accountStatusReload"' in admin_source
+    assert "function updateAccountStatus" in admin_source
     admin_actions = admin_source.split('<div class="admin-actions">', 1)[1].split("</div>", 1)[0]
     assert "startQrLogin()" in admin_actions
     assert "切换B站账号" in admin_actions
@@ -271,6 +280,15 @@ def test_danmaku_worker_closes_connection_when_cookie_version_changes():
 
     assert websocket.closed is True
     assert any(item["state"] == "cookie_reloading" for item in webhook.heartbeats)
+
+
+def test_danmaku_worker_uses_short_default_cookie_poll_interval():
+    from runtime import danmaku_worker
+
+    assert danmaku_worker.default_cookie_poll_interval({}) == 10.0
+    assert danmaku_worker.default_cookie_poll_interval({
+        "DANMAKU_COOKIE_POLL_INTERVAL_SECONDS": "5",
+    }) == 5.0
 
 
 def test_danmaku_worker_cookie_monitor_survives_transient_fetch_failure():

@@ -284,6 +284,8 @@ def run_migrations():
         columns = {col['name']: col for col in inspector.get_columns('cookie_metadata')}
         cookie_metadata_columns = {
             'cookie_version': 'INTEGER DEFAULT 0',
+            'reload_requested_version': 'INTEGER DEFAULT 0',
+            'reload_requested_at': 'DATETIME',
             'tv_access_token': 'TEXT DEFAULT ""',
             'tv_refresh_token': 'TEXT DEFAULT ""',
             'tv_auth_payload_json': 'TEXT',

@@ -332,6 +332,23 @@
             </div>
         </div>
 
+        <div id="accountStatusPanel" style="margin-top: 18px; padding: 14px 16px; border: 1px solid #e5e7eb; border-radius: 8px; background: #f8fafc;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px;">
+                <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; color: #1f2937;">
+                    <i class="fas fa-id-card" style="color: var(--primary);"></i>
+                    <span>B站账号授权状态</span>
+                </div>
+                <span id="accountStatusAuth" class="badge badge-primary">检查中</span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; font-size: 13px; color: #4b5563;">
+                <div>账号 UID：<strong id="accountStatusUid">-</strong></div>
+                <div>Cookie：<strong id="accountStatusCookieVersion">-</strong></div>
+                <div>Worker：<strong id="accountStatusWorker">-</strong></div>
+                <div>同步：<strong id="accountStatusReload">-</strong></div>
+            </div>
+            <div id="accountStatusDetail" style="margin-top: 8px; font-size: 12px; color: #6b7280;">正在读取运行态...</div>
+        </div>
+
         <div class="admin-actions">
             <a href="/admin/guards" class="btn btn-primary btn-sm">
                 <i class="fas fa-users"></i> 舰长列表
@@ -615,11 +632,63 @@
     }
 
     // ========== 弹幕监听状态检查 ==========
+
+    function authStatusLabel(status) {
+        if (status === 'valid') return '已授权';
+        if (status === 'rescan_required') return '需重新扫码';
+        if (status === 'missing') return '未授权';
+        return status || '未知';
+    }
+
+    function updateAccountStatus(data) {
+        const runtime = data.runtime || {};
+        const worker = (runtime.roles && runtime.roles['danmaku-worker']) || {};
+        const tvAuth = data.tv_auth || {};
+        const activeVersion = runtime.active_cookie_version || tvAuth.cookie_version || 0;
+        const workerVersion = runtime.worker_cookie_version || 0;
+        const reloadRequestedVersion = tvAuth.reload_requested_version || 0;
+        const workerState = worker.state || 'missing';
+        const heartbeatAge = worker.heartbeat_age_seconds == null ? '未知' : worker.heartbeat_age_seconds + ' 秒';
+        const hasLatestCookie = activeVersion > 0 && workerVersion >= activeVersion;
+
+        const authEl = document.getElementById('accountStatusAuth');
+        const uidEl = document.getElementById('accountStatusUid');
+        const cookieEl = document.getElementById('accountStatusCookieVersion');
+        const workerEl = document.getElementById('accountStatusWorker');
+        const reloadEl = document.getElementById('accountStatusReload');
+        const detailEl = document.getElementById('accountStatusDetail');
+
+        if (!authEl || !uidEl || !cookieEl || !workerEl || !reloadEl || !detailEl) {
+            return;
+        }
+
+        authEl.textContent = authStatusLabel(tvAuth.status);
+        authEl.className = 'badge ' + (tvAuth.status === 'valid' ? 'badge-success' : 'badge-primary');
+        uidEl.textContent = tvAuth.masked_uid || '未授权';
+        cookieEl.textContent = activeVersion ? ('当前 ' + activeVersion + ' / worker ' + workerVersion) : '无';
+        workerEl.textContent = workerState + '，心跳 ' + heartbeatAge;
+
+        if (runtime.worker_cookie_stale) {
+            reloadEl.textContent = '正在同步到 worker';
+        } else if (hasLatestCookie) {
+            reloadEl.textContent = '已加载最新 Cookie';
+        } else if (reloadRequestedVersion) {
+            reloadEl.textContent = '等待 worker 加载版本 ' + reloadRequestedVersion;
+        } else {
+            reloadEl.textContent = '无待同步 Cookie';
+        }
+
+        const expires = tvAuth.sessdata_expires_at ? '授权有效期：' + tvAuth.sessdata_expires_at : '授权有效期：未知';
+        const refreshed = tvAuth.last_refresh_at ? '上次维护：' + tvAuth.last_refresh_at : '上次维护：无';
+        const error = worker.last_error || worker.delivery_error || tvAuth.last_error || '';
+        detailEl.textContent = expires + '；' + refreshed + (error ? '；错误：' + error : '');
+    }
     
     function checkListenerStatus() {
         fetch('/admin/cookie/status')
             .then(response => response.json())
             .then(data => {
+                updateAccountStatus(data);
                 const alertEl = document.getElementById('listenerAlert');
                 const alertMsgEl = document.getElementById('listenerAlertMsg');
                 
@@ -716,7 +785,7 @@
                             } else if (statusData.status === 'succeeded') {
                                 clearInterval(checkInterval);
                                 const username = statusData.username || '用户';
-                                qrStatus.innerHTML = '✅ 授权成功！欢迎回来，<strong>' + username + '</strong>';
+                                qrStatus.innerHTML = '授权成功，正在同步到 danmaku-worker：<strong>' + username + '</strong>';
                                 qrStatus.style.color = '#48bb78';
                                 
                                 // 显示成功提示框
@@ -724,12 +793,12 @@
                                 alertDiv.style.display = 'none';
                                 
                                 // 显示toast提示
-                                showToast(statusData.restart_warning || '✅ 授权成功！Cookie已更新，后续会自动维护，danmaku-worker 会自动重新加载');
+                                showToast('授权成功，Cookie 已更新，danmaku-worker 会自动加载新版本');
+                                checkListenerStatus();
                                 
-                                // 3秒后刷新页面
-                                setTimeout(() => {
-                                    location.reload();
-                                }, 3000);
+                                // 成功后继续观察同步状态，避免让管理员手动刷新页面
+                                setTimeout(checkListenerStatus, 3000);
+                                setTimeout(checkListenerStatus, 10000);
                             }
                         })
                         .catch(error => {

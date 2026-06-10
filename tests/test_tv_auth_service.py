@@ -197,6 +197,8 @@ def test_legacy_cookie_metadata_schema_gets_tv_auth_columns(app):
         assert "sessdata_expires_at" in columns
         assert "last_refresh_at" in columns
         assert "tv_auth_payload_json" in columns
+        assert "reload_requested_version" in columns
+        assert "reload_requested_at" in columns
 
 
 def test_tv_auth_status_reports_rescan_next_action_when_refresh_token_missing(app):
@@ -220,6 +222,37 @@ def test_tv_auth_status_reports_rescan_next_action_when_refresh_token_missing(ap
     assert payload["status"] == "rescan_required"
     assert payload["has_refresh_token"] is False
     assert payload["next_action"] == "请重新扫码授权 B 站账号"
+
+
+def test_tv_auth_status_exposes_account_version_and_reload_request(app):
+    from services.tv_auth_service import tv_auth_status_payload
+
+    now = get_beijing_now()
+    with app.app_context():
+        db.session.add(
+            CookieMetadata(
+                role="admin",
+                status="valid",
+                source="tv_auth",
+                masked_uid="42",
+                cookie_version=4,
+                reload_requested_version=4,
+                reload_requested_at=now,
+                sessdata_expires_at=now + timedelta(days=20),
+                last_refresh_at=now,
+                last_validated_at=now,
+                tv_refresh_token="refresh-token",
+            )
+        )
+        db.session.commit()
+
+        payload = tv_auth_status_payload()
+
+    assert payload["masked_uid"] == "42"
+    assert payload["cookie_version"] == 4
+    assert payload["reload_requested_version"] == 4
+    assert payload["reload_requested_at"]
+    assert payload["source"] == "tv_auth"
 
 
 def test_start_tv_qr_login_persists_tv_task(app):

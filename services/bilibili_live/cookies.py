@@ -9,6 +9,8 @@ class RuntimeCookie:
     status: str
     version: int
     cookie: dict[str, str]
+    reload_requested_version: int = 0
+    reload_requested_at: str = ""
 
 
 class RuntimeCookieProvider:
@@ -31,6 +33,12 @@ class RuntimeCookieProvider:
         return RuntimeCookie(
             status=str(payload.get("status") or "missing"),
             version=int(payload.get("version") or 0),
+            reload_requested_version=int(
+                payload.get("reload_requested_version")
+                or payload.get("version")
+                or 0
+            ),
+            reload_requested_at=str(payload.get("reload_requested_at") or ""),
             cookie=dict(payload.get("cookie") or {}),
         )
 
@@ -39,4 +47,10 @@ class RuntimeCookieProvider:
 
     @staticmethod
     def should_reload(current_version: int | None, latest: RuntimeCookie) -> bool:
-        return latest.status == "valid" and int(latest.version or 0) > int(current_version or 0)
+        if latest.status != "valid":
+            return False
+        target_version = max(
+            int(latest.version or 0),
+            int(latest.reload_requested_version or 0),
+        )
+        return target_version > int(current_version or 0)

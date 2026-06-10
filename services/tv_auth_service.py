@@ -181,6 +181,11 @@ def tv_auth_status_payload(metadata: CookieMetadata | None = None) -> dict[str, 
         return {
             "status": "missing",
             "has_refresh_token": False,
+            "masked_uid": "",
+            "source": "",
+            "cookie_version": 0,
+            "reload_requested_version": 0,
+            "reload_requested_at": "",
             "sessdata_expires_at": "",
             "last_refresh_at": "",
             "last_validated_at": "",
@@ -200,6 +205,15 @@ def tv_auth_status_payload(metadata: CookieMetadata | None = None) -> dict[str, 
     return {
         "status": status,
         "has_refresh_token": has_refresh_token,
+        "masked_uid": metadata.masked_uid or "",
+        "source": metadata.source or "",
+        "cookie_version": int(metadata.cookie_version or 0),
+        "reload_requested_version": int(metadata.reload_requested_version or 0),
+        "reload_requested_at": (
+            metadata.reload_requested_at.isoformat()
+            if metadata.reload_requested_at
+            else ""
+        ),
         "sessdata_expires_at": (
             metadata.sessdata_expires_at.isoformat()
             if metadata.sessdata_expires_at
@@ -254,6 +268,8 @@ def store_tv_auth_success(payload: dict[str, Any], http_client=None) -> dict[str
     metadata.last_validated_at = now
     metadata.last_error = ""
     metadata.cookie_version = int(metadata.cookie_version or 0) + 1
+    metadata.reload_requested_version = int(metadata.cookie_version or 0)
+    metadata.reload_requested_at = now
     db.session.commit()
     return {"tv_auth": tv_auth_status_payload(metadata)}
 

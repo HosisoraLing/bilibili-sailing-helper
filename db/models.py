@@ -279,6 +279,8 @@ class CookieMetadata(db.Model):
     masked_uid = db.Column(db.String(32), index=True)
     payload_json = db.Column(db.Text)
     cookie_version = db.Column(db.Integer, nullable=False, default=0)
+    reload_requested_version = db.Column(db.Integer, nullable=False, default=0)
+    reload_requested_at = db.Column(db.DateTime)
     tv_access_token = db.Column(db.Text, default="")
     tv_refresh_token = db.Column(db.Text, default="")
     tv_auth_payload_json = db.Column(db.Text)
