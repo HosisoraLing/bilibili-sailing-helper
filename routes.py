@@ -116,6 +116,16 @@ def not_guard():
 
 
 # =========================
+# 开源项目说明
+# =========================
+
+@main_bp.route('/opensource')
+def opensource():
+    """开源项目使用说明页面"""
+    return render_template('opensource.html')
+
+
+# =========================
 # 鉴权状态轮询
 # =========================
 

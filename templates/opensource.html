@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>开源项目使用说明</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/fonts/fonts.css">
+    <link rel="stylesheet" href="/static/css/common.css">
+    <style>
+        .container {
+            max-width: 700px;
+            padding: 40px 30px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h2 {
+            font-size: 24px;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .license-info {
+            background: var(--bg-light);
+            border-radius: var(--radius-md);
+            padding: 20px;
+            margin-bottom: 25px;
+            border: 1px solid var(--border-color);
+        }
+
+        .license-info h3 {
+            font-size: 16px;
+            color: var(--text-primary);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .license-info p {
+            color: var(--text-secondary);
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .dep-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .dep-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border-color);
+            transition: var(--transition);
+        }
+
+        .dep-item:last-child {
+            border-bottom: none;
+        }
+
+        .dep-item:hover {
+            background: var(--bg-light);
+        }
+
+        .dep-name {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .dep-name a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        .dep-name a:hover {
+            text-decoration: underline;
+        }
+
+        .dep-desc {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 3px;
+        }
+
+        .dep-license {
+            font-size: 12px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            background: var(--bg-light);
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin: 25px 0 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--primary);
+            display: inline-block;
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--primary);
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 20px;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container animate-slideUp">
+    <a href="/" class="back-link">
+        <i class="fas fa-arrow-left"></i> 返回首页
+    </a>
+
+    <div class="header">
+        <h2><i class="fas fa-code-branch"></i> 开源项目使用说明</h2>
+        <p>本项目基于以下开源项目构建，感谢所有开源贡献者</p>
+    </div>
+
+    <div class="license-info">
+        <h3><i class="fas fa-balance-scale"></i> 本项目授权</h3>
+        <p>
+            <strong>bilibili-sailing-helper</strong> 采用 <strong>AGPLv3</strong> 许可证发布。<br>
+            源代码：<a href="https://github.com/HosisoraLing/bilibili-sailing-helper" target="_blank">GitHub</a>
+        </p>
+    </div>
+
+    <div class="section-title">核心框架</div>
+    <ul class="dep-list">
+        <li class="dep-item">
+            <div>
+                <div class="dep-name"><a href="https://github.com/pallets/flask" target="_blank">Flask</a></div>
+                <div class="dep-desc">轻量级 Python Web 框架</div>
+            </div>
+            <span class="dep-license">BSD-3-Clause</span>
+        </li>
+        <li class="dep-item">
+            <div>
+                <div class="dep-name"><a href="https://github.com/pallets/flask-sqlalchemy" target="_blank">Flask-SQLAlchemy</a></div>
+                <div class="dep-desc">Flask 的 SQLAlchemy 集成</div>
+            </div>
+            <span class="dep-license">BSD-3-Clause</span>
+        </li>
+        <li class="dep-item">
+            <div>
+                <div class="dep-name"><a href="https://github.com/maxcounterman/flask-login" target="_blank">Flask-Login</a></div>
+                <div class="dep-desc">Flask 用户会话管理</div>
+            </div>
+            <span class="dep-license">MIT</span>
+        </li>
+        <li class="dep-item">
+            <div>
+                <div class="dep-name"><a href="https://github.com/miguelgrinberg/flask-socketio" target="_blank">Flask-SocketIO</a></div>
+                <div class="dep-desc">Flask 的 WebSocket 支持</div>
+            </div>
+            <span class="dep-license">MIT</span>
+        </li>
+        <li class="dep-item">
+            <div>
+                <div class="dep-name"><a href="https://github.com/sqlalchemy/sqlalchemy" target="_blank">SQLAlchemy</a></div>
+                <div class="dep-desc">Python SQL 工具包和 ORM</div>
+            </div>
+            <span class="dep-license">MIT</span>
+        </li>
+    </ul>
+
+    <div class="section-title">B站弹幕监听</div>
+    <ul class="dep-list">
+        <li class="dep-item">
+            <div>
+                <div class="dep-name"><a href="https://github.com/xfgryujk/blivedm" target="_blank">blivedm</a></div>
+                <div class="dep-desc">B站直播弹幕监听库（核心功能依赖）</div>
+            </div>
+            <span class="dep-license">MIT</span>
+        </li>
+        <li class="dep-item">
+            <div>
+                <div class="dep-name"><a href="https://github.com/aio-libs/aiohttp" target="_blank">aiohttp</a></div>
+                <div class="dep-desc">异步 HTTP 客户端/服务器框架</div>
+            </div>
+            <span class="dep-license">Apache-2.0</span>
+        </li>
+    </ul>
+
+    <div class="section-title">网络与安全</div>
+    <ul class="dep-list">
+        <li class="dep-item">
+            <div>
+                <div class="dep-name"><a href="https://github.com/psf/requests" target="_blank">requests</a></div>
+                <div class="dep-desc">优雅的 Python HTTP 库</div>
+            </div>
+            <span class="dep-license">Apache-2.0</span>
+        </li>
+        <li class="dep-item">
+            <div>
+                <div class="dep-name"><a href="https://github.com/pallets/werkzeug" target="_blank">Werkzeug</a></div>
+                <div class="dep-desc">WSGI Web 应用工具库</div>
+            </div>
+            <span class="dep-license">BSD-3-Clause</span>
+        </li>
+        <li class="dep-item">
+            <div>
+                <div class="dep-name"><a href="https://github.com/miguelgrinberg/python-socketio" target="_blank">python-socketio</a></div>
+                <div class="dep-desc">Socket.IO 服务端实现</div>
+            </div>
+            <span class="dep-license">MIT</span>
+        </li>
+        <li class="dep-item">
+            <div>
+                <div class="dep-name"><a href="https://github.com/websocket-client/websocket-client" target="_blank">websocket-client</a></div>
+                <div class="dep-desc">WebSocket 客户端库</div>
+            </div>
+            <span class="dep-license">Apache-2.0</span>
+        </li>
+    </ul>
+
+    <div class="section-title">自动化工具</div>
+    <ul class="dep-list">
+        <li class="dep-item">
+            <div>
+                <div class="dep-name"><a href="https://github.com/microsoft/playwright-python" target="_blank">Playwright</a></div>
+                <div class="dep-desc">浏览器自动化工具（用于获取登录二维码和Cookie）</div>
+            </div>
+            <span class="dep-license">Apache-2.0</span>
+        </li>
+    </ul>
+
+    <div class="section-title">前端资源</div>
+    <ul class="dep-list">
+        <li class="dep-item">
+            <div>
+                <div class="dep-name"><a href="https://github.com/FortAwesome/Font-Awesome" target="_blank">Font Awesome</a></div>
+                <div class="dep-desc">图标字体库</div>
+            </div>
+            <span class="dep-license">Font Awesome Free License</span>
+        </li>
+        <li class="dep-item">
+            <div>
+                <div class="dep-name"><a href="https://github.com/nicepkg/gpt-runner" target="_blank">MiSans</a></div>
+                <div class="dep-desc">小米无衬线字体</div>
+            </div>
+            <span class="dep-license">免费商用</span>
+        </li>
+    </ul>
+
+    <div class="license-info" style="margin-top: 25px;">
+        <h3><i class="fas fa-info-circle"></i> 许可证说明</h3>
+        <p>
+            以上开源项目的许可证均允许在 AGPLv3 项目中使用。<br>
+            如需查看完整的许可证文本，请访问各项目的 GitHub 仓库。
+        </p>
+    </div>
+
+    <div class="page-footer">
+        <a href="https://github.com/HosisoraLing/bilibili-sailing-helper" target="_blank">
+            <i class="fab fa-github"></i> bilibili-sailing-helper
+        </a>
+        <span> | AGPLv3 Licensed</span>
+    </div>
+</div>
+
+</body>
+</html>
