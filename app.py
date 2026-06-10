@@ -530,87 +530,6 @@ def start_session_cleanup_scheduler(app):
     logger.info("Session清理定时任务已启动（每10分钟执行一次）")
 
 
-def start_auto_update_scheduler(app):
-    """
-    启动自动更新检查定时任务
-    - 每天凌晨3点检查GitHub更新
-    - 发现更新后自动拉取并重启
-    """
-    import threading
-    import time
-    import subprocess
-    from datetime import datetime
-
-    last_check_date = None
-
-    def scheduler():
-        nonlocal last_check_date
-        
-        while True:
-            try:
-                now = datetime.now()
-                today_str = now.strftime('%Y-%m-%d')
-                
-                # 每天凌晨3点检查更新
-                if now.hour == 3 and now.minute == 0 and last_check_date != today_str:
-                    logger.info("开始检查GitHub更新...")
-                    
-                    try:
-                        # 检查是否有更新
-                        result = subprocess.run(
-                            ['git', 'fetch', 'origin', 'main'],
-                            capture_output=True, text=True, timeout=30
-                        )
-                        
-                        if result.returncode == 0:
-                            # 比较本地和远程
-                            local = subprocess.run(
-                                ['git', 'rev-parse', 'HEAD'],
-                                capture_output=True, text=True
-                            ).stdout.strip()
-                            
-                            remote = subprocess.run(
-                                ['git', 'rev-parse', 'origin/main'],
-                                capture_output=True, text=True
-                            ).stdout.strip()
-                            
-                            if local != remote:
-                                logger.info(f"发现新版本，开始自动更新...")
-                                
-                                # 拉取更新
-                                pull_result = subprocess.run(
-                                    ['git', 'pull', 'origin', 'main'],
-                                    capture_output=True, text=True, timeout=60
-                                )
-                                
-                                if pull_result.returncode == 0:
-                                    logger.info("代码更新成功，将在下次启动时生效")
-                                    # 注意：不自动重启，需要手动重启或通过Docker自动重启
-                                else:
-                                    logger.error(f"代码更新失败: {pull_result.stderr}")
-                            else:
-                                logger.info("已是最新版本")
-                        else:
-                            logger.warning(f"检查更新失败: {result.stderr}")
-                    
-                    except subprocess.TimeoutExpired:
-                        logger.warning("检查更新超时")
-                    except Exception as e:
-                        logger.error(f"检查更新异常: {e}")
-                    
-                    last_check_date = today_str
-
-            except Exception as e:
-                logger.error(f"自动更新检查任务出错: {e}", exc_info=True)
-
-            # 每分钟检查一次
-            time.sleep(60)
-
-    thread = threading.Thread(target=scheduler, daemon=True)
-    thread.start()
-    logger.info("自动更新检查任务已启动（每天凌晨3点检查）")
-
-
 def register_admins():
     """
     系统启动时自动注册管理员
@@ -660,94 +579,59 @@ def register_admins():
     logger.info(f"管理员注册完成，共处理 {len(admin_uids)} 个管理员")
 
 
-if __name__ == '__main__':
-    ensure_region_json()
+def start_runtime_services(app_instance, role: str = "web"):
+    logger.info("runtime role %s owns no in-process background loops", role)
 
-    app_instance, socketio = create_app()
 
-    with app_instance.app_context():
-        db.create_all()
-        run_migrations()  # Run any pending migrations
-        fetch_and_save_guards()  # 首次爬取舰长数据
-        register_admins()  # 注册管理员
-
-    # 启动舰长爬取定时任务（每5分钟一次）
-    with app_instance.app_context():
-        start_guards_scheduler(app_instance)
-
-    # 启动舰长礼物统计定时任务
-    with app_instance.app_context():
-        start_guard_gift_scheduler(app_instance)
-
-    # 启动session清理定时任务
-    with app_instance.app_context():
-        start_session_cleanup_scheduler(app_instance)
-
-    # 启动Cookie自动刷新任务
-    with app_instance.app_context():
-        from services.cookie_service import CookieService
-        CookieService.start_auto_refresh_scheduler(app_instance)
-
-    # 启动自动更新检查任务
-    with app_instance.app_context():
-        start_auto_update_scheduler(app_instance)
-
-    from services.danmaku_listener import start_danmaku_auth_listener
-    start_danmaku_auth_listener(app_instance, socketio)
-
-    # 检查是否启用 HTTPS
+def run_web_server(app_instance, socketio, config=Config):
     ssl_available = False
-    if Config.SSL_ENABLED and Config.SSL_CERT_FILE and Config.SSL_KEY_FILE:
+    if config.SSL_ENABLED and config.SSL_CERT_FILE and config.SSL_KEY_FILE:
         import ssl
         import threading
         import os
 
-        # 检查证书文件是否存在
-        cert_exists = os.path.exists(Config.SSL_CERT_FILE)
-        key_exists = os.path.exists(Config.SSL_KEY_FILE)
+        cert_exists = os.path.exists(config.SSL_CERT_FILE)
+        key_exists = os.path.exists(config.SSL_KEY_FILE)
 
         if cert_exists and key_exists:
             try:
-                # 创建 SSL 上下文
                 ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-                ssl_context.load_cert_chain(Config.SSL_CERT_FILE, Config.SSL_KEY_FILE)
+                ssl_context.load_cert_chain(config.SSL_CERT_FILE, config.SSL_KEY_FILE)
                 ssl_available = True
             except ssl.SSLError as e:
                 logger.error(f"加载 SSL 证书失败: {e}")
         else:
             logger.error(f"SSL 证书文件不存在:")
             if not cert_exists:
-                logger.error(f"  - 证书文件: {Config.SSL_CERT_FILE}")
+                logger.error(f"  - 证书文件: {config.SSL_CERT_FILE}")
             if not key_exists:
-                logger.error(f"  - 密钥文件: {Config.SSL_KEY_FILE}")
+                logger.error(f"  - 密钥文件: {config.SSL_KEY_FILE}")
 
     if ssl_available:
-        logger.info(f"启用 HTTPS 支持")
-        logger.info(f"  - HTTP 端口: {Config.PORT}")
-        logger.info(f"  - HTTPS 端口: {Config.SSL_PORT}")
-        logger.info(f"  - SSL 证书: {Config.SSL_CERT_FILE}")
-        logger.info(f"  - SSL 密钥: {Config.SSL_KEY_FILE}")
+        logger.info("启用 HTTPS 支持")
+        logger.info(f"  - HTTP 端口: {config.PORT}")
+        logger.info(f"  - HTTPS 端口: {config.SSL_PORT}")
+        logger.info(f"  - SSL 证书: {config.SSL_CERT_FILE}")
+        logger.info(f"  - SSL 密钥: {config.SSL_KEY_FILE}")
 
-        # 启动 HTTP 服务器（主线程）
         http_thread = threading.Thread(
             target=lambda: socketio.run(
                 app_instance,
-                host=Config.HOST,
-                port=Config.PORT,
-                debug=Config.DEBUG,
+                host=config.HOST,
+                port=config.PORT,
+                debug=config.DEBUG,
                 use_reloader=False
             ),
             daemon=True
         )
         http_thread.start()
 
-        # 启动 HTTPS 服务器（后台线程）
         https_thread = threading.Thread(
             target=lambda: socketio.run(
                 app_instance,
-                host=Config.HOST,
-                port=Config.SSL_PORT,
-                debug=Config.DEBUG,
+                host=config.HOST,
+                port=config.SSL_PORT,
+                debug=config.DEBUG,
                 use_reloader=False,
                 ssl_context=ssl_context
             ),
@@ -755,7 +639,6 @@ if __name__ == '__main__':
         )
         https_thread.start()
 
-        # 保持主线程运行
         try:
             while True:
                 import time
@@ -763,13 +646,18 @@ if __name__ == '__main__':
         except KeyboardInterrupt:
             logger.info("服务器已停止")
     else:
-        # 仅启动 HTTP 服务器（默认行为）
-        logger.info(f"仅启用 HTTP 支持（端口: {Config.PORT}）")
+        logger.info(f"仅启用 HTTP 支持（端口: {config.PORT}）")
         socketio.run(
             app_instance,
-            host=Config.HOST,
-            port=Config.PORT,
-            debug=Config.DEBUG,
+            host=config.HOST,
+            port=config.PORT,
+            debug=config.DEBUG,
             use_reloader=False,
             allow_unsafe_werkzeug=True
         )
+
+
+if __name__ == '__main__':
+    from runtime.web import main
+
+    main()

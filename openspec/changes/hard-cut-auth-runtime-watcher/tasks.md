@@ -26,20 +26,20 @@
 - [x] 3.4a Implement worker Cookie version polling/reload so a successful admin QR login reconnects the live WebSocket without restarting web.
 - [x] 3.5 Implement event normalization and local webhook delivery queue with bounded retry/backoff.
 - [x] 3.6 Implement web/app internal danmaku webhook that authenticates requests, matches auth code, and atomically writes successful sessions to DB.
-- [ ] 3.7 Remove `blivedm` production dependency and obsolete listener wrapper paths.
+- [x] 3.7 Remove `blivedm` production dependency and obsolete listener wrapper paths.
 - [x] 3.8 Add mocked watcher/internal-webhook tests for connect/auth, compressed message decode, matching auth code, duplicate events, webhook retry, disconnect, and reconnect status.
 
 ## 4. Runtime Role Split
 
-- [ ] 4.1 Create explicit role entrypoints for `web`, `danmaku-worker`, and `scheduler`.
-- [ ] 4.2 Move scheduler ownership out of Flask startup into the scheduler role and make it call web/app internal APIs instead of writing business DB state directly.
-- [ ] 4.3 Move danmaku WebSocket ownership out of web startup into the danmaku worker role and make it call web/app internal APIs instead of writing business DB state directly.
-- [ ] 4.4 Remove runtime `git pull` or auto-update behavior from normal role startup.
-- [ ] 4.5 Update Dockerfile and Compose to run separate services with shared config/data volumes and role-specific commands.
-- [ ] 4.6 Configure `INTERNAL_API_URL` and `INTERNAL_API_SECRET` for worker/scheduler-to-web communication.
+- [x] 4.1 Create explicit role entrypoints for `web`, `danmaku-worker`, and `scheduler`.
+- [x] 4.2 Move scheduler ownership out of Flask startup into the scheduler role and make it call web/app internal APIs instead of writing business DB state directly.
+- [x] 4.3 Move danmaku WebSocket ownership out of web startup into the danmaku worker role and make it call web/app internal APIs instead of writing business DB state directly.
+- [x] 4.4 Remove runtime `git pull` or auto-update behavior from normal role startup.
+- [x] 4.5 Update Dockerfile and Compose to run separate services with shared config/data volumes and role-specific commands.
+- [x] 4.6 Configure `INTERNAL_API_URL` and `INTERNAL_API_SECRET` for worker/scheduler-to-web communication.
 - [x] 4.6a Add authenticated runtime Cookie status/access endpoint or documented shared-config plus version endpoint, and pass the required settings to `danmaku-worker`.
-- [ ] 4.7 Unify `settings.json.example`, Dockerfile `EXPOSE`, Compose ports, and healthcheck URL around one internal web port.
-- [ ] 4.8 Add entrypoint smoke tests or command-level checks that do not require live Bilibili connectivity.
+- [x] 4.7 Unify `settings.json.example`, Dockerfile `EXPOSE`, Compose ports, and healthcheck URL around one internal web port.
+- [x] 4.8 Add entrypoint smoke tests or command-level checks that do not require live Bilibili connectivity.
 
 ## 5. Admin UX And Documentation
 

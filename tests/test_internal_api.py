@@ -256,7 +256,11 @@ def test_runtime_heartbeat_preserves_previous_error_fields_when_omitted(client, 
         assert status.retry_count == 3
 
 
-def test_internal_scheduler_job_records_request_and_result(client, app):
+def test_internal_scheduler_job_records_request_and_result(client, app, monkeypatch):
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "fetch_and_save_guards", lambda: None)
+
     job_response = client.post(
         "/internal/scheduler/job",
         headers={"Authorization": "test-secret"},
@@ -291,6 +295,33 @@ def test_internal_scheduler_job_records_request_and_result(client, app):
         assert "synced" in job.result_json
 
 
+def test_internal_scheduler_job_executes_guard_sync_inside_web(client, app, monkeypatch):
+    import app as app_module
+
+    calls = []
+
+    def fake_fetch_and_save_guards():
+        calls.append("guard-sync")
+
+    monkeypatch.setattr(app_module, "fetch_and_save_guards", fake_fetch_and_save_guards)
+
+    job_response = client.post(
+        "/internal/scheduler/job",
+        headers={"Authorization": "test-secret"},
+        json={
+            "job_name": "guard-sync",
+            "requested_at": "2026-06-10T00:00:00+08:00",
+        },
+    )
+    assert job_response.status_code == 200
+    assert calls == ["guard-sync"]
+
+    with app.app_context():
+        job = SchedulerJob.query.filter_by(job_id=job_response.get_json()["job_id"]).one()
+        assert job.status == "success"
+        assert "guard-sync completed" in job.result_json
+
+
 def test_internal_scheduler_result_can_record_by_job_name_without_job_id(client, app):
     job_response = client.post(
         "/internal/scheduler/job",
@@ -322,7 +353,11 @@ def test_internal_scheduler_result_can_record_by_job_name_without_job_id(client,
         assert "refreshed" in job.result_json
 
 
-def test_internal_scheduler_job_is_idempotent_for_duplicate_job_id(client, app):
+def test_internal_scheduler_job_is_idempotent_for_duplicate_job_id(client, app, monkeypatch):
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "fetch_and_save_guards", lambda: None)
+
     payload = {
         "job_id": "fixed-job-id",
         "job_name": "guard-sync",
@@ -357,7 +392,11 @@ def test_internal_scheduler_result_requires_job_id_or_job_name(client):
     assert response.get_json()["error"] == "job_id or job_name is required"
 
 
-def test_internal_scheduler_result_rejects_mismatched_job_name(client):
+def test_internal_scheduler_result_rejects_mismatched_job_name(client, monkeypatch):
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "fetch_and_save_guards", lambda: None)
+
     job_response = client.post(
         "/internal/scheduler/job",
         headers={"Authorization": "test-secret"},

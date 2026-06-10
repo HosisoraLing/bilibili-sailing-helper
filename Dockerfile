@@ -8,9 +8,8 @@ WORKDIR /app
 # 使用国内镜像源
 RUN sed -i s/deb.debian.org/mirrors.aliyun.com/g /etc/apt/sources.list.d/debian.sources
 
-# 安装系统依赖（blivedm 需要 git，cryptography 需要 gcc）
+# 安装系统依赖（cryptography 需要 gcc）
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git \
     gcc \
     libffi-dev \
     && rm -rf /var/lib/apt/lists/*
@@ -38,7 +37,6 @@ RUN sed -i s/deb.debian.org/mirrors.aliyun.com/g /etc/apt/sources.list.d/debian.
 
 # 安装运行时依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
@@ -50,6 +48,7 @@ RUN useradd -m -s /bin/bash appuser
 
 COPY --chown=appuser:appuser app.py config.py routes.py decorators.py constants.py migrate.py ./
 COPY --chown=appuser:appuser db/        ./db/
+COPY --chown=appuser:appuser runtime/   ./runtime/
 COPY --chown=appuser:appuser services/  ./services/
 COPY --chown=appuser:appuser utils/     ./utils/
 COPY --chown=appuser:appuser storage/   ./storage/
@@ -62,9 +61,9 @@ RUN mkdir -p data logs && chown -R appuser:appuser data logs
 # 切换到应用用户运行
 USER appuser
 
-EXPOSE 80 443
+EXPOSE 7111
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:80/')" || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:7111/')" || exit 1
 
-CMD ["python", "app.py"]
+CMD ["python", "-m", "runtime.web"]

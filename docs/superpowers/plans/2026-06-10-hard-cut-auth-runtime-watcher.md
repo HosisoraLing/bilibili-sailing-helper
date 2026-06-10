@@ -411,11 +411,11 @@ git commit -m "feat: add native bilibili watcher protocol"
 - Modify: `Dockerfile`
 - Modify: `settings.json.example`
 
-- [ ] **Step 1: Write runtime config tests**
+- [x] **Step 1: Write runtime config tests**
 
 Create tests that assert production runtime no longer imports `blivedm`, Playwright is not required, compose has `web`, `danmaku-worker`, and `scheduler`, and worker/scheduler commands do not mount or require direct DB writes.
 
-- [ ] **Step 2: Run runtime tests and verify failure**
+- [x] **Step 2: Run runtime tests and verify failure**
 
 Run:
 
@@ -425,7 +425,7 @@ pytest tests/test_runtime_config.py -q
 
 Expected: fail because current runtime is still single service and dependencies remain.
 
-- [ ] **Step 3: Create role entrypoints**
+- [x] **Step 3: Create role entrypoints**
 
 Implement:
 
@@ -437,15 +437,15 @@ python -m runtime.scheduler
 
 `runtime.web` starts Flask/SocketIO. `runtime.danmaku_worker` starts the native watcher, loads the validated Cookie through the runtime Cookie contract, reports active `cookie_version`, reconnects on version change, and posts internal events. `runtime.scheduler` triggers internal job endpoints on schedule.
 
-- [ ] **Step 4: Remove web ownership of background loops**
+- [x] **Step 4: Remove web ownership of background loops**
 
 Update `app.py` so web startup no longer owns danmaku WebSocket, Cookie refresh scheduler, or session cleanup scheduler in production role mode.
 
-- [ ] **Step 5: Update Docker and Compose**
+- [x] **Step 5: Update Docker and Compose**
 
 Use one canonical internal web port. Define `web`, `danmaku-worker`, and `scheduler` services. Pass `INTERNAL_API_URL` and `INTERNAL_API_SECRET` to worker/scheduler. If Cookie bytes are read from a shared config volume rather than internal HTTP, mount that volume read-only in `danmaku-worker` and keep version/status checks authenticated through web. Remove Playwright browser install and `blivedm` git dependency.
 
-- [ ] **Step 6: Run runtime checks**
+- [x] **Step 6: Run runtime checks**
 
 Run:
 
@@ -457,7 +457,7 @@ python -m compileall .
 
 Expected: pytest passes, compose config renders, compileall succeeds.
 
-- [ ] **Step 7: Commit Task 5**
+- [x] **Step 7: Commit Task 5**
 
 ```bash
 git add runtime app.py services/danmaku_listener.py Dockerfile docker-compose.yml settings.json.example tests/test_runtime_config.py

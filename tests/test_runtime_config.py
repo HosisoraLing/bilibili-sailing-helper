@@ -1,0 +1,240 @@
+import asyncio
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def read(path: str) -> str:
+    return (ROOT / path).read_text(encoding="utf-8")
+
+
+def test_runtime_entrypoints_exist_and_expose_main_functions():
+    runtime_dir = ROOT / "runtime"
+    assert (runtime_dir / "web.py").exists()
+    assert (runtime_dir / "danmaku_worker.py").exists()
+    assert (runtime_dir / "scheduler.py").exists()
+
+    for path in ("runtime/web.py", "runtime/danmaku_worker.py", "runtime/scheduler.py"):
+        source = read(path)
+        assert "def main(" in source
+        assert "if __name__ == \"__main__\":" in source
+
+
+def test_compose_defines_split_runtime_roles():
+    compose = read("docker-compose.yml")
+
+    assert "\n  web:" in compose
+    assert "\n  danmaku-worker:" in compose
+    assert "\n  scheduler:" in compose
+    assert "\n  app:" not in compose
+    assert "command: [\"python\", \"-m\", \"runtime.web\"]" in compose
+    assert "command: [\"python\", \"-m\", \"runtime.danmaku_worker\"]" in compose
+    assert "command: [\"python\", \"-m\", \"runtime.scheduler\"]" in compose
+    assert "INTERNAL_API_URL=http://web:7111" in compose
+    assert "replace-this-internal-secret" not in compose
+    assert "INTERNAL_API_SECRET=${INTERNAL_API_SECRET:?set INTERNAL_API_SECRET}" in compose
+
+
+def test_worker_and_scheduler_do_not_mount_database_for_writes():
+    compose = read("docker-compose.yml")
+    worker_section = compose.split("  danmaku-worker:", 1)[1].split("\n  scheduler:", 1)[0]
+    scheduler_section = compose.split("  scheduler:", 1)[1]
+    for section in (worker_section, scheduler_section):
+        assert "./data:/app/data" not in section
+        assert "./data:/app/data:rw" not in section
+
+
+def test_scheduler_entrypoint_uses_internal_api_not_business_writers():
+    scheduler_source = read("runtime/scheduler.py")
+
+    assert "db.session" not in scheduler_source
+    assert "fetch_and_save_guards" not in scheduler_source
+    assert "/internal/scheduler/job" in scheduler_source
+
+
+def test_production_runtime_has_no_blivedm_playwright_or_runtime_git_pull():
+    runtime_sources = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            ROOT / "runtime" / "web.py",
+            ROOT / "runtime" / "danmaku_worker.py",
+            ROOT / "runtime" / "scheduler.py",
+        ]
+    )
+    production_sources = "\n".join([
+        read("requirements.txt"),
+        read("Dockerfile"),
+        read("app.py"),
+        runtime_sources,
+    ])
+
+    assert "playwright" not in production_sources.lower()
+    assert "chromium" not in production_sources.lower()
+    assert "blivedm" not in read("requirements.txt")
+    assert "git pull" not in production_sources
+    assert "git', 'pull" not in production_sources
+
+
+def test_web_startup_does_not_own_background_worker_loops():
+    web_source = read("runtime/web.py")
+    app_source = read("app.py")
+    start_runtime_source = app_source.split("def start_runtime_services", 1)[1].split(
+        "def run_web_server",
+        1,
+    )[0]
+
+    assert "start_danmaku_auth_listener" not in web_source
+    assert "start_auto_update_scheduler" not in web_source
+    assert "CookieService.start_auto_refresh_scheduler" not in web_source
+    assert "start_guards_scheduler" not in start_runtime_source
+    assert "start_guard_gift_scheduler" not in start_runtime_source
+    assert "start_session_cleanup_scheduler" not in start_runtime_source
+    assert "start_runtime_services" in app_source
+
+
+def test_settings_example_uses_canonical_internal_port():
+    settings_example = read("settings.json.example")
+    dockerfile = read("Dockerfile")
+    compose = read("docker-compose.yml")
+
+    assert '"port": 7111' in settings_example
+    assert "EXPOSE 7111" in dockerfile
+    assert "7111:7111" in compose
+
+
+class FakeCookieProvider:
+    def __init__(self, *cookies):
+        self.cookies = list(cookies)
+        self.calls = 0
+
+    async def fetch_latest(self):
+        self.calls += 1
+        if self.cookies:
+            return self.cookies.pop(0)
+        from services.bilibili_live.cookies import RuntimeCookie
+
+        return RuntimeCookie(status="valid", version=1, cookie={"SESSDATA": "sess"})
+
+
+class FakeWebhook:
+    def __init__(self):
+        self.heartbeats = []
+        self.events = []
+
+    async def report_heartbeat(self, **payload):
+        self.heartbeats.append(payload)
+        return True
+
+    async def enqueue_auth_event(self, payload):
+        self.events.append(payload)
+        return True
+
+    async def drain_once(self):
+        return True
+
+
+class FakeApi:
+    def __init__(self, session, cookie_header=""):
+        self.session = session
+        self.cookie_header = cookie_header
+
+    async def get_danmu_info(self, room_id):
+        return {
+            "token": "token",
+            "host_list": [{"host": "live.example", "wss_port": 443}],
+        }
+
+
+class FakeWebSocket:
+    def __init__(self, messages):
+        self.messages = list(messages)
+        self.sent = []
+
+    async def send_bytes(self, payload):
+        self.sent.append(payload)
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if not self.messages:
+            raise StopAsyncIteration
+        return self.messages.pop(0)
+
+
+def test_danmaku_worker_runs_native_watcher_and_keeps_loop_until_stopped(monkeypatch):
+    from services.bilibili_live.cookies import RuntimeCookie
+    from services.bilibili_live.protocol import OP_MESSAGE, pack_packet
+    from runtime import danmaku_worker
+
+    raw_event = {
+        "cmd": "DANMU_MSG",
+        "info": [[], "vc-code", [42, "tester"]],
+    }
+    packet = pack_packet(OP_MESSAGE, danmaku_worker.json_dumps(raw_event))
+    websocket = FakeWebSocket([packet])
+    webhook = FakeWebhook()
+
+    async def websocket_factory(_url):
+        return websocket
+
+    async def stop_after_first_iteration(_seconds):
+        raise danmaku_worker.WorkerStop("test stop")
+
+    asyncio.run(
+        danmaku_worker.run_worker_loop(
+            room_id=1,
+            cookie_provider=FakeCookieProvider(
+                RuntimeCookie(status="valid", version=1, cookie={"SESSDATA": "sess"}),
+            ),
+            webhook=webhook,
+            api_factory=FakeApi,
+            websocket_factory=websocket_factory,
+            instance_id="worker-1",
+            reconnect_delay=0,
+            idle_sleep=stop_after_first_iteration,
+        )
+    )
+
+    assert any(item["state"] == "running" for item in webhook.heartbeats)
+    assert webhook.events == [
+        {
+            "uid": "42",
+            "nickname": "tester",
+            "content": "vc-code",
+            "room_id": "1",
+            "raw_cmd": "DANMU_MSG",
+        }
+    ]
+
+
+def test_scheduler_runs_recurring_jobs_until_stopped():
+    from runtime import scheduler
+
+    posts = []
+
+    class FakeSession:
+        async def post(self, url, headers=None, json=None, timeout=None):
+            posts.append((url, json))
+            return object()
+
+    async def stop_after_first_interval(_seconds):
+        raise scheduler.SchedulerStop("test stop")
+
+    asyncio.run(
+        scheduler.run_scheduler_loop(
+            session=FakeSession(),
+            internal_url="http://web:7111",
+            secret="secret",
+            instance_id="scheduler-1",
+            interval_seconds=60,
+            sleep=stop_after_first_interval,
+        )
+    )
+
+    assert any(url.endswith("/internal/runtime/heartbeat") for url, _ in posts)
+    assert any(
+        url.endswith("/internal/scheduler/job") and payload["job_name"] == "guard-sync"
+        for url, payload in posts
+    )
