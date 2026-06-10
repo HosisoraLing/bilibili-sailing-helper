@@ -324,6 +324,8 @@ class RuntimeStatus(db.Model):
     state = db.Column(db.String(32), nullable=False, default='unknown', index=True)
     payload_json = db.Column(db.Text)
     last_error = db.Column(db.String(512))
+    delivery_error = db.Column(db.String(512))
+    retry_count = db.Column(db.Integer, default=0)
     last_event_at = db.Column(db.DateTime)
     heartbeat_at = db.Column(db.DateTime, default=get_beijing_now, index=True)
     created_at = db.Column(db.DateTime, default=get_beijing_now)

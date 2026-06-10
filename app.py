@@ -258,6 +258,26 @@ def run_migrations():
                 conn.commit()
                 logger.info("Migration completed: auth_sessions durable state columns added")
 
+    # Check runtime_statuses table for delivery visibility columns
+    if 'runtime_statuses' in inspector.get_table_names():
+        columns = {col['name']: col for col in inspector.get_columns('runtime_statuses')}
+        runtime_status_columns = {
+            'delivery_error': 'VARCHAR(512)',
+            'retry_count': 'INTEGER DEFAULT 0',
+        }
+        missing_columns = [
+            (name, ddl)
+            for name, ddl in runtime_status_columns.items()
+            if name not in columns
+        ]
+        if missing_columns:
+            logger.info("Migrating: Adding runtime status delivery columns...")
+            with db.engine.connect() as conn:
+                for name, ddl in missing_columns:
+                    conn.execute(text(f"ALTER TABLE runtime_statuses ADD COLUMN {name} {ddl}"))
+                conn.commit()
+                logger.info("Migration completed: runtime_statuses delivery columns added")
+
 
 # =========================
 # 主入口

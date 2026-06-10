@@ -39,6 +39,7 @@ TEST_SETTINGS_PATH.write_text(
                 "port": 7112,
             },
             "admin": {"uids": []},
+            "internal": {"api_secret": "test-secret"},
         }
     ),
     encoding="utf-8",
@@ -58,7 +59,6 @@ def app():
     app.config.update(
         TESTING=True,
         WTF_CSRF_ENABLED=False,
-        INTERNAL_API_SECRET="test-secret",
     )
     with app.app_context():
         db.create_all()

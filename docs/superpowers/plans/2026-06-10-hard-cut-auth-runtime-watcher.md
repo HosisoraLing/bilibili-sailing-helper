@@ -173,7 +173,7 @@ git commit -m "feat: add durable auth state models"
 - Modify: `app.py`
 - Modify: `db/models.py`
 
-- [ ] **Step 1: Write failing internal API tests**
+- [x] **Step 1: Write failing internal API tests**
 
 Create `tests/test_internal_api.py` with tests for missing secret, wrong secret, valid heartbeat, and valid danmaku event.
 
@@ -227,7 +227,7 @@ def test_danmaku_webhook_marks_auth_success(client, app):
         assert AuthSession.query.filter_by(uid="42").one().status == "success"
 ```
 
-- [ ] **Step 2: Run tests and verify failure**
+- [x] **Step 2: Run tests and verify failure**
 
 Run:
 
@@ -237,15 +237,15 @@ pytest tests/test_internal_api.py -q
 
 Expected: fail because internal routes and models do not exist.
 
-- [ ] **Step 3: Implement internal service helpers**
+- [x] **Step 3: Implement internal service helpers**
 
 Create `services/internal_api_service.py` with `verify_internal_secret()`, `record_runtime_heartbeat()`, `process_danmaku_auth_event()`, and scheduler job helpers. Use constant-time comparison for the secret.
 
-- [ ] **Step 4: Register internal routes**
+- [x] **Step 4: Register internal routes**
 
 Add routes under `/internal/danmaku/auth-event`, `/internal/runtime/heartbeat`, `/internal/scheduler/job`, and `/internal/scheduler/result`. Keep responses small and machine-readable.
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 Run:
 
@@ -255,7 +255,7 @@ pytest tests/test_internal_api.py tests/test_auth_state.py -q
 
 Expected: all pass.
 
-- [ ] **Step 6: Commit Task 2**
+- [x] **Step 6: Commit Task 2**
 
 ```bash
 git add routes.py app.py db/models.py services/internal_api_service.py tests/test_internal_api.py

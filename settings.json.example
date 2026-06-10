@@ -26,5 +26,8 @@
     },    
     "admin": {
         "uids": []
+    },
+    "internal": {
+        "api_secret": "replace-this-internal-secret"
     }
 }

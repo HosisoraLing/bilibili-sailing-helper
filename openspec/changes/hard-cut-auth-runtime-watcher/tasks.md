@@ -2,10 +2,10 @@
 
 - [ ] 1.1 Inventory current auth, Cookie, listener, scheduler, auto-update, Docker port, and healthcheck code paths.
 - [x] 1.2 Add DB schema/models for QR login tasks, Cookie integrity metadata, auth attempts/success transitions, scheduler jobs, and runtime role status.
-- [ ] 1.3 Design internal API contracts for danmaku event reporting, role heartbeat/status, scheduler job requests/results, and shared-secret authentication.
+- [x] 1.3 Design internal API contracts for danmaku event reporting, role heartbeat/status, scheduler job requests/results, and shared-secret authentication.
 - [x] 1.4 Configure SQLite for web/app-owned writes, including short transactions, busy timeout, and WAL if compatible with deployment.
 - [x] 1.5 Add focused tests for pending, success, expired, duplicate, and consumed auth session states.
-- [ ] 1.6 Add tests for internal API authentication, runtime status heartbeat, stale heartbeat, last error, delivery error, and role separation fields.
+- [x] 1.6 Add tests for internal API authentication, runtime status heartbeat, stale heartbeat, last error, delivery error, and role separation fields.
 
 ## 2. Browserless QR Login
 
@@ -23,7 +23,7 @@
 - [ ] 3.3 Implement packet pack/unpack, heartbeat, zlib/brotli handling, and fixture-based protocol tests.
 - [ ] 3.4 Implement WebSocket client lifecycle with auth payload, heartbeat loop, bounded reconnect, and internal status reporting.
 - [ ] 3.5 Implement event normalization and local webhook delivery queue with bounded retry/backoff.
-- [ ] 3.6 Implement web/app internal danmaku webhook that authenticates requests, matches auth code, and atomically writes successful sessions to DB.
+- [x] 3.6 Implement web/app internal danmaku webhook that authenticates requests, matches auth code, and atomically writes successful sessions to DB.
 - [ ] 3.7 Remove `blivedm` production dependency and obsolete listener wrapper paths.
 - [ ] 3.8 Add mocked watcher/internal-webhook tests for connect/auth, compressed message decode, matching auth code, duplicate events, webhook retry, disconnect, and reconnect status.
 

@@ -118,3 +118,8 @@ class Config:
 
     ADMIN_UIDS = ADMIN_UIDS
     RUID = RUID_INT
+
+    INTERNAL_API_SECRET = (
+        os.environ.get('INTERNAL_API_SECRET')
+        or settings.get('internal', {}).get('api_secret', '')
+    )

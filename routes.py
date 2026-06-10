@@ -24,6 +24,14 @@ from services.user_service import UserService
 from services.admin_service import AdminService
 from services.guard_gift_service import GuardGiftService
 from services.guard_service import GUARD_LEVEL_NAME_MAP
+from services.internal_api_service import (
+    ConflictError,
+    create_scheduler_job,
+    process_danmaku_auth_event,
+    record_runtime_heartbeat,
+    record_scheduler_result,
+    verify_internal_secret,
+)
 from utils.request_utils import get_uid_from_request
 from utils.csv_utils import create_csv_response
 from utils.cache_utils import (
@@ -42,6 +50,20 @@ from decorators import (
 # 创建蓝图
 main_bp = Blueprint('main', __name__)
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
+internal_bp = Blueprint('internal', __name__, url_prefix='/internal')
+
+
+def _internal_json_payload():
+    return request.get_json(silent=True) or {}
+
+
+def _internal_authorized():
+    secret = request.headers.get('Authorization')
+    return verify_internal_secret(secret)
+
+
+def _internal_unauthorized():
+    return jsonify({'error': 'invalid internal secret'}), 401
 
 
 # 主路由
@@ -2105,6 +2127,80 @@ def admin_restart_listener():
 
 
 # =========================
+# 内部 API 路由
+# =========================
+
+@internal_bp.route('/runtime/heartbeat', methods=['POST'])
+def internal_runtime_heartbeat():
+    if not _internal_authorized():
+        return _internal_unauthorized()
+
+    try:
+        status = record_runtime_heartbeat(_internal_json_payload())
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+
+    return jsonify({
+        'status': 'ok',
+        'role': status.role,
+        'instance_id': status.instance_id,
+        'state': status.state,
+    })
+
+
+@internal_bp.route('/danmaku/auth-event', methods=['POST'])
+def internal_danmaku_auth_event():
+    if not _internal_authorized():
+        return _internal_unauthorized()
+
+    try:
+        result = process_danmaku_auth_event(_internal_json_payload())
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+
+    return jsonify({'status': 'ok', **result})
+
+
+@internal_bp.route('/scheduler/job', methods=['POST'])
+def internal_scheduler_job():
+    if not _internal_authorized():
+        return _internal_unauthorized()
+
+    try:
+        job = create_scheduler_job(_internal_json_payload())
+    except ConflictError as exc:
+        return jsonify({'error': str(exc)}), 409
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+
+    return jsonify({
+        'status': 'ok',
+        'job_id': job.job_id,
+        'job_name': job.job_type,
+    })
+
+
+@internal_bp.route('/scheduler/result', methods=['POST'])
+def internal_scheduler_result():
+    if not _internal_authorized():
+        return _internal_unauthorized()
+
+    try:
+        job = record_scheduler_result(_internal_json_payload())
+    except ConflictError as exc:
+        return jsonify({'error': str(exc)}), 409
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+
+    return jsonify({
+        'status': 'ok',
+        'job_id': job.job_id,
+        'job_name': job.job_type,
+        'job_status': job.status,
+    })
+
+
+# =========================
 # 注册蓝图
 # =========================
 
@@ -2112,3 +2208,4 @@ def register_routes(app):
     """注册所有路由蓝图"""
     app.register_blueprint(main_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(internal_bp)
