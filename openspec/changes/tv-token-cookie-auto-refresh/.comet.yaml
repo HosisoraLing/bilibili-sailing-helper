@@ -1,11 +1,11 @@
 workflow: full
 phase: build
 context_compression: off
-build_mode: null
+build_mode: executing-plans
 build_pause: null
 subagent_dispatch: null
-tdd_mode: null
-isolation: null
+tdd_mode: tdd
+isolation: worktree
 verify_mode: null
 auto_transition: true
 base_ref: e360536529050e7551362a20272f525f595274d1
@@ -19,3 +19,5 @@ verified_at: null
 archived: false
 handoff_context: openspec/changes/tv-token-cookie-auto-refresh/.comet/handoff/design-context.json
 handoff_hash: 351ebec2c5ec6ff6cf585ec1b9125225bc5e279132e4ccbff621f9c8f198d2e6
+build_command: .venv/bin/python -m compileall app.py routes.py db services runtime tests get_cookies.py route_handlers
+verify_command: .venv/bin/python -m pytest tests/test_route_inventory.py tests/test_internal_api.py tests/test_auth_state.py tests/test_qr_login.py tests/test_browserless_qr_contract.py tests/test_cookie_runtime_contract.py tests/test_tv_auth_service.py tests/test_cookie_maintenance.py

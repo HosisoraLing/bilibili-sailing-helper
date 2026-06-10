@@ -534,14 +534,14 @@ def test_run_pending_scheduler_job_executes_all_periodic_jobs_inside_web(app, mo
             calls.append("guard-gift-history")
             return [object(), object()]
 
-    class FakeCookieService:
+    class FakeCookieMaintenanceService:
         @staticmethod
-        def auto_update_buvid3():
+        def run_cookie_maintenance():
             calls.append("cookie-maintenance")
-            return True
+            return {"status": "success", "summary": "cookie-maintenance completed"}
 
     monkeypatch.setattr(routes, "GuardGiftService", FakeGuardGiftService)
-    monkeypatch.setattr(routes, "CookieService", FakeCookieService)
+    monkeypatch.setattr(routes, "CookieMaintenanceService", FakeCookieMaintenanceService)
     monkeypatch.setattr(routes, "cleanup_expired_sessions", lambda: calls.append("auth-cleanup") or 2)
 
     with app.app_context():
@@ -606,16 +606,16 @@ def test_run_pending_scheduler_job_records_failure(app, monkeypatch):
         assert "guard-sync failed" in refreshed.result_json
 
 
-def test_run_pending_scheduler_job_marks_cookie_maintenance_false_as_failed(app, monkeypatch):
+def test_run_pending_scheduler_job_marks_cookie_maintenance_failure(app, monkeypatch):
     from routes import run_pending_scheduler_job
     import routes
 
-    class FakeCookieService:
+    class FakeCookieMaintenanceService:
         @staticmethod
-        def auto_update_buvid3():
-            return False
+        def run_cookie_maintenance():
+            return {"status": "failed", "error": "请重新扫码授权 B 站账号"}
 
-    monkeypatch.setattr(routes, "CookieService", FakeCookieService)
+    monkeypatch.setattr(routes, "CookieMaintenanceService", FakeCookieMaintenanceService)
 
     with app.app_context():
         job = SchedulerJob(
@@ -632,7 +632,7 @@ def test_run_pending_scheduler_job_marks_cookie_maintenance_false_as_failed(app,
         assert result["job_status"] == "failed"
         refreshed = SchedulerJob.query.filter_by(job_id="cookie-maintenance-needs-login").one()
         assert refreshed.status == "failed"
-        assert "needs QR login" in refreshed.last_error
+        assert "重新扫码" in refreshed.last_error
 
 
 def test_internal_scheduler_result_can_record_by_job_name_without_job_id(client, app):
