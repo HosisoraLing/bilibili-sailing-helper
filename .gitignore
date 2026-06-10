@@ -55,6 +55,7 @@ logs/
 # Claude files
 .claude/
 claude.md
+!CLAUDE.md
 
 # Local scratch test files
 danmuku_test.py
