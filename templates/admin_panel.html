@@ -301,7 +301,7 @@
             </div>
             <div style="display: flex; gap: 10px;">
                 <button onclick="startQrLogin()" style="background: white; color: #ff6b6b; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer;">
-                    <i class="fas fa-qrcode"></i> 扫码登录
+                    <i class="fas fa-qrcode"></i> 扫码授权
                 </button>
                 <button onclick="restartListener()" style="background: rgba(255,255,255,0.2); color: white; border: 2px solid rgba(255,255,255,0.5); padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer;">
                     <i class="fas fa-sync-alt"></i> 查看重启方式
@@ -312,8 +312,8 @@
 
     <!-- 二维码显示区域 -->
     <div id="qrCodeArea" style="display:none; background: white; padding: 20px; border-radius: 12px; margin-bottom: 20px; text-align: center; box-shadow: var(--shadow-lg);">
-        <h3 style="margin-bottom: 15px;"><i class="fas fa-qrcode"></i> 扫码登录B站</h3>
-        <p style="color: #666; margin-bottom: 15px;">请使用B站APP扫描二维码登录</p>
+        <h3 style="margin-bottom: 15px;"><i class="fas fa-qrcode"></i> B站账号授权</h3>
+        <p style="color: #666; margin-bottom: 15px;">请使用B站APP扫描二维码授权；成功后系统会自动维护 Cookie，refresh token 失效时需要重新扫码。</p>
         <img id="qrCodeImage" src="" alt="二维码" style="max-width: 300px; border: 1px solid #eee; border-radius: 8px;">
         <div id="qrStatus" style="margin-top: 15px; color: #666;">等待扫码...</div>
     </div>
@@ -627,13 +627,17 @@
                 
                 const runtime = data.runtime || {};
                 const worker = (runtime.roles && runtime.roles['danmaku-worker']) || {};
-                const needsWarning = !data.is_valid || runtime.next_action !== '无需操作';
+                const tvAuth = data.tv_auth || {};
+                const needsTvAuth = tvAuth.status === 'missing' || tvAuth.status === 'rescan_required';
+                const needsWarning = !data.is_valid || needsTvAuth || runtime.next_action !== '无需操作';
                 
                 if (needsWarning) {
                     alertEl.style.display = 'block';
                     
-                    if (!data.is_valid) {
-                        alertMsgEl.textContent = 'Cookie无效或已过期，请重新登录B站账号';
+                    if (needsTvAuth) {
+                        alertMsgEl.textContent = tvAuth.next_action || '请扫码授权 B 站账号以启用自动 Cookie 维护';
+                    } else if (!data.is_valid) {
+                        alertMsgEl.textContent = 'Cookie无效或已过期，请重新扫码授权B站账号';
                     } else if (runtime.next_action) {
                         const age = worker.heartbeat_age_seconds == null ? '未知' : worker.heartbeat_age_seconds + ' 秒';
                         const error = worker.last_error || worker.delivery_error || '无';
@@ -641,13 +645,17 @@
                         const lastEvent = worker.last_event_at || '无';
                         const activeVersion = runtime.active_cookie_version || 0;
                         const workerVersion = runtime.worker_cookie_version || 0;
+                        const tvSummary = tvAuth.sessdata_expires_at
+                            ? '，授权有效期：' + tvAuth.sessdata_expires_at
+                            : '';
                         alertMsgEl.textContent = runtime.next_action
                             + '；danmaku-worker 状态：' + (worker.state || 'missing')
                             + '，心跳：' + age
                             + '，最后弹幕：' + lastEvent
                             + '，错误：' + error
                             + '，重试：' + retry
-                            + '，Cookie：' + activeVersion + ' -> ' + workerVersion;
+                            + '，Cookie：' + activeVersion + ' -> ' + workerVersion
+                            + tvSummary;
                     }
                 } else {
                     alertEl.style.display = 'none';
@@ -665,9 +673,9 @@
         const qrStatus = document.getElementById('qrStatus');
         
         qrArea.style.display = 'block';
-        qrStatus.textContent = '正在生成二维码...';
+        qrStatus.textContent = '正在生成授权二维码...';
         
-        fetch('/admin/cookie/start-qr-login', {
+        fetch('/admin/cookie/start-tv-qr-login', {
             method: 'POST',
             headers: {
                 'X-CSRF-Token': csrfToken,
@@ -678,13 +686,13 @@
         .then(({status, data}) => {
             if (data.success) {
                 qrImage.src = '/admin/cookie/qrcode/' + encodeURIComponent(data.task_id);
-                qrStatus.textContent = '请使用B站APP扫描二维码';
+                qrStatus.textContent = '请使用B站APP扫描二维码授权';
                 
                 let checkCount = 0;
                 const checkInterval = setInterval(() => {
                     checkCount++;
                     
-                    fetch('/admin/cookie/qr-login/' + encodeURIComponent(data.task_id))
+                    fetch('/admin/cookie/tv-qr-login/' + encodeURIComponent(data.task_id))
                         .then(response => response.json().then(statusData => {
                             if (!response.ok) {
                                 throw new Error(statusData.error || '扫码状态检查失败');
@@ -693,15 +701,15 @@
                         }))
                         .then(statusData => {
                             if (statusData.status === 'scanned') {
-                                qrStatus.textContent = '已扫码，请在B站APP确认登录';
+                                qrStatus.textContent = '已扫码，请在B站APP确认授权';
                                 qrStatus.style.color = '#667eea';
                             } else if (statusData.status === 'expired') {
                                 clearInterval(checkInterval);
-                                qrStatus.textContent = '二维码已过期，请重新扫码登录';
+                                qrStatus.textContent = '二维码已过期，请重新扫码授权';
                                 qrStatus.style.color = '#e53e3e';
                             } else if (statusData.status === 'failed') {
                                 clearInterval(checkInterval);
-                                qrStatus.textContent = statusData.message || statusData.error || '扫码登录失败，请重试';
+                                qrStatus.textContent = statusData.message || statusData.error || '扫码授权失败，请重试';
                                 qrStatus.style.color = '#e53e3e';
                             } else if (statusData.status === 'unknown') {
                                 clearInterval(checkInterval);
@@ -710,7 +718,7 @@
                             } else if (statusData.status === 'succeeded') {
                                 clearInterval(checkInterval);
                                 const username = statusData.username || '用户';
-                                qrStatus.innerHTML = '✅ 登录成功！欢迎回来，<strong>' + username + '</strong>';
+                                qrStatus.innerHTML = '✅ 授权成功！欢迎回来，<strong>' + username + '</strong>';
                                 qrStatus.style.color = '#48bb78';
                                 
                                 // 显示成功提示框
@@ -718,7 +726,7 @@
                                 alertDiv.style.display = 'none';
                                 
                                 // 显示toast提示
-                                showToast(statusData.restart_warning || '✅ 登录成功！Cookie已更新，danmaku-worker 会自动重新加载');
+                                showToast(statusData.restart_warning || '✅ 授权成功！Cookie已更新，后续会自动维护，danmaku-worker 会自动重新加载');
                                 
                                 // 3秒后刷新页面
                                 setTimeout(() => {

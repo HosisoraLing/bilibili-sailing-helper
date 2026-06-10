@@ -1,11 +1,12 @@
 import json
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
 import requests
 
-from db.models import CookieMetadata, db, get_beijing_now
+from db.models import CookieMetadata, QrLoginTask, db, get_beijing_now
 from services.bilibili_qr_service import (
     cookie_header_from_map,
     validate_cookie_header,
@@ -14,6 +15,8 @@ from services.cookie_service import CookieService
 
 
 TV_REFRESH_URL = "https://passport.bilibili.com/x/passport-tv-login/token/refresh"
+TV_QR_BEGIN_URL = "https://passport.bilibili.com/x/passport-tv-login/qrcode/auth_code"
+TV_QR_POLL_URL = "https://passport.bilibili.com/x/passport-tv-login/qrcode/poll"
 DEFAULT_REFRESH_THRESHOLD_DAYS = 10
 
 
@@ -34,6 +37,18 @@ def _json_text(value: Any) -> str:
 
 def _client(http_client=None):
     return http_client or requests
+
+
+def _task_payload(task: QrLoginTask, **extra) -> dict[str, Any]:
+    payload = {
+        "task_id": task.task_id,
+        "status": task.status,
+        "qrcode_key": task.qrcode_key,
+        "qr_url": task.qr_url,
+        "message": task.error_message or "",
+    }
+    payload.update(extra)
+    return payload
 
 
 def _token_value(payload: dict[str, Any], name: str) -> str:
@@ -100,7 +115,14 @@ def _save_cookie_map(cookie_map: dict[str, str]) -> bool:
 def tv_auth_status_payload(metadata: CookieMetadata | None = None) -> dict[str, Any]:
     if metadata is None:
         metadata = CookieMetadata.query.filter_by(role="admin").first()
-    if metadata is None:
+    if (
+        metadata is None
+        or (
+            metadata.source != "tv_auth"
+            and not metadata.tv_access_token
+            and not metadata.tv_refresh_token
+        )
+    ):
         return {
             "status": "missing",
             "has_refresh_token": False,
@@ -179,6 +201,84 @@ def store_tv_auth_success(payload: dict[str, Any], http_client=None) -> dict[str
     metadata.cookie_version = int(metadata.cookie_version or 0) + 1
     db.session.commit()
     return {"tv_auth": tv_auth_status_payload(metadata)}
+
+
+def start_tv_qr_login(http_client=None, role: str = "admin") -> dict[str, Any]:
+    response = _client(http_client).get(TV_QR_BEGIN_URL, timeout=10)
+    payload = response.json()
+    if payload.get("code") != 0:
+        raise RuntimeError(payload.get("message") or "TV 二维码生成失败")
+
+    data = payload.get("data") or {}
+    qr_url = data.get("url") or data.get("qrcode_url") or ""
+    auth_code = data.get("auth_code") or data.get("qrcode_key") or ""
+    if not qr_url or not auth_code:
+        raise RuntimeError("TV 二维码响应缺少 url 或 auth_code")
+
+    task = QrLoginTask(
+        task_id=str(uuid.uuid4()),
+        role=f"{role}_tv",
+        status="pending",
+        qrcode_key=auth_code,
+        qr_url=qr_url,
+        payload_json=_json_text(payload),
+        expires_at=get_beijing_now() + timedelta(minutes=5),
+    )
+    db.session.add(task)
+    db.session.commit()
+    return _task_payload(task, tv_auth=tv_auth_status_payload())
+
+
+def poll_tv_qr_login(task_id: str, http_client=None) -> dict[str, Any]:
+    task = QrLoginTask.query.filter_by(task_id=task_id).first()
+    if task is None:
+        raise ValueError("TV 二维码任务不存在")
+
+    response = _client(http_client).get(
+        TV_QR_POLL_URL,
+        params={"auth_code": task.qrcode_key},
+        timeout=10,
+    )
+    payload = response.json()
+    if payload.get("code") != 0:
+        task.status = "failed"
+        task.error_message = payload.get("message") or "TV 二维码轮询失败"
+        task.payload_json = _json_text(payload)
+        db.session.commit()
+        return _task_payload(task, tv_auth=tv_auth_status_payload())
+
+    data = payload.get("data") or {}
+    status_code = data.get("code")
+    message = data.get("message") or ""
+    task.payload_json = _json_text(payload)
+
+    if status_code in {86039, 86101}:
+        task.status = "pending"
+        task.error_message = message
+        db.session.commit()
+        return _task_payload(task, tv_auth=tv_auth_status_payload())
+    if status_code == 86090:
+        task.status = "scanned"
+        task.error_message = message
+        db.session.commit()
+        return _task_payload(task, tv_auth=tv_auth_status_payload())
+    if status_code == 86038:
+        task.status = "expired"
+        task.error_message = message
+        db.session.commit()
+        return _task_payload(task, tv_auth=tv_auth_status_payload())
+    if status_code != 0:
+        task.status = "unknown"
+        task.error_message = message or "未知 TV 二维码状态"
+        db.session.commit()
+        return _task_payload(task, tv_auth=tv_auth_status_payload())
+
+    result = store_tv_auth_success(data, http_client=http_client)
+    task.status = "succeeded" if result["tv_auth"]["status"] == "valid" else "failed"
+    task.error_message = "" if task.status == "succeeded" else result["tv_auth"].get("last_error", "")
+    task.completed_at = get_beijing_now() if task.status == "succeeded" else None
+    db.session.commit()
+    return _task_payload(task, **result)
 
 
 def refresh_tv_auth(metadata: CookieMetadata, http_client=None) -> dict[str, Any]:

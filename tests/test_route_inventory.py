@@ -164,6 +164,16 @@ EXPECTED_ROUTE_INVENTORY = {
         "methods": ["POST"],
         "blueprint": "admin",
     },
+    "admin.admin_start_tv_qr_login": {
+        "rule": "/admin/cookie/start-tv-qr-login",
+        "methods": ["POST"],
+        "blueprint": "admin",
+    },
+    "admin.admin_poll_tv_qr_login": {
+        "rule": "/admin/cookie/tv-qr-login/<task_id>",
+        "methods": ["GET"],
+        "blueprint": "admin",
+    },
     "internal.internal_danmaku_auth_event": {
         "rule": "/internal/danmaku/auth-event",
         "methods": ["POST"],
@@ -271,6 +281,10 @@ def test_admin_url_generation_is_stable(app):
         assert (
             url_for("admin.admin_poll_qr_login", task_id="task-1")
             == "/admin/cookie/qr-login/task-1"
+        )
+        assert (
+            url_for("admin.admin_poll_tv_qr_login", task_id="task-1")
+            == "/admin/cookie/tv-qr-login/task-1"
         )
 
 

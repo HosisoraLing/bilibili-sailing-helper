@@ -37,6 +37,11 @@ from services.bilibili_qr_service import poll_qr_login, start_qr_login
 from services.bilibili_qr_service import get_qr_login_task, render_qr_png
 from services.cookie_service import CookieService
 from services.cookie_maintenance_service import CookieMaintenanceService
+from services.tv_auth_service import (
+    poll_tv_qr_login,
+    start_tv_qr_login,
+    tv_auth_status_payload,
+)
 from utils.request_utils import get_uid_from_request
 from utils.csv_utils import create_csv_response
 from utils.cache_utils import (

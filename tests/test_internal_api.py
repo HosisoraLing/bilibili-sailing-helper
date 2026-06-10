@@ -157,6 +157,7 @@ def test_admin_cookie_status_reports_runtime_health_and_next_action(client, app,
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["runtime"]["active_cookie_version"] == 3
+    assert payload["tv_auth"]["status"] == "missing"
     assert payload["runtime"]["worker_cookie_stale"] is True
     assert payload["runtime"]["next_action"] == "等待 danmaku-worker 重新加载 Cookie"
     assert payload["runtime"]["roles"]["danmaku-worker"]["heartbeat_age_seconds"] >= 20
