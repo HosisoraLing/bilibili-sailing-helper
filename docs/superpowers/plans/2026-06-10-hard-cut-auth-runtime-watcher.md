@@ -2,6 +2,7 @@
 change: hard-cut-auth-runtime-watcher
 design-doc: docs/superpowers/specs/2026-06-10-hard-cut-auth-runtime-watcher-design.md
 base-ref: 80b9c3b16cb08c0ccec876c1203b23e47500a952
+archived-with: 2026-06-10-hard-cut-auth-runtime-watcher
 ---
 
 # Hard-Cut Auth Runtime Watcher Implementation Plan

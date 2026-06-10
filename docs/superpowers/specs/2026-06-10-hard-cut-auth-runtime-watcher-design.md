@@ -2,6 +2,8 @@
 comet_change: hard-cut-auth-runtime-watcher
 role: technical-design
 canonical_spec: openspec
+archived-with: 2026-06-10-hard-cut-auth-runtime-watcher
+status: final
 ---
 
 # Hard-Cut Auth Runtime Watcher Design
