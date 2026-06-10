@@ -349,21 +349,30 @@ def restart_listener():
     Returns:
         bool: 是否成功重启
     """
-    global _flask_app, _socketio
+    global _flask_app, _socketio, _listener_thread
     
     try:
         logger.info("正在重启弹幕监听...")
         
         # 停止当前监听
         stop_danmaku_auth_listener()
-        time.sleep(2)
+        
+        # 等待线程真正停止
+        for i in range(10):
+            if _listener_thread is None or not _listener_thread.is_alive():
+                break
+            time.sleep(0.5)
+        
+        # 强制清理状态
+        _listener_thread = None
         
         # 重新启动
         if _flask_app:
             start_danmaku_auth_listener(_flask_app, _socketio)
             return True
-        
-        return False
+        else:
+            logger.error("重启失败: _flask_app 为 None")
+            return False
     except Exception as e:
         logger.error(f"重启弹幕监听失败: {e}", exc_info=True)
         return False

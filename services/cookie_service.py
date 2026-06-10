@@ -79,9 +79,12 @@ class CookieService:
             return None
     
     @staticmethod
-    def get_sessdata_by_qr() -> Tuple[Optional[str], Optional[str]]:
+    def get_sessdata_by_qr(qr_ready_event=None) -> Tuple[Optional[str], Optional[str]]:
         """
         通过二维码获取 SESSDATA
+        
+        Args:
+            qr_ready_event: 可选的threading.Event，二维码生成完成时会set()
         
         Returns:
             Tuple[str, str]: (SESSDATA, bili_jct)，失败返回(None, None)
@@ -147,6 +150,9 @@ class CookieService:
                                         f.write(img_bytes)
                                     
                                     logger.info(f"二维码已保存到: {QR_IMAGE_PATH} (尝试 {attempt + 1})")
+                                    # 通知二维码已就绪
+                                    if qr_ready_event:
+                                        qr_ready_event.set()
                                     break
                         else:
                             # 没有找到合适的图片，等待后重试
@@ -163,12 +169,19 @@ class CookieService:
                         if canvas:
                             canvas.screenshot(path=QR_IMAGE_PATH)
                             logger.info(f"canvas二维码已保存到: {QR_IMAGE_PATH}")
+                            if qr_ready_event:
+                                qr_ready_event.set()
                         else:
                             # 最后尝试截取整个页面
                             page.screenshot(path=QR_IMAGE_PATH)
                             logger.info(f"已截取整个页面到: {QR_IMAGE_PATH}")
+                            if qr_ready_event:
+                                qr_ready_event.set()
                 except Exception as e:
                     logger.warning(f"提取二维码失败: {e}")
+                    # 即使失败也通知，避免前端一直等待
+                    if qr_ready_event:
+                        qr_ready_event.set()
                     page.screenshot(path=QR_IMAGE_PATH)
                 
                 # 等待用户扫码登录（通过URL变化检测）

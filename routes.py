@@ -2040,10 +2040,14 @@ def admin_start_qr_login():
     if os.path.exists(QR_PATH):
         os.remove(QR_PATH)
     
+    # 使用事件来同步QR码生成状态
+    qr_ready = threading.Event()
+    qr_result = {'success': False, 'error': None}
+    
     def do_login():
         try:
             logger.info("开始扫码登录流程...")
-            sessdata, bili_jct = CookieService.get_sessdata_by_qr()
+            sessdata, bili_jct = CookieService.get_sessdata_by_qr(qr_ready_event=qr_ready)
             if sessdata:
                 logger.info(f"获取到SESSDATA，长度: {len(sessdata)}")
                 settings = CookieService.load_settings()
@@ -2060,11 +2064,16 @@ def admin_start_qr_login():
                 logger.warning("扫码登录未获取到SESSDATA")
         except Exception as e:
             logger.error(f"扫码登录失败: {e}", exc_info=True)
+            qr_result['error'] = str(e)
     
     thread = threading.Thread(target=do_login, daemon=True)
     thread.start()
     
-    return jsonify({'success': True, 'message': '扫码登录已启动，请查看二维码'})
+    # 等待二维码生成完成（最多15秒）
+    if qr_ready.wait(timeout=15):
+        return jsonify({'success': True, 'message': '二维码已生成，请扫码登录'})
+    else:
+        return jsonify({'error': '二维码生成超时'}), 504
 
 
 @admin_bp.route('/cookie/restart-listener', methods=['POST'])
