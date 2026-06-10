@@ -4,7 +4,14 @@ from sqlalchemy import text
 
 from services import internal_api_service
 from services.internal_api_service import is_runtime_status_stale
-from db.models import AuthSession, RuntimeStatus, SchedulerJob, db, get_beijing_now
+from db.models import (
+    AuthSession,
+    CookieMetadata,
+    RuntimeStatus,
+    SchedulerJob,
+    db,
+    get_beijing_now,
+)
 
 
 def test_internal_api_rejects_missing_secret(client):
@@ -86,6 +93,126 @@ def test_runtime_status_keeps_roles_separate(client, app):
     with app.app_context():
         statuses = RuntimeStatus.query.filter_by(instance_id="same-id").all()
         assert {status.role for status in statuses} == {"danmaku-worker", "scheduler"}
+
+
+def test_admin_cookie_status_reports_runtime_health_and_next_action(client, app, monkeypatch):
+    with app.app_context():
+        db.session.add(
+            CookieMetadata(
+                role="admin",
+                status="valid",
+                cookie_version=3,
+                masked_uid="12***34",
+                last_validated_at=get_beijing_now(),
+            )
+        )
+        db.session.add(
+            RuntimeStatus(
+                role="danmaku-worker",
+                instance_id="worker-1",
+                state="running",
+                retry_count=1,
+                cookie_version=2,
+                last_error="",
+                delivery_error="",
+                last_event_at=get_beijing_now() - timedelta(seconds=10),
+                heartbeat_at=get_beijing_now() - timedelta(seconds=20),
+            )
+        )
+        db.session.add(
+            RuntimeStatus(
+                role="scheduler",
+                instance_id="scheduler-1",
+                state="running",
+                heartbeat_at=get_beijing_now() - timedelta(seconds=5),
+            )
+        )
+        db.session.commit()
+
+    monkeypatch.setattr(
+        "services.cookie_service.CookieService.load_settings",
+        lambda: {
+            "bilibili": {
+                "SESSDATA": "sess",
+                "bili_jct": "csrf",
+                "buvid3": "buvid",
+            }
+        },
+    )
+    monkeypatch.setattr(
+        "services.cookie_service.CookieService.validate_cookie",
+        lambda _sessdata: (True, "tester"),
+    )
+
+    response = client.get("/admin/cookie/status")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["runtime"]["active_cookie_version"] == 3
+    assert payload["runtime"]["worker_cookie_stale"] is True
+    assert payload["runtime"]["next_action"] == "等待 danmaku-worker 重新加载 Cookie"
+    assert payload["runtime"]["roles"]["danmaku-worker"]["heartbeat_age_seconds"] >= 20
+    assert payload["runtime"]["roles"]["danmaku-worker"]["last_event_at"]
+    assert payload["listener"]["role"] == "danmaku-worker"
+
+
+def test_auth_status_reports_listener_unavailable_for_pending_session(client, app):
+    with app.app_context():
+        db.session.add(
+            AuthSession(
+                uid="listener-down",
+                code="vc-down",
+                status="pending",
+                expires_at=get_beijing_now() + timedelta(minutes=5),
+            )
+        )
+        db.session.add(
+            RuntimeStatus(
+                role="danmaku-worker",
+                instance_id="worker-down",
+                state="failed",
+                last_error="connect failed",
+                heartbeat_at=get_beijing_now() - timedelta(seconds=10),
+            )
+        )
+        db.session.commit()
+
+    response = client.get("/auth/status?uid=listener-down")
+
+    assert response.status_code == 503
+    payload = response.get_json()
+    assert payload["status"] == "listener_unavailable"
+    assert payload["next_action"] == "管理员需要检查 danmaku-worker"
+
+
+def test_auth_status_reports_retrying_for_reconnecting_worker(client, app):
+    with app.app_context():
+        db.session.add(
+            AuthSession(
+                uid="retrying-user",
+                code="vc-retry",
+                status="pending",
+                expires_at=get_beijing_now() + timedelta(minutes=5),
+            )
+        )
+        db.session.add(
+            RuntimeStatus(
+                role="danmaku-worker",
+                instance_id="worker-retry",
+                state="reconnecting",
+                retry_count=2,
+                last_error="temporary disconnect",
+                heartbeat_at=get_beijing_now() - timedelta(seconds=3),
+            )
+        )
+        db.session.commit()
+
+    response = client.get("/auth/status?uid=retrying-user")
+
+    assert response.status_code == 202
+    payload = response.get_json()
+    assert payload["status"] == "retrying"
+    assert payload["retry_count"] == 2
 
 
 def test_danmaku_webhook_marks_auth_success(client, app):
@@ -295,13 +422,15 @@ def test_internal_scheduler_job_records_request_and_result(client, app, monkeypa
         assert "synced" in job.result_json
 
 
-def test_internal_scheduler_job_executes_guard_sync_inside_web(client, app, monkeypatch):
+def test_internal_scheduler_job_accepts_guard_sync_without_running_network_task(
+    client,
+    app,
+    monkeypatch,
+):
     import app as app_module
 
-    calls = []
-
     def fake_fetch_and_save_guards():
-        calls.append("guard-sync")
+        raise AssertionError("guard-sync must not run inside the scheduler request")
 
     monkeypatch.setattr(app_module, "fetch_and_save_guards", fake_fetch_and_save_guards)
 
@@ -314,12 +443,38 @@ def test_internal_scheduler_job_executes_guard_sync_inside_web(client, app, monk
         },
     )
     assert job_response.status_code == 200
-    assert calls == ["guard-sync"]
+    payload = job_response.get_json()
+    assert payload["job_status"] == "requested"
+    assert payload["accepted"] is True
 
     with app.app_context():
         job = SchedulerJob.query.filter_by(job_id=job_response.get_json()["job_id"]).one()
-        assert job.status == "success"
-        assert "guard-sync completed" in job.result_json
+        assert job.status == "requested"
+
+
+def test_run_pending_scheduler_job_executes_guard_sync_inside_web(app, monkeypatch):
+    import app as app_module
+    from routes import run_pending_scheduler_job
+
+    calls = []
+
+    def fake_fetch_and_save_guards():
+        calls.append("guard-sync")
+
+    monkeypatch.setattr(app_module, "fetch_and_save_guards", fake_fetch_and_save_guards)
+
+    with app.app_context():
+        job = SchedulerJob(job_id="guard-job-1", job_type="guard-sync", status="requested")
+        db.session.add(job)
+        db.session.commit()
+
+        result = run_pending_scheduler_job(job)
+
+        assert result == {"executed": True, "job_status": "success"}
+        assert calls == ["guard-sync"]
+        refreshed = SchedulerJob.query.filter_by(job_id="guard-job-1").one()
+        assert refreshed.status == "success"
+        assert "guard-sync completed" in refreshed.result_json
 
 
 def test_internal_scheduler_result_can_record_by_job_name_without_job_id(client, app):

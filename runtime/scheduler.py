@@ -19,8 +19,16 @@ async def post_json(session, url: str, *, secret: str, payload: dict):
         timeout=15,
     )
     close = getattr(response, "release", None)
-    if callable(close):
-        close()
+    try:
+        if not 200 <= int(getattr(response, "status", 0)) < 300:
+            text = ""
+            read_text = getattr(response, "text", None)
+            if callable(read_text):
+                text = await read_text()
+            raise RuntimeError(f"HTTP {response.status} from {url}: {text}")
+    finally:
+        if callable(close):
+            close()
 
 
 async def request_scheduler_jobs(
@@ -62,6 +70,7 @@ async def run_scheduler_loop(
     interval_seconds: float,
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
 ):
+    failure_count = 0
     while True:
         try:
             await request_scheduler_jobs(
@@ -70,11 +79,32 @@ async def run_scheduler_loop(
                 secret=secret,
                 instance_id=instance_id,
             )
+            failure_count = 0
             await sleep(interval_seconds)
         except SchedulerStop:
             return
-        except Exception:
-            await sleep(min(interval_seconds, 60))
+        except Exception as exc:
+            failure_count += 1
+            try:
+                await post_json(
+                    session,
+                    f"{internal_url.rstrip('/')}/internal/runtime/heartbeat",
+                    secret=secret,
+                    payload={
+                        "role": "scheduler",
+                        "instance_id": instance_id,
+                        "state": "delivery_error",
+                        "last_error": str(exc),
+                        "delivery_error": str(exc),
+                        "retry_count": failure_count,
+                    },
+                )
+            except Exception:
+                pass
+            try:
+                await sleep(min(interval_seconds, 60))
+            except SchedulerStop:
+                return
 
 
 async def run():

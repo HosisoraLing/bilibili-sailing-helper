@@ -162,6 +162,9 @@ class FakeWebSocket:
             raise StopAsyncIteration
         return self.messages.pop(0)
 
+    async def close(self):
+        self.closed = True
+
 
 def test_danmaku_worker_runs_native_watcher_and_keeps_loop_until_stopped(monkeypatch):
     from services.bilibili_live.cookies import RuntimeCookie
@@ -209,15 +212,55 @@ def test_danmaku_worker_runs_native_watcher_and_keeps_loop_until_stopped(monkeyp
     ]
 
 
+def test_danmaku_worker_closes_connection_when_cookie_version_changes():
+    from services.bilibili_live.cookies import RuntimeCookie
+    from runtime import danmaku_worker
+
+    websocket = FakeWebSocket([])
+    websocket.closed = False
+    webhook = FakeWebhook()
+
+    async def websocket_factory(_url):
+        return websocket
+
+    async def fast_poll(_seconds):
+        return None
+
+    asyncio.run(
+        danmaku_worker.run_connection(
+            room_id=1,
+            cookie=RuntimeCookie(status="valid", version=1, cookie={"SESSDATA": "old"}),
+            cookie_provider=FakeCookieProvider(
+                RuntimeCookie(status="valid", version=2, cookie={"SESSDATA": "new"}),
+            ),
+            webhook=webhook,
+            api_factory=FakeApi,
+            websocket_factory=websocket_factory,
+            instance_id="worker-1",
+            cookie_poll_interval=0,
+            sleep=fast_poll,
+        )
+    )
+
+    assert websocket.closed is True
+    assert any(item["state"] == "cookie_reloading" for item in webhook.heartbeats)
+
+
 def test_scheduler_runs_recurring_jobs_until_stopped():
     from runtime import scheduler
 
     posts = []
 
+    class FakeResponse:
+        status = 200
+
+        def release(self):
+            pass
+
     class FakeSession:
         async def post(self, url, headers=None, json=None, timeout=None):
             posts.append((url, json))
-            return object()
+            return FakeResponse()
 
     async def stop_after_first_interval(_seconds):
         raise scheduler.SchedulerStop("test stop")
@@ -236,5 +279,80 @@ def test_scheduler_runs_recurring_jobs_until_stopped():
     assert any(url.endswith("/internal/runtime/heartbeat") for url, _ in posts)
     assert any(
         url.endswith("/internal/scheduler/job") and payload["job_name"] == "guard-sync"
+        for url, payload in posts
+    )
+
+
+def test_scheduler_raises_on_internal_api_error():
+    from runtime import scheduler
+
+    class FakeResponse:
+        status = 401
+
+        async def text(self):
+            return "unauthorized"
+
+        def release(self):
+            pass
+
+    class FakeSession:
+        async def post(self, url, headers=None, json=None, timeout=None):
+            return FakeResponse()
+
+    try:
+        asyncio.run(
+            scheduler.post_json(
+                FakeSession(),
+                "http://web:7111/internal/scheduler/job",
+                secret="bad",
+                payload={"job_name": "guard-sync"},
+            )
+        )
+    except RuntimeError as exc:
+        assert "HTTP 401" in str(exc)
+    else:
+        raise AssertionError("post_json should raise on non-2xx responses")
+
+
+def test_scheduler_reports_error_heartbeat_when_job_request_fails():
+    from runtime import scheduler
+
+    posts = []
+
+    class FakeResponse:
+        def __init__(self, status=200):
+            self.status = status
+
+        async def text(self):
+            return "failed"
+
+        def release(self):
+            pass
+
+    class FakeSession:
+        async def post(self, url, headers=None, json=None, timeout=None):
+            posts.append((url, json))
+            if url.endswith("/internal/scheduler/job"):
+                return FakeResponse(502)
+            return FakeResponse(200)
+
+    async def stop_after_error(_seconds):
+        raise scheduler.SchedulerStop("test stop")
+
+    asyncio.run(
+        scheduler.run_scheduler_loop(
+            session=FakeSession(),
+            internal_url="http://web:7111",
+            secret="secret",
+            instance_id="scheduler-1",
+            interval_seconds=60,
+            sleep=stop_after_error,
+        )
+    )
+
+    assert any(
+        url.endswith("/internal/runtime/heartbeat")
+        and payload["state"] == "delivery_error"
+        and "HTTP 502" in payload["last_error"]
         for url, payload in posts
     )

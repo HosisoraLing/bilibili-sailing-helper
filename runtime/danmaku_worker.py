@@ -32,10 +32,26 @@ def cookie_header(cookie: dict[str, str]) -> str:
 async def default_websocket_factory(url: str):
     session = aiohttp.ClientSession()
     try:
-        return await session.ws_connect(url, heartbeat=30)
+        websocket = await session.ws_connect(url, heartbeat=30)
+        setattr(websocket, "_bsh_session", session)
+        return websocket
     except Exception:
         await session.close()
         raise
+
+
+async def close_websocket(websocket):
+    close = getattr(websocket, "close", None)
+    if callable(close):
+        result = close()
+        if asyncio.iscoroutine(result):
+            await result
+    session = getattr(websocket, "_bsh_session", None)
+    session_close = getattr(session, "close", None)
+    if callable(session_close):
+        result = session_close()
+        if asyncio.iscoroutine(result):
+            await result
 
 
 async def handle_packet(raw: bytes, room_id: int, webhook: InternalWebhookClient):
@@ -52,14 +68,41 @@ async def handle_packet(raw: bytes, room_id: int, webhook: InternalWebhookClient
             await webhook.drain_once()
 
 
+async def monitor_cookie_version(
+    *,
+    cookie_provider: RuntimeCookieProvider,
+    current_version: int,
+    websocket,
+    webhook: InternalWebhookClient,
+    instance_id: str,
+    poll_interval: float,
+    sleep=asyncio.sleep,
+):
+    while True:
+        await sleep(poll_interval)
+        latest = await cookie_provider.fetch_latest()
+        if RuntimeCookieProvider.should_reload(current_version, latest):
+            await webhook.report_heartbeat(
+                role="danmaku-worker",
+                instance_id=instance_id,
+                state="cookie_reloading",
+                cookie_version=latest.version,
+            )
+            await close_websocket(websocket)
+            return
+
+
 async def run_connection(
     *,
     room_id: int,
     cookie,
+    cookie_provider: RuntimeCookieProvider,
     webhook: InternalWebhookClient,
     api_factory=BilibiliLiveApi,
     websocket_factory=default_websocket_factory,
     instance_id: str,
+    cookie_poll_interval: float = 30.0,
+    sleep=asyncio.sleep,
 ):
     async with aiohttp.ClientSession() as session:
         api = api_factory(session, cookie_header=cookie_header(cookie.cookie))
@@ -80,18 +123,46 @@ async def run_connection(
             last_error="",
         )
         heartbeat_task = asyncio.create_task(client.heartbeat_loop(websocket))
+        cookie_task = None
+        if cookie_poll_interval > 0:
+            cookie_task = asyncio.create_task(
+                monitor_cookie_version(
+                    cookie_provider=cookie_provider,
+                    current_version=cookie.version,
+                    websocket=websocket,
+                    webhook=webhook,
+                    instance_id=instance_id,
+                    poll_interval=cookie_poll_interval,
+                    sleep=sleep,
+                )
+            )
         try:
-            async for message in websocket:
-                raw = getattr(message, "data", message)
-                if isinstance(raw, bytes):
-                    await handle_packet(raw, room_id, webhook)
+            if cookie_poll_interval <= 0:
+                await monitor_cookie_version(
+                    cookie_provider=cookie_provider,
+                    current_version=cookie.version,
+                    websocket=websocket,
+                    webhook=webhook,
+                    instance_id=instance_id,
+                    poll_interval=cookie_poll_interval,
+                    sleep=sleep,
+                )
+            else:
+                async for message in websocket:
+                    raw = getattr(message, "data", message)
+                    if isinstance(raw, bytes):
+                        await handle_packet(raw, room_id, webhook)
         finally:
             client.stop()
-            heartbeat_task.cancel()
-            try:
-                await heartbeat_task
-            except asyncio.CancelledError:
-                pass
+            await close_websocket(websocket)
+            for task in (heartbeat_task, cookie_task):
+                if task is None:
+                    continue
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
 
 
 async def run_worker_loop(
@@ -123,6 +194,7 @@ async def run_worker_loop(
             await run_connection(
                 room_id=room_id,
                 cookie=latest,
+                cookie_provider=cookie_provider,
                 webhook=webhook,
                 api_factory=api_factory,
                 websocket_factory=websocket_factory,

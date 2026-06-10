@@ -2160,7 +2160,7 @@ def internal_danmaku_auth_event():
     return jsonify({'status': 'ok', **result})
 
 
-def _execute_internal_scheduler_job(job):
+def run_pending_scheduler_job(job):
     from app import fetch_and_save_guards
 
     started_at = get_beijing_now().isoformat()
@@ -2187,29 +2187,17 @@ def internal_scheduler_job():
     job = None
     try:
         job = create_scheduler_job(_internal_json_payload())
-        execution = _execute_internal_scheduler_job(job)
     except ConflictError as exc:
         return jsonify({'error': str(exc)}), 409
     except ValueError as exc:
         return jsonify({'error': str(exc)}), 400
-    except Exception as exc:
-        if job is not None:
-            record_scheduler_result({
-                'job_id': job.job_id,
-                'job_name': job.job_type,
-                'status': 'failed',
-                'finished_at': get_beijing_now().isoformat(),
-                'summary': '',
-                'error': str(exc),
-            })
-            return jsonify({'error': str(exc), 'job_id': job.job_id}), 502
-        return jsonify({'error': str(exc)}), 502
 
     return jsonify({
         'status': 'ok',
         'job_id': job.job_id,
         'job_name': job.job_type,
-        **execution,
+        'accepted': True,
+        'job_status': job.status,
     })
 
 
