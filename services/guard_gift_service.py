@@ -375,6 +375,9 @@ class GuardGiftService:
             db.session.commit()
         
         return new_records
+
+    @staticmethod
+    def get_available_months() -> List[str]:
         """
         获取所有有记录的月份列表
 
