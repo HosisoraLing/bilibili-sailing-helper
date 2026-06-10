@@ -223,7 +223,11 @@ def test_tv_auth_status_reports_rescan_next_action_when_refresh_token_missing(ap
 
 
 def test_start_tv_qr_login_persists_tv_task(app):
+    from services import tv_auth_service
     from services.tv_auth_service import start_tv_qr_login
+
+    monkeypatch_ts = 1700000000
+    tv_auth_service._tv_timestamp = lambda: monkeypatch_ts
 
     http = FakeHttpClient([
         FakeResponse({
@@ -243,6 +247,17 @@ def test_start_tv_qr_login_persists_tv_task(app):
         assert result["qrcode_key"] == "auth-code-1"
         assert result["tv_auth"]["status"] == "missing"
 
+    method, url, kwargs = http.calls[0]
+    assert method == "POST"
+    assert url == "http://passport.bilibili.com/x/passport-tv-login/qrcode/auth_code"
+    assert kwargs["data"]["appkey"] == "4409e2ce8ffd12b8"
+    assert kwargs["data"]["local_id"] == "0"
+    assert kwargs["data"]["ts"] == monkeypatch_ts
+    assert kwargs["data"]["sign"] == "ebb086c9f52ae7393619a89bdc320e45"
+    assert kwargs["headers"]["Content-Type"] == "application/x-www-form-urlencoded"
+    assert kwargs["headers"]["host"] == "passport.bilibili.com"
+    assert "Chrome/119.0.0.0" in kwargs["headers"]["User-Agent"]
+
 
 def test_poll_tv_qr_login_success_stores_tv_credentials(app, monkeypatch):
     from services import tv_auth_service
@@ -258,6 +273,7 @@ def test_poll_tv_qr_login_success_stores_tv_credentials(app, monkeypatch):
         "save_settings",
         staticmethod(lambda settings: True),
     )
+    monkeypatch.setattr(tv_auth_service, "_tv_timestamp", lambda: 1700000000)
 
     http = FakeHttpClient([
         FakeResponse({
@@ -279,6 +295,13 @@ def test_poll_tv_qr_login_success_stores_tv_credentials(app, monkeypatch):
         assert result["status"] == "succeeded"
         assert result["tv_auth"]["status"] == "valid"
         assert metadata.tv_refresh_token == "refresh-secret"
+
+    poll_call = http.calls[1]
+    assert poll_call[0] == "POST"
+    assert poll_call[1] == "http://passport.bilibili.com/x/passport-tv-login/qrcode/poll"
+    assert poll_call[2]["data"]["auth_code"] == "auth-code-success"
+    assert poll_call[2]["data"]["sign"] == "23228899aa9eaf635e2acde27b66c4e5"
+    assert poll_call[2]["headers"]["host"] == "passport.bilibili.com"
 
 
 def test_poll_tv_qr_login_maps_waiting_and_expired_states(app):
@@ -302,3 +325,39 @@ def test_poll_tv_qr_login_maps_waiting_and_expired_states(app):
         assert poll_tv_qr_login(task["task_id"], http_client=http)["status"] == "pending"
         assert poll_tv_qr_login(task["task_id"], http_client=http)["status"] == "scanned"
         assert poll_tv_qr_login(task["task_id"], http_client=http)["status"] == "expired"
+
+
+def test_refresh_tv_auth_uses_tv_oauth_refresh_protocol(app, monkeypatch):
+    from services import tv_auth_service
+    from services.tv_auth_service import refresh_tv_auth
+
+    monkeypatch.setattr(tv_auth_service, "_tv_timestamp", lambda: 1700000000)
+    http = FakeHttpClient([
+        FakeResponse({
+            "code": 0,
+            "data": {
+                "access_token": "new-access",
+                "refresh_token": "new-refresh",
+                "cookie_info": {"cookies": [{"name": "SESSDATA", "value": "new-sess"}]},
+            },
+        })
+    ])
+
+    with app.app_context():
+        metadata = CookieMetadata(
+            role="admin",
+            tv_access_token="old-access",
+            tv_refresh_token="old-refresh",
+        )
+        result = refresh_tv_auth(metadata, http_client=http)
+
+    assert result["access_token"] == "new-access"
+    method, url, kwargs = http.calls[0]
+    assert method == "POST"
+    assert url == "https://passport.bilibili.com/api/v2/oauth2/refresh_token"
+    assert kwargs["data"]["access_key"] == "old-access"
+    assert kwargs["data"]["refresh_token"] == "old-refresh"
+    assert kwargs["data"]["appkey"] == "4409e2ce8ffd12b8"
+    assert kwargs["data"]["ts"] == 1700000000
+    assert kwargs["data"]["sign"] == "5f6b0683b13f7ef073fab68db372f7a5"
+    assert kwargs["headers"]["host"] == "passport.bilibili.com"

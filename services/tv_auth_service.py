@@ -1,4 +1,6 @@
 import json
+import hashlib
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -14,10 +16,22 @@ from services.bilibili_qr_service import (
 from services.cookie_service import CookieService
 
 
-TV_REFRESH_URL = "https://passport.bilibili.com/x/passport-tv-login/token/refresh"
-TV_QR_BEGIN_URL = "https://passport.bilibili.com/x/passport-tv-login/qrcode/auth_code"
-TV_QR_POLL_URL = "https://passport.bilibili.com/x/passport-tv-login/qrcode/poll"
+TV_APPKEY = "4409e2ce8ffd12b8"
+TV_SECRET_KEY = "59b43e04ad6965f34319062b478f83dd"
+TV_REFRESH_URL = "https://passport.bilibili.com/api/v2/oauth2/refresh_token"
+TV_QR_BEGIN_URL = "http://passport.bilibili.com/x/passport-tv-login/qrcode/auth_code"
+TV_QR_POLL_URL = "http://passport.bilibili.com/x/passport-tv-login/qrcode/poll"
 DEFAULT_REFRESH_THRESHOLD_DAYS = 10
+TV_FORM_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/119.0.0.0 Safari/537.36"
+    ),
+    "Content-Type": "application/x-www-form-urlencoded",
+    "cookie": "",
+    "host": "passport.bilibili.com",
+}
 
 
 @dataclass
@@ -37,6 +51,47 @@ def _json_text(value: Any) -> str:
 
 def _client(http_client=None):
     return http_client or requests
+
+
+def _tv_timestamp() -> int:
+    return int(time.time())
+
+
+def _tv_sign(params: dict[str, Any]) -> str:
+    sign_base = "&".join(f"{key}={params[key]}" for key in params)
+    return hashlib.md5(f"{sign_base}{TV_SECRET_KEY}".encode()).hexdigest()
+
+
+def _tv_qr_begin_params() -> dict[str, Any]:
+    signed = {
+        "appkey": TV_APPKEY,
+        "local_id": "0",
+        "ts": _tv_timestamp(),
+    }
+    signed["sign"] = _tv_sign(signed)
+    return signed
+
+
+def _tv_qr_poll_params(auth_code: str) -> dict[str, Any]:
+    signed = {
+        "appkey": TV_APPKEY,
+        "auth_code": auth_code,
+        "local_id": "0",
+        "ts": _tv_timestamp(),
+    }
+    signed["sign"] = _tv_sign(signed)
+    return signed
+
+
+def _tv_refresh_params(access_key: str, refresh_token: str) -> dict[str, Any]:
+    signed = {
+        "access_key": access_key,
+        "appkey": TV_APPKEY,
+        "refresh_token": refresh_token,
+        "ts": _tv_timestamp(),
+    }
+    signed["sign"] = _tv_sign(signed)
+    return signed
 
 
 def _task_payload(task: QrLoginTask, **extra) -> dict[str, Any]:
@@ -204,7 +259,12 @@ def store_tv_auth_success(payload: dict[str, Any], http_client=None) -> dict[str
 
 
 def start_tv_qr_login(http_client=None, role: str = "admin") -> dict[str, Any]:
-    response = _client(http_client).get(TV_QR_BEGIN_URL, timeout=10)
+    response = _client(http_client).post(
+        TV_QR_BEGIN_URL,
+        data=_tv_qr_begin_params(),
+        headers=TV_FORM_HEADERS,
+        timeout=10,
+    )
     payload = response.json()
     if payload.get("code") != 0:
         raise RuntimeError(payload.get("message") or "TV 二维码生成失败")
@@ -234,22 +294,34 @@ def poll_tv_qr_login(task_id: str, http_client=None) -> dict[str, Any]:
     if task is None:
         raise ValueError("TV 二维码任务不存在")
 
-    response = _client(http_client).get(
+    response = _client(http_client).post(
         TV_QR_POLL_URL,
-        params={"auth_code": task.qrcode_key},
+        data=_tv_qr_poll_params(task.qrcode_key),
+        headers=TV_FORM_HEADERS,
         timeout=10,
     )
     payload = response.json()
-    if payload.get("code") != 0:
+
+    status_code = payload.get("code")
+    data = payload.get("data") or {}
+    if status_code == 0 and "code" in data:
+        status_code = data.get("code")
+
+    if status_code == 0 and not data:
+        task.status = "failed"
+        task.error_message = "TV 二维码轮询响应缺少授权数据"
+        task.payload_json = _json_text(payload)
+        db.session.commit()
+        return _task_payload(task, tv_auth=tv_auth_status_payload())
+
+    if payload.get("code") not in {0, 86038, 86039, 86090, 86101}:
         task.status = "failed"
         task.error_message = payload.get("message") or "TV 二维码轮询失败"
         task.payload_json = _json_text(payload)
         db.session.commit()
         return _task_payload(task, tv_auth=tv_auth_status_payload())
 
-    data = payload.get("data") or {}
-    status_code = data.get("code")
-    message = data.get("message") or ""
+    message = data.get("message") or payload.get("message") or ""
     task.payload_json = _json_text(payload)
 
     if status_code in {86039, 86101}:
@@ -267,7 +339,7 @@ def poll_tv_qr_login(task_id: str, http_client=None) -> dict[str, Any]:
         task.error_message = message
         db.session.commit()
         return _task_payload(task, tv_auth=tv_auth_status_payload())
-    if status_code != 0:
+    if status_code not in {0, None}:
         task.status = "unknown"
         task.error_message = message or "未知 TV 二维码状态"
         db.session.commit()
@@ -286,10 +358,8 @@ def refresh_tv_auth(metadata: CookieMetadata, http_client=None) -> dict[str, Any
         raise RuntimeError("请重新扫码授权 B 站账号")
     response = _client(http_client).post(
         TV_REFRESH_URL,
-        data={
-            "access_token": metadata.tv_access_token,
-            "refresh_token": metadata.tv_refresh_token,
-        },
+        data=_tv_refresh_params(metadata.tv_access_token, metadata.tv_refresh_token),
+        headers=TV_FORM_HEADERS,
         timeout=10,
     )
     payload = response.json()

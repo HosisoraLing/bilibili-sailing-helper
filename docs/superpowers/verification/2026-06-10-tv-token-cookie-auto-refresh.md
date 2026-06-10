@@ -22,7 +22,8 @@ openspec validate tv-token-cookie-auto-refresh
 
 - OpenSpec validation: `Change 'tv-token-cookie-auto-refresh' is valid`.
 - Python compile check: passed for `app.py`, `routes.py`, `db`, `services`, `runtime`, `tests`, `get_cookies.py`, and `route_handlers`.
-- Focused pytest suite: `88 passed`.
+- Focused pytest suite: `89 passed`.
+- Live TV QR begin protocol smoke check: Bilibili returned JSON `code: 0` for signed TV form request, and the local Docker route returned a 530x530 PNG QR image.
 - Docker Compose config: generated successfully at `/tmp/bsh-tv-compose.yml`.
 - Sensitive-value search: only test fake values and expected protocol/documentation references were found; no real credentials were detected.
 
