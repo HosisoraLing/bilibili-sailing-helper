@@ -264,6 +264,7 @@ def run_migrations():
         runtime_status_columns = {
             'delivery_error': 'VARCHAR(512)',
             'retry_count': 'INTEGER DEFAULT 0',
+            'cookie_version': 'INTEGER DEFAULT 0',
         }
         missing_columns = [
             (name, ddl)
@@ -277,6 +278,16 @@ def run_migrations():
                     conn.execute(text(f"ALTER TABLE runtime_statuses ADD COLUMN {name} {ddl}"))
                 conn.commit()
                 logger.info("Migration completed: runtime_statuses delivery columns added")
+
+    # Check cookie_metadata table for runtime Cookie version column
+    if 'cookie_metadata' in inspector.get_table_names():
+        columns = {col['name']: col for col in inspector.get_columns('cookie_metadata')}
+        if 'cookie_version' not in columns:
+            logger.info("Migrating: Adding cookie_metadata.cookie_version...")
+            with db.engine.connect() as conn:
+                conn.execute(text("ALTER TABLE cookie_metadata ADD COLUMN cookie_version INTEGER DEFAULT 0"))
+                conn.commit()
+                logger.info("Migration completed: cookie_metadata.cookie_version added")
 
 
 # =========================

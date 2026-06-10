@@ -67,6 +67,8 @@ def record_runtime_heartbeat(payload: dict[str, Any]) -> RuntimeStatus:
         status.delivery_error = payload.get("delivery_error") or ""
     if "retry_count" in payload:
         status.retry_count = int(payload.get("retry_count") or 0)
+    if "cookie_version" in payload:
+        status.cookie_version = int(payload.get("cookie_version") or 0)
     if "last_event_at" in payload:
         status.last_event_at = parse_datetime(payload.get("last_event_at"))
     status.heartbeat_at = get_beijing_now()

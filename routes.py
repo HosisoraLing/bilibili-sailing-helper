@@ -32,6 +32,7 @@ from services.internal_api_service import (
     record_scheduler_result,
     verify_internal_secret,
 )
+from services.runtime_cookie_service import RuntimeCookieService
 from services.bilibili_qr_service import poll_qr_login, start_qr_login
 from services.bilibili_qr_service import get_qr_login_task, render_qr_png
 from utils.request_utils import get_uid_from_request
@@ -2136,6 +2137,14 @@ def internal_runtime_heartbeat():
         'instance_id': status.instance_id,
         'state': status.state,
     })
+
+
+@internal_bp.route('/runtime/cookie', methods=['GET'])
+def internal_runtime_cookie():
+    if not _internal_authorized():
+        return _internal_unauthorized()
+
+    return jsonify(RuntimeCookieService.get_runtime_cookie_payload())
 
 
 @internal_bp.route('/danmaku/auth-event', methods=['POST'])

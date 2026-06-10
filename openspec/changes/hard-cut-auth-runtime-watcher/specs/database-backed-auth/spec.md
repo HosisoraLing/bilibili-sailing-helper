@@ -32,6 +32,10 @@ The system SHALL store runtime role health in the database with timestamps, last
 - **WHEN** the danmaku worker loses its WebSocket and starts reconnecting
 - **THEN** the worker reports reconnecting through internal API and the web admin status shows `danmaku-worker` as reconnecting with last error time and retry count
 
+#### Scenario: Worker reports active Cookie version
+- **WHEN** the danmaku worker sends a heartbeat after connecting or reloading Cookie
+- **THEN** web/app persists the worker's active Cookie version or update timestamp with runtime health so admin status can detect stale worker Cookie state
+
 #### Scenario: Worker stops updating heartbeat
 - **WHEN** a role heartbeat is stale beyond the configured threshold
 - **THEN** the admin status marks that role unhealthy and explains that the role should be restarted

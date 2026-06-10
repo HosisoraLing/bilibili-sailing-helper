@@ -52,8 +52,11 @@ Use a small set of internal endpoints instead of a generic RPC system:
   - Payload: `uid`, `nickname`, `content`, `room_id`, `event_ts`, optional `avatar_url`, optional raw command metadata.
   - Behavior: authenticate secret, reject invalid payloads, idempotently process matching auth sessions.
 - `POST /internal/runtime/heartbeat`
-  - Payload: `role`, `instance_id`, `state`, `last_event_at`, `last_error`, `delivery_error`, `retry_count`.
-  - Behavior: upsert role health.
+  - Payload: `role`, `instance_id`, `state`, `last_event_at`, `last_error`, `delivery_error`, `retry_count`, optional `cookie_version`.
+  - Behavior: upsert role health and persist the worker's active Cookie version when present.
+- `GET /internal/runtime/cookie`
+  - Behavior: authenticate secret and return the currently validated runtime Cookie state for `danmaku-worker`: `status`, `version`, `updated_at`, integrity metadata, and the Cookie fields required for Bilibili API/WebSocket authentication.
+  - Alternative: if Cookie bytes must not cross HTTP, this endpoint returns only `status`, `version`, and `updated_at`, while the worker reads the Cookie from an explicitly shared config volume after detecting a newer version.
 - `POST /internal/scheduler/job`
   - Payload: `job_name`, `requested_at`, optional parameters.
   - Behavior: web/app runs or records the job through existing service layer.
@@ -79,13 +82,18 @@ Implementation reference:
 
 Store QR task state in DB so admin refreshes and web restarts do not lose status. Do not replace the currently usable Cookie until the new Cookie validates successfully.
 
+Successful validation must also advance a durable Cookie version. A timestamp such as `CookieMetadata.updated_at` is acceptable if tests can reliably compare it, but an explicit monotonically increasing `cookie_version` is preferred because it makes worker reload decisions and admin stale-state display unambiguous.
+
+The old single-process compatibility path may restart the legacy listener after QR success, but the split-runtime contract must not depend on `web` calling an in-process listener restart. The durable flow is: QR success updates validated Cookie and version, `danmaku-worker` observes the newer version through the internal runtime Cookie contract, then reconnects its Bilibili WebSocket with the new Cookie.
+
 ## Native Watcher
 
 Build a minimal in-repo watcher with these layers:
 
 - Bilibili API client: room/server data, `getDanmuInfo`, WBI only if required.
 - Protocol codec: packet pack/unpack, heartbeat, zlib/brotli expansion.
-- Live client: WebSocket connect, auth payload, heartbeat loop, reconnect/backoff.
+- Cookie provider: internal runtime Cookie status/access client, active version tracking, and reload signal.
+- Live client: WebSocket connect, auth payload, heartbeat loop, reconnect/backoff, and reconnect-on-Cookie-version-change.
 - Event normalizer: stable auth event shape from raw `DANMU_MSG`.
 - Internal webhook client: bounded local queue, retry/backoff, delivery failure status.
 
@@ -97,6 +105,8 @@ Implementation reference:
 - `/Users/nowanti/Play/Projects/v-nexus-core-monorepo/services/watcher/libs/bilibili/protocol.py`
 
 The watcher should not decide whether a user is authenticated. It only reports candidate events. The web/app auth service owns matching, idempotency, expiration, and DB writes.
+
+The watcher should decide only whether it has a usable Bilibili Cookie for its own connection. When no usable Cookie is available, it reports a Cookie-unavailable health state instead of silently running unauthenticated. When a newer validated Cookie appears while it is connected, it closes the old WebSocket and reconnects with the new Cookie without requiring a web restart.
 
 ## Database Ownership
 
@@ -124,6 +134,8 @@ Admin status should show role-level health:
 - last error
 - delivery error
 - retry count
+- active Cookie version
+- whether the worker Cookie is stale compared with the latest validated Cookie
 - suggested next action
 
 User auth polling should distinguish:
@@ -147,6 +159,7 @@ Add tests before implementation where the current code allows it, then expand te
 - QR login: generated, scanned, expired, success, invalid Cookie, unknown Bilibili status.
 - Protocol fixtures: heartbeat packet, compressed message batch, normalized `DANMU_MSG`.
 - Worker retry: web unavailable, bounded retry, delivery error visible.
+- Cookie reload: QR success advances Cookie version, worker heartbeat reports active version, stale worker state is visible, and worker reconnects when a newer Cookie appears.
 - Scheduler: job trigger/result through internal API, no direct production DB writes.
 - Runtime checks: Compose roles, canonical port, no Playwright, no `blivedm`, no runtime `git pull`.
 

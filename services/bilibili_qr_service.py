@@ -142,6 +142,7 @@ def validate_cookie_header(cookie_header: str, http_client=None) -> dict[str, An
 
 def _upsert_cookie_metadata(validation: dict[str, Any], source: str, error: str = ""):
     metadata = CookieMetadata.query.filter_by(role="admin").first()
+    is_new = metadata is None
     if metadata is None:
         metadata = CookieMetadata(role="admin")
         db.session.add(metadata)
@@ -151,6 +152,10 @@ def _upsert_cookie_metadata(validation: dict[str, Any], source: str, error: str 
     metadata.payload_json = _json_text(validation.get("payload") or {})
     metadata.last_validated_at = get_beijing_now()
     metadata.last_error = error or ("" if validation.get("valid") else validation.get("message") or "")
+    if validation.get("valid"):
+        metadata.cookie_version = int(metadata.cookie_version or 0) + 1
+    elif is_new and metadata.cookie_version is None:
+        metadata.cookie_version = 0
     return metadata
 
 

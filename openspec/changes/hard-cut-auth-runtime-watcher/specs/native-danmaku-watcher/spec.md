@@ -5,7 +5,22 @@ The system SHALL connect to Bilibili live danmaku using an in-repo native watche
 
 #### Scenario: Watcher authenticates to live WebSocket
 - **WHEN** the danmaku worker starts for a configured live room
-- **THEN** it fetches danmaku server info, opens a WebSocket, sends the auth payload, and starts heartbeat
+- **THEN** it loads the current validated Cookie, fetches danmaku server info, opens a WebSocket, sends the auth payload, and starts heartbeat
+
+### Requirement: Runtime Cookie reload is explicit
+The system SHALL let the danmaku worker detect validated Cookie changes and reconnect without requiring the web process to restart the listener in-process.
+
+#### Scenario: Worker starts with available Cookie
+- **WHEN** the danmaku worker starts and web/app has a valid Cookie
+- **THEN** the worker uses that Cookie for Bilibili API and WebSocket authentication and reports the Cookie version in heartbeat
+
+#### Scenario: Worker detects newer Cookie
+- **WHEN** web/app exposes a newer usable Cookie version than the worker is currently using
+- **THEN** the worker closes the old WebSocket, reconnects with the new Cookie, and reports the new version and reconnect status through internal API
+
+#### Scenario: Cookie is missing or invalid
+- **WHEN** no usable Cookie is available to the worker
+- **THEN** the worker reports `cookie_unavailable` or equivalent health state and admin status tells the admin to scan or repair Cookie before expecting authenticated danmaku monitoring
 
 ### Requirement: Protocol packets are decoded
 The system SHALL decode Bilibili live packets including heartbeat replies and compressed message batches.

@@ -23,12 +23,14 @@ base-ref: 80b9c3b16cb08c0ccec876c1203b23e47500a952
 - Create `tests/test_internal_api.py`: internal secret auth, danmaku webhook, runtime heartbeat, scheduler job endpoints.
 - Create `tests/test_qr_login.py`: mocked Passport QR flow and Cookie validation.
 - Create `tests/test_watcher_protocol.py`: Bilibili packet codec and event normalization fixtures.
+- Create `tests/test_cookie_runtime_contract.py`: internal Cookie status/access, Cookie version heartbeat, stale worker detection, and reload decisions.
 - Create `tests/test_runtime_config.py`: dependency, Docker, Compose, and production-runtime guard checks.
 - Modify `db/models.py`: add QR login, Cookie metadata, auth attempt, runtime status, scheduler job models.
 - Create `services/repositories.py`: short DB write helpers used only by web/app service layer.
 - Modify `services/auth_service.py`: DB-backed auth codes and atomic success transition.
 - Create `services/internal_api_service.py`: shared-secret validation and internal endpoint handlers.
 - Create `services/bilibili_qr_service.py`: HTTP Passport QR begin/poll and Cookie integrity validation.
+- Create `services/runtime_cookie_service.py`: web-owned runtime Cookie state/version reader for internal API and worker reload decisions.
 - Create `services/bilibili_live/`: native watcher package with `api.py`, `protocol.py`, `client.py`, `events.py`, `webhook.py`.
 - Create `runtime/web.py`, `runtime/danmaku_worker.py`, `runtime/scheduler.py`: explicit role entrypoints.
 - Modify `routes.py`: admin QR/status routes and internal routes.
@@ -296,7 +298,7 @@ https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=...
 https://api.bilibili.com/x/web-interface/nav
 ```
 
-Persist QR task state in DB and do not replace the current Cookie until validation succeeds.
+Persist QR task state in DB and do not replace the current Cookie until validation succeeds. Successful validation must also advance a durable Cookie version, preferably an explicit monotonic field on Cookie metadata rather than relying only on wall-clock comparison.
 
 - [x] **Step 4: Replace admin QR routes**
 
@@ -328,52 +330,70 @@ git commit -m "feat: replace qr login with passport api"
 **Files:**
 - Create: `services/bilibili_live/__init__.py`
 - Create: `services/bilibili_live/api.py`
+- Create: `services/bilibili_live/cookies.py`
 - Create: `services/bilibili_live/protocol.py`
 - Create: `services/bilibili_live/events.py`
 - Create: `services/bilibili_live/webhook.py`
 - Create: `tests/test_watcher_protocol.py`
+- Create: `tests/test_cookie_runtime_contract.py`
+- Modify: `services/internal_api_service.py`
+- Modify: `routes.py`
+- Modify: `db/models.py`
 - Modify: `requirements.txt`
 
-- [ ] **Step 1: Write protocol and event tests**
+- [x] **Step 1: Write protocol and event tests**
 
 Create tests for packet header parsing, heartbeat packet creation, compressed payload expansion, and `DANMU_MSG` normalization into `uid`, `nickname`, `content`, and `room_id`.
 
-- [ ] **Step 2: Run protocol tests and verify failure**
+- [x] **Step 2: Write Cookie runtime contract tests**
+
+Create tests for:
+- QR success or Cookie save advances a durable Cookie version.
+- `GET /internal/runtime/cookie` rejects missing/wrong secret and returns validated Cookie state for valid secret.
+- runtime heartbeat persists `cookie_version`.
+- admin/runtime status can detect latest Cookie version newer than worker-reported version.
+- worker Cookie provider decides reload when the internal Cookie version changes.
+
+- [x] **Step 3: Run protocol and Cookie contract tests and verify failure**
 
 Run:
 
 ```bash
-pytest tests/test_watcher_protocol.py -q
+pytest tests/test_watcher_protocol.py tests/test_cookie_runtime_contract.py -q
 ```
 
-Expected: fail because live modules do not exist.
+Expected: fail because live modules and runtime Cookie contract do not exist.
 
-- [ ] **Step 3: Implement protocol codec**
+- [x] **Step 4: Implement runtime Cookie contract**
+
+Add the web-owned Cookie runtime endpoint/service and persistence fields needed for explicit version tracking. Prefer a `cookie_version` integer on Cookie metadata; if using `updated_at`, make tests robust and document that it is the version token. Keep Cookie writes owned by web/app. Do not let `danmaku-worker` write Cookie state or business DB records.
+
+- [x] **Step 5: Implement protocol codec**
 
 Implement packet constants, `pack_heartbeat()`, `pack_auth(payload)`, and `unpack_packets(raw)` with zlib and brotli support. Keep it independent from Flask and DB.
 
-- [ ] **Step 4: Implement event normalizer**
+- [x] **Step 6: Implement event normalizer**
 
 Implement `normalize_danmaku_event(raw_event, room_id)` and return `None` for unsupported events or malformed payloads.
 
-- [ ] **Step 5: Implement internal webhook client**
+- [x] **Step 7: Implement internal webhook client and Cookie provider**
 
-Implement an async webhook client with bounded queue, retry count, timeout, exponential backoff, and delivery error reporting payloads for `/internal/runtime/heartbeat`.
+Implement an async webhook client with bounded queue, retry count, timeout, exponential backoff, and delivery error reporting payloads for `/internal/runtime/heartbeat`. Include `cookie_version` in heartbeat when the worker has loaded a Cookie. Implement a Cookie provider that polls or receives the internal runtime Cookie version and signals reconnect when it changes.
 
-- [ ] **Step 6: Run watcher tests**
+- [x] **Step 8: Run watcher and Cookie contract tests**
 
 Run:
 
 ```bash
-pytest tests/test_watcher_protocol.py -q
+pytest tests/test_watcher_protocol.py tests/test_cookie_runtime_contract.py -q
 ```
 
 Expected: pass.
 
-- [ ] **Step 7: Commit Task 4**
+- [x] **Step 9: Commit Task 4**
 
 ```bash
-git add services/bilibili_live tests/test_watcher_protocol.py requirements.txt
+git add services/bilibili_live services/internal_api_service.py routes.py db/models.py tests/test_watcher_protocol.py tests/test_cookie_runtime_contract.py requirements.txt
 git commit -m "feat: add native bilibili watcher protocol"
 ```
 
@@ -415,7 +435,7 @@ python -m runtime.danmaku_worker
 python -m runtime.scheduler
 ```
 
-`runtime.web` starts Flask/SocketIO. `runtime.danmaku_worker` starts the native watcher and posts internal events. `runtime.scheduler` triggers internal job endpoints on schedule.
+`runtime.web` starts Flask/SocketIO. `runtime.danmaku_worker` starts the native watcher, loads the validated Cookie through the runtime Cookie contract, reports active `cookie_version`, reconnects on version change, and posts internal events. `runtime.scheduler` triggers internal job endpoints on schedule.
 
 - [ ] **Step 4: Remove web ownership of background loops**
 
@@ -423,7 +443,7 @@ Update `app.py` so web startup no longer owns danmaku WebSocket, Cookie refresh 
 
 - [ ] **Step 5: Update Docker and Compose**
 
-Use one canonical internal web port. Define `web`, `danmaku-worker`, and `scheduler` services. Pass `INTERNAL_API_URL` and `INTERNAL_API_SECRET` to worker/scheduler. Remove Playwright browser install and `blivedm` git dependency.
+Use one canonical internal web port. Define `web`, `danmaku-worker`, and `scheduler` services. Pass `INTERNAL_API_URL` and `INTERNAL_API_SECRET` to worker/scheduler. If Cookie bytes are read from a shared config volume rather than internal HTTP, mount that volume read-only in `danmaku-worker` and keep version/status checks authenticated through web. Remove Playwright browser install and `blivedm` git dependency.
 
 - [ ] **Step 6: Run runtime checks**
 
@@ -455,7 +475,7 @@ git commit -m "feat: split runtime roles"
 
 - [ ] **Step 1: Update admin health response**
 
-Admin status must show role, state, heartbeat age, last event time, last error, delivery error, retry count, and next action.
+Admin status must show role, state, heartbeat age, last event time, last error, delivery error, retry count, active Cookie version, whether worker Cookie is stale, and next action.
 
 - [ ] **Step 2: Update auth polling response**
 
@@ -463,7 +483,7 @@ User-facing auth status must distinguish waiting, success, expired, listener una
 
 - [ ] **Step 3: Update docs**
 
-Document the role split, internal secret, how to restart only `danmaku-worker` or `scheduler`, and SQLite backup before migration.
+Document the role split, internal secret, Cookie reload flow after admin QR login, how to restart only `danmaku-worker` or `scheduler`, and SQLite backup before migration.
 
 - [ ] **Step 4: Run full verification**
 
@@ -483,6 +503,7 @@ Expected:
 - compose config renders
 - no production Playwright or `blivedm` path remains
 - worker/scheduler runtime code does not directly commit business DB state
+- QR Cookie update causes worker reload/reconnect without web in-process listener restart
 
 - [ ] **Step 5: Update OpenSpec tasks**
 

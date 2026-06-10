@@ -16,11 +16,15 @@ The system SHALL validate completed Bilibili Cookies before marking them usable.
 
 #### Scenario: Login succeeds with valid Cookie
 - **WHEN** QR polling returns a successful login Cookie
-- **THEN** the system validates it with Bilibili account navigation API and records account metadata and integrity status
+- **THEN** the system validates it with Bilibili account navigation API and records account metadata, integrity status, and a monotonically changing Cookie version or update timestamp
 
 #### Scenario: Login returns invalid Cookie
 - **WHEN** Cookie validation fails
 - **THEN** the system stores a failed status with an actionable admin message and MUST NOT replace the currently usable Cookie
+
+#### Scenario: Login updates Cookie while worker is running
+- **WHEN** a valid QR login replaces the usable Cookie
+- **THEN** the system exposes the new Cookie version through the internal runtime contract so the danmaku worker can reload without requiring a web process restart
 
 ### Requirement: Admin-facing QR feedback
 The system SHALL show QR login status in language that tells the admin what to do next.
