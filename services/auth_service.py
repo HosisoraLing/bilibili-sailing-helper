@@ -83,11 +83,11 @@ def create_auth_session(uid: str) -> Tuple[AuthSession, str]:
 
 def get_active_auth_session(uid: str) -> Optional[AuthSession]:
     """
-    获取最新的一条鉴权会话（仅返回pending状态）
+    获取最新的一条鉴权会话（返回pending或success状态）
     """
-    return AuthSession.query.filter_by(
-        uid=str(uid),
-        status='pending'
+    return AuthSession.query.filter(
+        AuthSession.uid == str(uid),
+        AuthSession.status.in_(['pending', 'success'])
     ).order_by(AuthSession.created_at.desc()).first()
 
 
