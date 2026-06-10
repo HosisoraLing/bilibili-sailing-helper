@@ -672,7 +672,12 @@
                     checkCount++;
                     
                     fetch('/admin/cookie/qr-login/' + encodeURIComponent(data.task_id))
-                        .then(response => response.json())
+                        .then(response => response.json().then(statusData => {
+                            if (!response.ok) {
+                                throw new Error(statusData.error || '扫码状态检查失败');
+                            }
+                            return statusData;
+                        }))
                         .then(statusData => {
                             if (statusData.status === 'scanned') {
                                 qrStatus.textContent = '已扫码，请在B站APP确认登录';
@@ -684,6 +689,10 @@
                             } else if (statusData.status === 'failed') {
                                 clearInterval(checkInterval);
                                 qrStatus.textContent = statusData.message || statusData.error || '扫码登录失败，请重试';
+                                qrStatus.style.color = '#e53e3e';
+                            } else if (statusData.status === 'unknown') {
+                                clearInterval(checkInterval);
+                                qrStatus.textContent = statusData.message || 'B站返回了未知扫码状态，请重新开始';
                                 qrStatus.style.color = '#e53e3e';
                             } else if (statusData.status === 'succeeded') {
                                 clearInterval(checkInterval);
@@ -703,6 +712,11 @@
                                     location.reload();
                                 }, 3000);
                             }
+                        })
+                        .catch(error => {
+                            clearInterval(checkInterval);
+                            qrStatus.textContent = '扫码状态检查失败，请重新开始: ' + error.message;
+                            qrStatus.style.color = '#e53e3e';
                         });
                     
                     // 5分钟后停止

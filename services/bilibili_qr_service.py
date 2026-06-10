@@ -205,7 +205,7 @@ def poll_qr_login(task_id: str, http_client=None) -> dict[str, Any]:
         db.session.commit()
         return _task_payload(task)
     if status_code != 0:
-        task.status = "failed"
+        task.status = "unknown"
         task.error_message = message or "未知二维码状态"
         db.session.commit()
         return _task_payload(task)
@@ -213,20 +213,26 @@ def poll_qr_login(task_id: str, http_client=None) -> dict[str, Any]:
     cookie_map = _response_cookie_map(response)
     cookie_header = cookie_header_from_map(cookie_map)
     validation = validate_cookie_header(cookie_header, http_client=http_client)
-    _upsert_cookie_metadata(validation, source="qr_login")
 
     if not validation["valid"]:
+        _upsert_cookie_metadata(validation, source="qr_login")
         task.status = "failed"
         task.error_message = validation["message"]
         db.session.commit()
         return _task_payload(task, username="")
 
     if not _save_validated_cookie(validation["cookie_map"]):
+        _upsert_cookie_metadata(
+            {**validation, "valid": False, "status": "invalid"},
+            source="qr_login",
+            error="Cookie 保存失败",
+        )
         task.status = "failed"
         task.error_message = "Cookie 保存失败"
         db.session.commit()
         return _task_payload(task, username=validation.get("username") or "")
 
+    _upsert_cookie_metadata(validation, source="qr_login")
     task.status = "succeeded"
     task.error_message = ""
     task.completed_at = get_beijing_now()

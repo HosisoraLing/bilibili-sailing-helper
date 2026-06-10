@@ -157,7 +157,7 @@ def test_poll_qr_login_does_not_replace_cookie_when_validation_fails(app, monkey
         assert metadata.status == "invalid"
 
 
-def test_poll_qr_login_unknown_status_is_failed(app):
+def test_poll_qr_login_unknown_status_is_preserved(app):
     from services.bilibili_qr_service import poll_qr_login, start_qr_login
 
     http = FakeHttpClient([
@@ -175,8 +175,47 @@ def test_poll_qr_login_unknown_status_is_failed(app):
         task = start_qr_login(http_client=http)
         result = poll_qr_login(task["task_id"], http_client=http)
 
-        assert result["status"] == "failed"
+        assert result["status"] == "unknown"
         assert result["message"] == "new state"
+
+
+def test_poll_qr_login_does_not_mark_metadata_valid_when_save_fails(app, monkeypatch):
+    from services import bilibili_qr_service
+    from services.bilibili_qr_service import poll_qr_login, start_qr_login
+
+    monkeypatch.setattr(
+        bilibili_qr_service.CookieService,
+        "load_settings",
+        staticmethod(lambda: {"bilibili": {"SESSDATA": "old", "bili_jct": "old-csrf"}}),
+    )
+    monkeypatch.setattr(
+        bilibili_qr_service.CookieService,
+        "save_settings",
+        staticmethod(lambda settings: False),
+    )
+
+    http = FakeHttpClient([
+        FakeResponse({
+            "code": 0,
+            "data": {
+                "url": "https://passport.bilibili.com/qrcode/test",
+                "qrcode_key": "key-save-fails",
+            },
+        }),
+        FakeResponse(
+            {"code": 0, "data": {"code": 0, "message": "ok", "url": "https://bilibili.com"}},
+            cookies={"SESSDATA": "new-sess", "bili_jct": "new-csrf", "DedeUserID": "42"},
+        ),
+        FakeResponse({"code": 0, "data": {"isLogin": True, "uname": "tester", "mid": 42}}),
+    ])
+
+    with app.app_context():
+        task = start_qr_login(http_client=http)
+        result = poll_qr_login(task["task_id"], http_client=http)
+
+        assert result["status"] == "failed"
+        metadata = CookieMetadata.query.filter_by(role="admin").one_or_none()
+        assert metadata is None or metadata.status != "valid"
 
 
 def test_validate_cookie_header_rejects_missing_sessdata(app):

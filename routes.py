@@ -2094,7 +2094,8 @@ def admin_poll_qr_login(task_id):
             logger.warning(f"Cookie 已更新，但弹幕监听重启失败: {e}")
             result['restart_warning'] = 'Cookie 已更新，但弹幕监听重启失败，请手动重启监听'
 
-    return jsonify({'success': result.get('status') != 'failed', **result})
+    success_states = {'pending', 'scanned', 'succeeded'}
+    return jsonify({'success': result.get('status') in success_states, **result})
 
 
 @admin_bp.route('/cookie/restart-listener', methods=['POST'])
