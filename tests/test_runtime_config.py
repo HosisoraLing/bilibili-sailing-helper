@@ -43,6 +43,8 @@ def test_worker_and_scheduler_do_not_mount_database_for_writes():
     for section in (worker_section, scheduler_section):
         assert "./data:/app/data" not in section
         assert "./data:/app/data:rw" not in section
+        assert "healthcheck:" in section
+        assert "disable: true" in section
 
 
 def test_scheduler_entrypoint_uses_internal_api_not_business_writers():
@@ -122,6 +124,21 @@ def test_admin_panel_displays_runtime_diagnostics():
     assert "retry_count" in admin_source
     assert "active_cookie_version" in admin_source
     assert "worker_cookie_version" in admin_source
+    assert "Cookie版本" in admin_source
+    assert "上报于" in admin_source
+    assert 'id="accountStatusPanel"' in admin_source
+    assert 'id="accountStatusUid"' in admin_source
+    assert 'id="accountStatusAuth"' in admin_source
+    assert 'id="accountStatusCookieVersion"' in admin_source
+    assert 'id="accountStatusWorker"' in admin_source
+    assert 'id="accountStatusReload"' in admin_source
+    assert "function updateAccountStatus" in admin_source
+    admin_actions = admin_source.split('<div class="admin-actions">', 1)[1].split("</div>", 1)[0]
+    assert "startQrLogin()" in admin_actions
+    assert "切换B站账号" in admin_actions
+    listener_alert = admin_source.split('id="listenerAlert"', 1)[1].split('id="qrCodeArea"', 1)[0]
+    assert "restartListener()" not in listener_alert
+    assert "查看重启方式" not in listener_alert
 
 
 class FakeCookieProvider:
@@ -267,6 +284,15 @@ def test_danmaku_worker_closes_connection_when_cookie_version_changes():
     assert any(item["state"] == "cookie_reloading" for item in webhook.heartbeats)
 
 
+def test_danmaku_worker_uses_short_default_cookie_poll_interval():
+    from runtime import danmaku_worker
+
+    assert danmaku_worker.default_cookie_poll_interval({}) == 10.0
+    assert danmaku_worker.default_cookie_poll_interval({
+        "DANMAKU_COOKIE_POLL_INTERVAL_SECONDS": "5",
+    }) == 5.0
+
+
 def test_danmaku_worker_cookie_monitor_survives_transient_fetch_failure():
     from services.bilibili_live.cookies import RuntimeCookie
     from runtime import danmaku_worker
@@ -349,6 +375,50 @@ def test_scheduler_runs_recurring_jobs_until_stopped():
         "cookie-maintenance",
         "auth-cleanup",
     }
+
+
+def test_scheduler_reports_heartbeat_while_waiting_between_job_cycles():
+    from runtime import scheduler
+
+    posts = []
+    sleeps = []
+
+    class FakeResponse:
+        status = 200
+
+        def release(self):
+            pass
+
+    class FakeSession:
+        async def post(self, url, headers=None, json=None, timeout=None):
+            posts.append((url, json))
+            return FakeResponse()
+
+    async def stop_after_two_sleeps(seconds):
+        sleeps.append(seconds)
+        if len(sleeps) >= 2:
+            raise scheduler.SchedulerStop("test stop")
+
+    asyncio.run(
+        scheduler.run_scheduler_loop(
+            session=FakeSession(),
+            internal_url="http://web:7111",
+            secret="secret",
+            instance_id="scheduler-1",
+            interval_seconds=3600,
+            sleep=stop_after_two_sleeps,
+            heartbeat_interval_seconds=30,
+        )
+    )
+
+    heartbeat_payloads = [
+        payload
+        for url, payload in posts
+        if url.endswith("/internal/runtime/heartbeat")
+        and payload["role"] == "scheduler"
+    ]
+    assert [payload["state"] for payload in heartbeat_payloads] == ["running", "running"]
+    assert sleeps == [30, 30]
 
 
 def test_scheduler_attempts_all_jobs_when_one_request_fails():

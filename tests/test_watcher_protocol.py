@@ -444,6 +444,8 @@ def test_live_api_fetches_danmu_info_with_cookie_headers():
         class FakeResponse:
             status = 200
             headers = {}
+            def __init__(self, payload):
+                self.payload = payload
 
             async def __aenter__(self):
                 return self
@@ -452,13 +454,7 @@ def test_live_api_fetches_danmu_info_with_cookie_headers():
                 return False
 
             async def json(self):
-                return {
-                    "code": 0,
-                    "data": {
-                        "token": "token",
-                        "host_list": [{"host": "broadcast.test", "wss_port": 443}],
-                    },
-                }
+                return self.payload
 
         class FakeSession:
             def __init__(self):
@@ -471,7 +467,23 @@ def test_live_api_fetches_danmu_info_with_cookie_headers():
                     "headers": headers,
                     "timeout": timeout,
                 })
-                return FakeResponse()
+                if url.endswith("/x/web-interface/nav"):
+                    return FakeResponse({
+                        "code": 0,
+                        "data": {
+                            "wbi_img": {
+                                "img_url": "https://i0.hdslb.com/bfs/wbi/7cd084941338484aae1ad9425b84077c.png",
+                                "sub_url": "https://i0.hdslb.com/bfs/wbi/4932caff0ff746eab6f01bf08b70ac45.png",
+                            }
+                        },
+                    })
+                return FakeResponse({
+                    "code": 0,
+                    "data": {
+                        "token": "token",
+                        "host_list": [{"host": "broadcast.test", "wss_port": 443}],
+                    },
+                })
 
         session = FakeSession()
         api = BilibiliLiveApi(
@@ -482,11 +494,30 @@ def test_live_api_fetches_danmu_info_with_cookie_headers():
         result = await api.get_danmu_info(room_id=123)
 
         assert result["token"] == "token"
-        assert session.calls[0]["url"].endswith("/xlive/web-room/v1/index/getDanmuInfo")
-        assert session.calls[0]["params"] == {"id": 123, "type": 0}
-        assert session.calls[0]["headers"]["Cookie"] == "SESSDATA=sess; buvid3=buvid"
+        assert session.calls[0]["url"].endswith("/x/web-interface/nav")
+        assert session.calls[1]["url"].endswith("/xlive/web-room/v1/index/getDanmuInfo")
+        assert session.calls[1]["params"]["id"] == "123"
+        assert session.calls[1]["params"]["type"] == "0"
+        assert session.calls[1]["params"]["web_location"] == "444.8"
+        assert session.calls[1]["params"]["wts"]
+        assert session.calls[1]["params"]["w_rid"]
+        assert session.calls[1]["headers"]["Cookie"] == "SESSDATA=sess; buvid3=buvid"
 
     asyncio.run(run_test())
+
+
+def test_worker_adds_ephemeral_buvid3_for_tv_cookie_without_persisted_buvid():
+    from runtime.danmaku_worker import cookie_header, runtime_live_cookie
+
+    original = {"SESSDATA": "sess", "bili_jct": "csrf", "buvid3": ""}
+
+    live_cookie = runtime_live_cookie(original)
+
+    assert original["buvid3"] == ""
+    assert live_cookie["SESSDATA"] == "sess"
+    assert live_cookie["bili_jct"] == "csrf"
+    assert live_cookie["buvid3"]
+    assert "buvid3=" in cookie_header(live_cookie)
 
 
 def test_live_client_sends_auth_payload_and_heartbeat_packets():
@@ -593,5 +624,88 @@ def test_live_client_reports_reconnecting_and_retries_bounded_connection():
         assert webhook.heartbeats[0]["retry_count"] == 1
         assert webhook.heartbeats[0]["cookie_version"] == 5
         assert webhook.heartbeats[-1]["state"] == "running"
+
+    asyncio.run(run_test())
+
+
+def test_worker_waits_for_new_cookie_after_bilibili_minus_352():
+    async def run_test():
+        from runtime.danmaku_worker import WorkerStop, run_worker_loop
+        from services.bilibili_live.cookies import RuntimeCookie
+
+        class FakeCookieProvider:
+            def __init__(self):
+                self.polls_after_rejection = 0
+
+            async def fetch_latest(self):
+                if api_attempts:
+                    self.polls_after_rejection += 1
+                    version = 8 if self.polls_after_rejection >= 2 else 7
+                    return RuntimeCookie(
+                        status="valid",
+                        version=version,
+                        cookie={"SESSDATA": f"sess-{version}"},
+                    )
+                return RuntimeCookie(
+                    status="valid",
+                    version=7,
+                    cookie={"SESSDATA": "sess-7"},
+                )
+
+        class FakeWebhook:
+            def __init__(self):
+                self.heartbeats = []
+
+            async def report_heartbeat(self, **payload):
+                self.heartbeats.append(payload)
+                return True
+
+        api_attempts = []
+
+        class FakeApi:
+            def __init__(self, *_args, **_kwargs):
+                pass
+
+            async def get_danmu_info(self, _room_id):
+                api_attempts.append(_room_id)
+                if len(api_attempts) == 1:
+                    raise RuntimeError("-352")
+                raise WorkerStop()
+
+        async def websocket_factory(_url):
+            raise AssertionError("websocket must not connect after -352")
+
+        sleeps = []
+
+        async def fake_sleep(delay):
+            sleeps.append(delay)
+
+        webhook = FakeWebhook()
+
+        await run_worker_loop(
+            room_id=123,
+            cookie_provider=FakeCookieProvider(),
+            webhook=webhook,
+            api_factory=FakeApi,
+            websocket_factory=websocket_factory,
+            instance_id="worker-rejected",
+            idle_sleep=fake_sleep,
+        )
+
+        assert api_attempts == [123, 123]
+        assert sleeps == [5.0, 5.0]
+        assert webhook.heartbeats[0] == {
+            "role": "danmaku-worker",
+            "instance_id": "worker-rejected",
+            "state": "bilibili_rejected",
+            "cookie_version": 7,
+            "last_error": "B站直播接口返回 -352，请扫码授权其他账号",
+        }
+        assert webhook.heartbeats[1] == {
+            "role": "danmaku-worker",
+            "instance_id": "worker-rejected",
+            "state": "cookie_reloading",
+            "cookie_version": 8,
+        }
 
     asyncio.run(run_test())

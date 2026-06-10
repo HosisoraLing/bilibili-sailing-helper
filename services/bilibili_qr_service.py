@@ -150,10 +150,13 @@ def _upsert_cookie_metadata(validation: dict[str, Any], source: str, error: str 
     metadata.source = source
     metadata.masked_uid = validation.get("mid") or ""
     metadata.payload_json = _json_text(validation.get("payload") or {})
-    metadata.last_validated_at = get_beijing_now()
+    now = get_beijing_now()
+    metadata.last_validated_at = now
     metadata.last_error = error or ("" if validation.get("valid") else validation.get("message") or "")
     if validation.get("valid"):
         metadata.cookie_version = int(metadata.cookie_version or 0) + 1
+        metadata.reload_requested_version = int(metadata.cookie_version or 0)
+        metadata.reload_requested_at = now
     elif is_new and metadata.cookie_version is None:
         metadata.cookie_version = 0
     return metadata

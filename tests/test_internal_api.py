@@ -157,11 +157,131 @@ def test_admin_cookie_status_reports_runtime_health_and_next_action(client, app,
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["runtime"]["active_cookie_version"] == 3
+    assert payload["tv_auth"]["status"] == "missing"
     assert payload["runtime"]["worker_cookie_stale"] is True
     assert payload["runtime"]["next_action"] == "等待 danmaku-worker 重新加载 Cookie"
     assert payload["runtime"]["roles"]["danmaku-worker"]["heartbeat_age_seconds"] >= 20
     assert payload["runtime"]["roles"]["danmaku-worker"]["last_event_at"]
     assert payload["listener"]["role"] == "danmaku-worker"
+
+
+def test_admin_cookie_status_reports_rescan_action_for_bilibili_rejected_worker(
+    client,
+    app,
+    monkeypatch,
+):
+    with app.app_context():
+        admin = User(uid="admin-risk", nickname="admin")
+        admin.add_role("admin")
+        db.session.add(admin)
+        db.session.add(
+            CookieMetadata(
+                role="admin",
+                status="valid",
+                cookie_version=7,
+                masked_uid="98***76",
+                last_validated_at=get_beijing_now(),
+            )
+        )
+        db.session.add(
+            RuntimeStatus(
+                role="danmaku-worker",
+                instance_id="worker-rejected",
+                state="bilibili_rejected",
+                cookie_version=7,
+                last_error="B站直播接口返回 -352，请扫码授权其他账号",
+                heartbeat_at=get_beijing_now() - timedelta(seconds=5),
+            )
+        )
+        db.session.add(
+            RuntimeStatus(
+                role="scheduler",
+                instance_id="scheduler-1",
+                state="running",
+                heartbeat_at=get_beijing_now() - timedelta(seconds=5),
+            )
+        )
+        db.session.commit()
+        admin_id = admin.id
+
+    with client.session_transaction() as flask_session:
+        flask_session["_user_id"] = str(admin_id)
+
+    monkeypatch.setattr(
+        "services.cookie_service.CookieService.load_settings",
+        lambda: {"bilibili": {"SESSDATA": "sess", "bili_jct": "csrf"}},
+    )
+    monkeypatch.setattr(
+        "services.cookie_service.CookieService.validate_cookie",
+        lambda _sessdata: (True, "tester"),
+    )
+
+    response = client.get("/admin/cookie/status")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["runtime"]["next_action"] == "请扫码授权其他 B 站账号"
+    assert payload["runtime"]["roles"]["danmaku-worker"]["state"] == "bilibili_rejected"
+
+
+def test_admin_cookie_status_does_not_block_listener_on_stale_scheduler(
+    client,
+    app,
+    monkeypatch,
+):
+    with app.app_context():
+        admin = User(uid="admin-scheduler-stale", nickname="admin")
+        admin.add_role("admin")
+        db.session.add(admin)
+        db.session.add(
+            CookieMetadata(
+                role="admin",
+                status="valid",
+                cookie_version=3,
+                masked_uid="12***34",
+                last_validated_at=get_beijing_now(),
+            )
+        )
+        db.session.add(
+            RuntimeStatus(
+                role="danmaku-worker",
+                instance_id="worker-running",
+                state="running",
+                cookie_version=3,
+                last_error="",
+                delivery_error="",
+                heartbeat_at=get_beijing_now() - timedelta(seconds=2),
+            )
+        )
+        db.session.add(
+            RuntimeStatus(
+                role="scheduler",
+                instance_id="scheduler-stale",
+                state="running",
+                heartbeat_at=get_beijing_now() - timedelta(seconds=3600),
+            )
+        )
+        db.session.commit()
+        admin_id = admin.id
+
+    with client.session_transaction() as flask_session:
+        flask_session["_user_id"] = str(admin_id)
+
+    monkeypatch.setattr(
+        "services.cookie_service.CookieService.load_settings",
+        lambda: {"bilibili": {"SESSDATA": "sess", "bili_jct": "csrf", "buvid3": "buvid"}},
+    )
+    monkeypatch.setattr(
+        "services.cookie_service.CookieService.validate_cookie",
+        lambda _sessdata: (True, "tester"),
+    )
+
+    response = client.get("/admin/cookie/status")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["runtime"]["next_action"] == "无需操作"
+    assert payload["runtime"]["roles"]["scheduler"]["stale"] is True
 
 
 def test_auth_status_reports_listener_unavailable_for_pending_session(client, app):
@@ -221,6 +341,67 @@ def test_auth_status_reports_retrying_for_reconnecting_worker(client, app):
     payload = response.get_json()
     assert payload["status"] == "retrying"
     assert payload["retry_count"] == 2
+
+
+def test_auth_status_reports_rescan_action_for_bilibili_rejected_worker(client, app):
+    with app.app_context():
+        db.session.add(
+            AuthSession(
+                uid="risk-user",
+                code="vc-risk",
+                status="pending",
+                expires_at=get_beijing_now() + timedelta(minutes=5),
+            )
+        )
+        db.session.add(
+            RuntimeStatus(
+                role="danmaku-worker",
+                instance_id="worker-rejected",
+                state="bilibili_rejected",
+                cookie_version=7,
+                last_error="B站直播接口返回 -352，请扫码授权其他账号",
+                heartbeat_at=get_beijing_now() - timedelta(seconds=3),
+            )
+        )
+        db.session.commit()
+
+    response = client.get("/auth/status?uid=risk-user")
+
+    assert response.status_code == 503
+    payload = response.get_json()
+    assert payload["status"] == "listener_unavailable"
+    assert payload["next_action"] == "管理员需要扫码授权其他 B 站账号"
+    assert payload["last_error"] == "B站直播接口返回 -352，请扫码授权其他账号"
+
+
+def test_auth_status_keeps_rescan_action_for_stale_bilibili_rejected_worker(client, app):
+    with app.app_context():
+        db.session.add(
+            AuthSession(
+                uid="stale-risk-user",
+                code="vc-stale-risk",
+                status="pending",
+                expires_at=get_beijing_now() + timedelta(minutes=5),
+            )
+        )
+        db.session.add(
+            RuntimeStatus(
+                role="danmaku-worker",
+                instance_id="worker-stale-rejected",
+                state="bilibili_rejected",
+                cookie_version=7,
+                last_error="B站直播接口返回 -352，请扫码授权其他账号",
+                heartbeat_at=get_beijing_now() - timedelta(seconds=120),
+            )
+        )
+        db.session.commit()
+
+    response = client.get("/auth/status?uid=stale-risk-user")
+
+    assert response.status_code == 503
+    payload = response.get_json()
+    assert payload["status"] == "listener_unavailable"
+    assert payload["next_action"] == "管理员需要扫码授权其他 B 站账号"
 
 
 def test_auth_status_reports_delivery_delay_for_queue_full_worker(client, app):
@@ -534,14 +715,14 @@ def test_run_pending_scheduler_job_executes_all_periodic_jobs_inside_web(app, mo
             calls.append("guard-gift-history")
             return [object(), object()]
 
-    class FakeCookieService:
+    class FakeCookieMaintenanceService:
         @staticmethod
-        def auto_update_buvid3():
+        def run_cookie_maintenance():
             calls.append("cookie-maintenance")
-            return True
+            return {"status": "success", "summary": "cookie-maintenance completed"}
 
     monkeypatch.setattr(routes, "GuardGiftService", FakeGuardGiftService)
-    monkeypatch.setattr(routes, "CookieService", FakeCookieService)
+    monkeypatch.setattr(routes, "CookieMaintenanceService", FakeCookieMaintenanceService)
     monkeypatch.setattr(routes, "cleanup_expired_sessions", lambda: calls.append("auth-cleanup") or 2)
 
     with app.app_context():
@@ -606,16 +787,16 @@ def test_run_pending_scheduler_job_records_failure(app, monkeypatch):
         assert "guard-sync failed" in refreshed.result_json
 
 
-def test_run_pending_scheduler_job_marks_cookie_maintenance_false_as_failed(app, monkeypatch):
+def test_run_pending_scheduler_job_marks_cookie_maintenance_failure(app, monkeypatch):
     from routes import run_pending_scheduler_job
     import routes
 
-    class FakeCookieService:
+    class FakeCookieMaintenanceService:
         @staticmethod
-        def auto_update_buvid3():
-            return False
+        def run_cookie_maintenance():
+            return {"status": "failed", "error": "请重新扫码授权 B 站账号"}
 
-    monkeypatch.setattr(routes, "CookieService", FakeCookieService)
+    monkeypatch.setattr(routes, "CookieMaintenanceService", FakeCookieMaintenanceService)
 
     with app.app_context():
         job = SchedulerJob(
@@ -632,7 +813,7 @@ def test_run_pending_scheduler_job_marks_cookie_maintenance_false_as_failed(app,
         assert result["job_status"] == "failed"
         refreshed = SchedulerJob.query.filter_by(job_id="cookie-maintenance-needs-login").one()
         assert refreshed.status == "failed"
-        assert "needs QR login" in refreshed.last_error
+        assert "重新扫码" in refreshed.last_error
 
 
 def test_internal_scheduler_result_can_record_by_job_name_without_job_id(client, app):

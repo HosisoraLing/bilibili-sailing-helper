@@ -56,7 +56,11 @@ docker compose up -d
 
 ## Cookie 更新
 
-管理员在后台扫码登录成功后，`web` 会更新 Cookie version。`danmaku-worker` 会通过内部 Cookie 接口检测版本变化并自动重连。
+管理员在后台扫码授权成功后，`web` 会保存 TV 授权 token 和从授权结果提取出的 Web Cookie，并更新 Cookie version。`danmaku-worker` 会通过内部 Cookie 接口检测版本变化并自动重连。
+
+`scheduler` 会定时触发 `cookie-maintenance`。当 `SESSDATA` 距离过期不足默认 10 天时，`web` 使用已保存的 TV refresh token 刷新授权；刷新成功会替换 Web Cookie 并推进 Cookie version。refresh token 失效、B 站风控或上游接口异常时，系统会保留最后可用 Cookie，并在管理后台提示重新扫码授权。
+
+TV `access_token`、`refresh_token`、`SESSDATA`、`bili_jct`、`buvid3` 都是敏感凭据，只能存在本地配置或数据库中，不要写入文档、日志或提交记录。
 
 ## 故障定位
 
@@ -66,7 +70,7 @@ docker compose logs --tail=200 danmaku-worker
 docker compose logs --tail=200 scheduler
 ```
 
-管理后台的 Cookie 状态接口会显示角色状态、心跳年龄、最后错误、重试次数、Cookie version 和下一步建议。
+管理后台的 Cookie 状态接口会显示 TV 授权状态、Cookie 有效期、最近刷新/验证时间、角色状态、心跳年龄、最后错误、重试次数、Cookie version 和下一步建议。
 
 ## SSL
 

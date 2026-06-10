@@ -282,12 +282,28 @@ def run_migrations():
     # Check cookie_metadata table for runtime Cookie version column
     if 'cookie_metadata' in inspector.get_table_names():
         columns = {col['name']: col for col in inspector.get_columns('cookie_metadata')}
-        if 'cookie_version' not in columns:
-            logger.info("Migrating: Adding cookie_metadata.cookie_version...")
+        cookie_metadata_columns = {
+            'cookie_version': 'INTEGER DEFAULT 0',
+            'reload_requested_version': 'INTEGER DEFAULT 0',
+            'reload_requested_at': 'DATETIME',
+            'tv_access_token': 'TEXT DEFAULT ""',
+            'tv_refresh_token': 'TEXT DEFAULT ""',
+            'tv_auth_payload_json': 'TEXT',
+            'sessdata_expires_at': 'DATETIME',
+            'last_refresh_at': 'DATETIME',
+        }
+        missing_columns = [
+            (name, ddl)
+            for name, ddl in cookie_metadata_columns.items()
+            if name not in columns
+        ]
+        if missing_columns:
+            logger.info("Migrating: Adding Cookie metadata columns...")
             with db.engine.connect() as conn:
-                conn.execute(text("ALTER TABLE cookie_metadata ADD COLUMN cookie_version INTEGER DEFAULT 0"))
+                for name, ddl in missing_columns:
+                    conn.execute(text(f"ALTER TABLE cookie_metadata ADD COLUMN {name} {ddl}"))
                 conn.commit()
-                logger.info("Migration completed: cookie_metadata.cookie_version added")
+                logger.info("Migration completed: Cookie metadata columns added")
 
 
 # =========================

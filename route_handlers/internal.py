@@ -59,10 +59,14 @@ def run_pending_scheduler_job(job):
                 f"{len(historical_records or [])} historical"
             )
         elif job.job_type == 'cookie-maintenance':
-            success = CookieService.auto_update_buvid3()
-            if not success:
-                raise RuntimeError('cookie-maintenance needs QR login or valid buvid3')
-            summary = f"cookie-maintenance completed: {'success' if success else 'needs_qr_login'}"
+            result = CookieMaintenanceService.run_cookie_maintenance()
+            if result.get("status") != "success":
+                raise RuntimeError(
+                    result.get("error")
+                    or result.get("next_action")
+                    or "cookie-maintenance failed"
+                )
+            summary = result.get("summary") or f"cookie-maintenance completed: {result.get('action')}"
         elif job.job_type == 'auth-cleanup':
             cleaned = cleanup_expired_sessions()
             summary = f"auth-cleanup completed: {cleaned} expired sessions"

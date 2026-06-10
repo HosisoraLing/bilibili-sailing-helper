@@ -22,13 +22,15 @@ class RuntimeCookieService:
             return {
                 "status": "missing",
                 "version": 0,
+                "reload_requested_version": 0,
+                "reload_requested_at": "",
                 "cookie": {},
             }
 
         cookie = RuntimeCookieService.load_cookie_settings()
         missing_keys = [
             key
-            for key in ("SESSDATA", "bili_jct", "buvid3")
+            for key in ("SESSDATA",)
             if not cookie.get(key)
         ]
         status = metadata.status
@@ -39,6 +41,12 @@ class RuntimeCookieService:
         return {
             "status": status,
             "version": int(metadata.cookie_version or 0),
+            "reload_requested_version": int(metadata.reload_requested_version or 0),
+            "reload_requested_at": (
+                metadata.reload_requested_at.isoformat()
+                if metadata.reload_requested_at
+                else ""
+            ),
             "masked_uid": metadata.masked_uid or "",
             "updated_at": metadata.updated_at.isoformat() if metadata.updated_at else "",
             "last_validated_at": (

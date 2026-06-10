@@ -130,6 +130,47 @@ def test_internal_runtime_cookie_hides_incomplete_cookie_even_when_metadata_is_v
     assert "缺少 SESSDATA" in payload["last_error"]
 
 
+def test_internal_runtime_cookie_allows_tv_cookie_without_buvid3(
+    client,
+    app,
+    monkeypatch,
+):
+    from services.runtime_cookie_service import RuntimeCookieService
+
+    monkeypatch.setattr(
+        RuntimeCookieService,
+        "load_cookie_settings",
+        staticmethod(lambda: {
+            "SESSDATA": "sess-value",
+            "bili_jct": "csrf-value",
+            "buvid3": "",
+        }),
+    )
+
+    with app.app_context():
+        db.session.add(CookieMetadata(
+            role="admin",
+            status="valid",
+            source="tv_auth",
+            masked_uid="42",
+            cookie_version=7,
+            last_validated_at=get_beijing_now(),
+        ))
+        db.session.commit()
+
+    response = client.get(
+        "/internal/runtime/cookie",
+        headers={"Authorization": "test-secret"},
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["status"] == "valid"
+    assert payload["cookie"]["SESSDATA"] == "sess-value"
+    assert payload["cookie"]["bili_jct"] == "csrf-value"
+    assert payload["cookie"]["buvid3"] == ""
+
+
 def test_runtime_heartbeat_persists_cookie_version(client, app):
     response = client.post(
         "/internal/runtime/heartbeat",
@@ -216,6 +257,7 @@ def test_worker_cookie_provider_detects_reload(monkeypatch):
 
     assert first.version == 1
     assert second.version == 2
+    assert second.reload_requested_version == 2
     assert provider.should_reload(current_version=1, latest=second) is True
 
 
@@ -276,3 +318,5 @@ def test_legacy_runtime_cookie_schema_is_migrated(app):
         }
         assert "cookie_version" in cookie_columns
         assert "cookie_version" in runtime_columns
+        assert "reload_requested_version" in cookie_columns
+        assert "reload_requested_at" in cookie_columns

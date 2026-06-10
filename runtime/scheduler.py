@@ -79,6 +79,49 @@ async def request_scheduler_jobs(
         raise RuntimeError("; ".join(errors))
 
 
+async def report_scheduler_heartbeat(
+    *,
+    session,
+    internal_url: str,
+    secret: str,
+    instance_id: str,
+):
+    await post_json(
+        session,
+        f"{internal_url.rstrip('/')}/internal/runtime/heartbeat",
+        secret=secret,
+        payload={
+            "role": "scheduler",
+            "instance_id": instance_id,
+            "state": "running",
+        },
+    )
+
+
+async def sleep_with_heartbeats(
+    *,
+    session,
+    internal_url: str,
+    secret: str,
+    instance_id: str,
+    total_seconds: float,
+    heartbeat_interval_seconds: float,
+    sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+):
+    remaining = total_seconds
+    while remaining > 0:
+        delay = min(remaining, heartbeat_interval_seconds)
+        await sleep(delay)
+        remaining -= delay
+        if remaining > 0:
+            await report_scheduler_heartbeat(
+                session=session,
+                internal_url=internal_url,
+                secret=secret,
+                instance_id=instance_id,
+            )
+
+
 async def run_scheduler_loop(
     *,
     session,
@@ -86,6 +129,7 @@ async def run_scheduler_loop(
     secret: str,
     instance_id: str,
     interval_seconds: float,
+    heartbeat_interval_seconds: float = 30.0,
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
 ):
     failure_count = 0
@@ -98,7 +142,15 @@ async def run_scheduler_loop(
                 instance_id=instance_id,
             )
             failure_count = 0
-            await sleep(interval_seconds)
+            await sleep_with_heartbeats(
+                session=session,
+                internal_url=internal_url,
+                secret=secret,
+                instance_id=instance_id,
+                total_seconds=interval_seconds,
+                heartbeat_interval_seconds=heartbeat_interval_seconds,
+                sleep=sleep,
+            )
         except SchedulerStop:
             return
         except Exception as exc:
@@ -130,6 +182,7 @@ async def run():
     secret = os.environ.get("INTERNAL_API_SECRET", "")
     instance_id = os.environ.get("RUNTIME_INSTANCE_ID", "scheduler")
     interval_seconds = float(os.environ.get("SCHEDULER_INTERVAL_SECONDS", "3600"))
+    heartbeat_interval_seconds = float(os.environ.get("SCHEDULER_HEARTBEAT_INTERVAL_SECONDS", "30"))
 
     async with aiohttp.ClientSession() as session:
         await run_scheduler_loop(
@@ -138,6 +191,7 @@ async def run():
             secret=secret,
             instance_id=instance_id,
             interval_seconds=interval_seconds,
+            heartbeat_interval_seconds=heartbeat_interval_seconds,
         )
 
 

@@ -60,9 +60,9 @@ python app.py
         "ruid": 789012
     },
     "bilibili": {
-        "SESSDATA": "你的SESSDATA",
-        "bili_jct": "你的bili_jct",
-        "buvid3": "你的buvid3"
+        "SESSDATA": "",
+        "bili_jct": "",
+        "buvid3": ""
     },
     "database": {
         "url": "sqlite:///data/app.db"
@@ -87,10 +87,11 @@ python app.py
 
 ### 获取B站Cookie
 
-1. 登录 [B站](https://www.bilibili.com)
-2. 打开浏览器开发者工具 (F12)
-3. 在Application/Storage中找到Cookies
-4. 复制 `SESSDATA`、`bili_jct`、`buvid3` 的值
+推荐方式是在管理后台使用 B 站 APP 扫码授权。首次授权成功后，系统会保存 refresh token 和验证后的 Web Cookie；后续由定时任务在 `SESSDATA` 临期时自动刷新。
+
+`SESSDATA`、`bili_jct`、`buvid3`、TV `access_token`、TV `refresh_token` 都是敏感凭据，不要提交到仓库、截图或日志。如果 refresh token 失效或 B 站风控拦截，管理后台会提示重新扫码授权。
+
+手动填写 Cookie 仍可用于排障，但无法提供自动续期能力。
 
 ## 目录结构
 

@@ -144,12 +144,12 @@ def runtime_health_summary() -> dict[str, Any]:
         next_action = "启动 danmaku-worker"
     elif worker_cookie_stale:
         next_action = "等待 danmaku-worker 重新加载 Cookie"
+    elif worker.state == "bilibili_rejected":
+        next_action = "请扫码授权其他 B 站账号"
     elif worker.state in {"failed", "cookie_unavailable"} or is_runtime_status_stale(worker):
         next_action = "检查 danmaku-worker 日志并重启该角色"
     elif worker.state == "reconnecting":
         next_action = "等待 danmaku-worker 自动重连"
-    elif scheduler is None or is_runtime_status_stale(scheduler):
-        next_action = "检查 scheduler 角色"
     else:
         next_action = "无需操作"
 
@@ -167,7 +167,20 @@ def runtime_health_summary() -> dict[str, Any]:
 
 def pending_auth_runtime_state() -> dict[str, Any]:
     worker = latest_runtime_status("danmaku-worker")
-    if worker is None or is_runtime_status_stale(worker):
+    if worker is None:
+        return {
+            "status": "listener_unavailable",
+            "http_status": 503,
+            "next_action": "管理员需要检查 danmaku-worker",
+        }
+    if worker.state == "bilibili_rejected":
+        return {
+            "status": "listener_unavailable",
+            "http_status": 503,
+            "next_action": "管理员需要扫码授权其他 B 站账号",
+            "last_error": worker.last_error or worker.delivery_error or "",
+        }
+    if is_runtime_status_stale(worker):
         return {
             "status": "listener_unavailable",
             "http_status": 503,

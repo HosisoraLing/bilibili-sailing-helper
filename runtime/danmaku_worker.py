@@ -1,6 +1,8 @@
 import asyncio
 import json
 import os
+import random
+import time
 
 import aiohttp
 
@@ -27,6 +29,36 @@ def cookie_header(cookie: dict[str, str]) -> str:
         for key, value in cookie.items()
         if value
     )
+
+
+def generate_buvid3() -> str:
+    chars = "0123456789ABCDEF"
+
+    def rand(length: int) -> str:
+        return "".join(random.choice(chars) for _ in range(length))
+
+    suffix = f"{int(time.time() * 1000) % 100000:05d}infoc"
+    return f"{rand(8)}-{rand(4)}-{rand(4)}-{rand(4)}-{rand(12)}{suffix}"
+
+
+def runtime_live_cookie(cookie: dict[str, str]) -> dict[str, str]:
+    live_cookie = dict(cookie)
+    if not live_cookie.get("buvid3"):
+        live_cookie["buvid3"] = generate_buvid3()
+    return live_cookie
+
+
+def is_bilibili_live_rejected(exc: Exception) -> bool:
+    return "-352" in str(exc)
+
+
+def default_cookie_poll_interval(environ=os.environ) -> float:
+    raw = environ.get("DANMAKU_COOKIE_POLL_INTERVAL_SECONDS", "10")
+    try:
+        interval = float(raw)
+    except (TypeError, ValueError):
+        return 10.0
+    return max(interval, 1.0)
 
 
 async def default_websocket_factory(url: str):
@@ -101,6 +133,37 @@ async def monitor_cookie_version(
             return
 
 
+async def wait_for_new_cookie_version(
+    *,
+    cookie_provider: RuntimeCookieProvider,
+    current_version: int,
+    webhook: InternalWebhookClient,
+    instance_id: str,
+    poll_interval: float,
+    sleep=asyncio.sleep,
+):
+    while True:
+        await sleep(poll_interval)
+        try:
+            latest = await cookie_provider.fetch_latest()
+        except Exception as exc:
+            await webhook.report_heartbeat(
+                role="danmaku-worker",
+                instance_id=instance_id,
+                state="cookie_poll_error",
+                last_error=str(exc),
+            )
+            continue
+        if RuntimeCookieProvider.should_reload(current_version, latest):
+            await webhook.report_heartbeat(
+                role="danmaku-worker",
+                instance_id=instance_id,
+                state="cookie_reloading",
+                cookie_version=latest.version,
+            )
+            return
+
+
 async def run_connection(
     *,
     room_id: int,
@@ -110,14 +173,15 @@ async def run_connection(
     api_factory=BilibiliLiveApi,
     websocket_factory=default_websocket_factory,
     instance_id: str,
-    cookie_poll_interval: float = 30.0,
+    cookie_poll_interval: float = 10.0,
     sleep=asyncio.sleep,
 ):
     async with aiohttp.ClientSession() as session:
-        api = api_factory(session, cookie_header=cookie_header(cookie.cookie))
+        live_cookie = runtime_live_cookie(cookie.cookie)
+        api = api_factory(session, cookie_header=cookie_header(live_cookie))
         client = BilibiliLiveClient(
             room_id=room_id,
-            buvid3=cookie.cookie.get("buvid3", ""),
+            buvid3=live_cookie.get("buvid3", ""),
             cookie_version=cookie.version,
         )
         info = await api.get_danmu_info(room_id)
@@ -183,6 +247,7 @@ async def run_worker_loop(
     websocket_factory=default_websocket_factory,
     instance_id: str,
     reconnect_delay: float = 5.0,
+    cookie_poll_interval: float = 10.0,
     idle_sleep=asyncio.sleep,
 ):
     current_version = 0
@@ -208,11 +273,29 @@ async def run_worker_loop(
                 api_factory=api_factory,
                 websocket_factory=websocket_factory,
                 instance_id=instance_id,
+                cookie_poll_interval=cookie_poll_interval,
             )
             await idle_sleep(reconnect_delay)
         except WorkerStop:
             return
         except Exception as exc:
+            if is_bilibili_live_rejected(exc):
+                await webhook.report_heartbeat(
+                    role="danmaku-worker",
+                    instance_id=instance_id,
+                    state="bilibili_rejected",
+                    cookie_version=current_version,
+                    last_error="B站直播接口返回 -352，请扫码授权其他账号",
+                )
+                await wait_for_new_cookie_version(
+                    cookie_provider=cookie_provider,
+                    current_version=current_version,
+                    webhook=webhook,
+                    instance_id=instance_id,
+                    poll_interval=reconnect_delay,
+                    sleep=idle_sleep,
+                )
+                continue
             await webhook.report_heartbeat(
                 role="danmaku-worker",
                 instance_id=instance_id,
@@ -228,6 +311,7 @@ async def run():
     secret = os.environ.get("INTERNAL_API_SECRET", "")
     instance_id = os.environ.get("RUNTIME_INSTANCE_ID", "danmaku-worker")
     room_id = int(os.environ.get("BILIBILI_ROOM_ID") or ROOM_ID_INT)
+    cookie_poll_interval = default_cookie_poll_interval()
 
     async with aiohttp.ClientSession() as session:
         cookie_provider = RuntimeCookieProvider(
@@ -246,6 +330,7 @@ async def run():
             cookie_provider=cookie_provider,
             webhook=webhook,
             instance_id=instance_id,
+            cookie_poll_interval=cookie_poll_interval,
         )
 
 
