@@ -109,7 +109,7 @@ def get_cached_code(uid: str) -> Optional[str]:
     return None
 
 
-def mark_auth_success(session: AuthSession) -> bool:
+def mark_auth_success(session: AuthSession, expected_code: str | None = None) -> bool:
     """
     标记鉴权成功（带并发保护）
     
@@ -131,11 +131,15 @@ def mark_auth_success(session: AuthSession) -> bool:
             return False
 
         update_time = get_beijing_now()
-        updated_count = AuthSession.query.filter(
+        success_query = AuthSession.query.filter(
             AuthSession.id == session.id,
             AuthSession.status == 'pending',
             AuthSession.expires_at >= update_time,
-        ).update({
+        )
+        if expected_code is not None:
+            success_query = success_query.filter(AuthSession.code == expected_code)
+
+        updated_count = success_query.update({
             'status': 'success',
             'succeeded_at': update_time,
             'last_attempt_at': update_time,

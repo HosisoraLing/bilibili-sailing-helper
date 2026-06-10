@@ -89,6 +89,16 @@ def test_duplicate_success_only_wins_once(app):
         assert mark_auth_success(session) is False
 
 
+def test_success_transition_requires_current_code(app):
+    with app.app_context():
+        session, _ = create_auth_session("1007")
+        session.code = "vc-new"
+        db.session.commit()
+
+        assert mark_auth_success(session, expected_code="vc-old") is False
+        assert session.status == "pending"
+
+
 def test_consumed_session_is_rejected(app):
     with app.app_context():
         session = AuthSession(

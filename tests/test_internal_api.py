@@ -148,6 +148,40 @@ def test_danmaku_webhook_ignores_non_matching_code(client, app):
         assert session.status == "pending"
 
 
+def test_danmaku_webhook_rejects_stale_code_after_session_code_rotates(client, app):
+    with app.app_context():
+        session = AuthSession(
+            uid="45",
+            code="vc-old",
+            status="pending",
+            expires_at=get_beijing_now() + timedelta(minutes=5),
+        )
+        db.session.add(session)
+        db.session.commit()
+
+        # Simulate code rotation after a stale danmaku event was matched.
+        session.code = "vc-new"
+        db.session.commit()
+
+    response = client.post(
+        "/internal/danmaku/auth-event",
+        headers={"Authorization": "test-secret"},
+        json={
+            "uid": "45",
+            "nickname": "tester",
+            "content": "vc-old",
+            "room_id": 123,
+            "event_ts": "2026-06-10T00:00:00+08:00",
+        },
+    )
+    assert response.status_code == 200
+    assert response.get_json()["matched"] is False
+
+    with app.app_context():
+        session = AuthSession.query.filter_by(uid="45").one()
+        assert session.status == "pending"
+
+
 def test_danmaku_webhook_reports_false_when_success_transition_fails(
     client,
     app,
@@ -163,7 +197,11 @@ def test_danmaku_webhook_reports_false_when_success_transition_fails(
         db.session.add(session)
         db.session.commit()
 
-    monkeypatch.setattr(internal_api_service, "mark_auth_success", lambda session: False)
+    monkeypatch.setattr(
+        internal_api_service,
+        "mark_auth_success",
+        lambda session, expected_code=None: False,
+    )
 
     response = client.post(
         "/internal/danmaku/auth-event",
@@ -182,6 +220,40 @@ def test_danmaku_webhook_reports_false_when_success_transition_fails(
     with app.app_context():
         attempt = db.session.query(internal_api_service.AuthAttempt).filter_by(uid="44").one()
         assert attempt.status == "conflict"
+
+
+def test_runtime_heartbeat_preserves_previous_error_fields_when_omitted(client, app):
+    first = client.post(
+        "/internal/runtime/heartbeat",
+        headers={"Authorization": "test-secret"},
+        json={
+            "role": "danmaku-worker",
+            "instance_id": "preserve-errors",
+            "state": "degraded",
+            "last_error": "ws disconnected",
+            "delivery_error": "web unavailable",
+            "retry_count": 3,
+        },
+    )
+    assert first.status_code == 200
+
+    second = client.post(
+        "/internal/runtime/heartbeat",
+        headers={"Authorization": "test-secret"},
+        json={
+            "role": "danmaku-worker",
+            "instance_id": "preserve-errors",
+            "state": "running",
+        },
+    )
+    assert second.status_code == 200
+
+    with app.app_context():
+        status = RuntimeStatus.query.filter_by(instance_id="preserve-errors").one()
+        assert status.state == "running"
+        assert status.last_error == "ws disconnected"
+        assert status.delivery_error == "web unavailable"
+        assert status.retry_count == 3
 
 
 def test_internal_scheduler_job_records_request_and_result(client, app):
@@ -219,6 +291,37 @@ def test_internal_scheduler_job_records_request_and_result(client, app):
         assert "synced" in job.result_json
 
 
+def test_internal_scheduler_result_can_record_by_job_name_without_job_id(client, app):
+    job_response = client.post(
+        "/internal/scheduler/job",
+        headers={"Authorization": "test-secret"},
+        json={
+            "job_name": "cookie-refresh",
+            "requested_at": "2026-06-10T00:00:00+08:00",
+        },
+    )
+    assert job_response.status_code == 200
+
+    result_response = client.post(
+        "/internal/scheduler/result",
+        headers={"Authorization": "test-secret"},
+        json={
+            "job_name": "cookie-refresh",
+            "status": "success",
+            "started_at": "2026-06-10T00:00:01+08:00",
+            "finished_at": "2026-06-10T00:00:02+08:00",
+            "summary": "refreshed",
+            "error": "",
+        },
+    )
+    assert result_response.status_code == 200
+
+    with app.app_context():
+        job = SchedulerJob.query.filter_by(job_type="cookie-refresh").one()
+        assert job.status == "success"
+        assert "refreshed" in job.result_json
+
+
 def test_internal_scheduler_job_is_idempotent_for_duplicate_job_id(client, app):
     payload = {
         "job_id": "fixed-job-id",
@@ -244,14 +347,14 @@ def test_internal_scheduler_job_is_idempotent_for_duplicate_job_id(client, app):
         assert SchedulerJob.query.filter_by(job_id="fixed-job-id").count() == 1
 
 
-def test_internal_scheduler_result_requires_job_id(client):
+def test_internal_scheduler_result_requires_job_id_or_job_name(client):
     response = client.post(
         "/internal/scheduler/result",
         headers={"Authorization": "test-secret"},
-        json={"job_name": "guard-sync", "status": "success"},
+        json={"status": "success"},
     )
     assert response.status_code == 400
-    assert response.get_json()["error"] == "job_id is required"
+    assert response.get_json()["error"] == "job_id or job_name is required"
 
 
 def test_internal_scheduler_result_rejects_mismatched_job_name(client):

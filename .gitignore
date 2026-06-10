@@ -56,10 +56,7 @@ logs/
 .claude/
 claude.md
 
-# Test files
-tests/
-test_*.py
-*_test.py
+# Local scratch test files
 danmuku_test.py
 
 # Cache

@@ -61,10 +61,14 @@ def record_runtime_heartbeat(payload: dict[str, Any]) -> RuntimeStatus:
 
     status.state = state
     status.payload_json = to_json_text(payload)
-    status.last_error = payload.get("last_error") or ""
-    status.delivery_error = payload.get("delivery_error") or ""
-    status.retry_count = int(payload.get("retry_count") or 0)
-    status.last_event_at = parse_datetime(payload.get("last_event_at"))
+    if "last_error" in payload:
+        status.last_error = payload.get("last_error") or ""
+    if "delivery_error" in payload:
+        status.delivery_error = payload.get("delivery_error") or ""
+    if "retry_count" in payload:
+        status.retry_count = int(payload.get("retry_count") or 0)
+    if "last_event_at" in payload:
+        status.last_event_at = parse_datetime(payload.get("last_event_at"))
     status.heartbeat_at = get_beijing_now()
     db.session.commit()
     return status
@@ -105,7 +109,7 @@ def process_danmaku_auth_event(payload: dict[str, Any]) -> dict[str, Any]:
     db.session.add(attempt)
 
     if matched:
-        matched = mark_auth_success(session)
+        matched = mark_auth_success(session, expected_code=content)
         if not matched:
             attempt.status = "conflict"
             db.session.commit()
@@ -139,13 +143,19 @@ def create_scheduler_job(payload: dict[str, Any]) -> SchedulerJob:
 def record_scheduler_result(payload: dict[str, Any]) -> SchedulerJob:
     job_id = str(payload.get("job_id") or "").strip()
     job_name = str(payload.get("job_name") or "").strip()
-    if not job_id:
-        raise ValueError("job_id is required")
+    if not job_id and not job_name:
+        raise ValueError("job_id or job_name is required")
 
-    job = SchedulerJob.query.filter_by(job_id=job_id).first()
+    if job_id:
+        job = SchedulerJob.query.filter_by(job_id=job_id).first()
+    else:
+        job = SchedulerJob.query.filter_by(job_type=job_name).order_by(
+            SchedulerJob.created_at.desc()
+        ).first()
+
     if job is None:
         job = SchedulerJob(
-            job_id=job_id,
+            job_id=job_id or str(uuid.uuid4()),
             job_type=job_name,
             status="requested",
         )
