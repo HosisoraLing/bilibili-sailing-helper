@@ -52,10 +52,15 @@ logs/
 *.temp
 .worktrees/
 
-# Claude files
+# Agent workflow files
 .claude/
 claude.md
-!CLAUDE.md
+.agents/
+.codex/
+AGENTS.md
+CLAUDE.md
+.mcp.json
+skills-lock.json
 
 # Local scratch test files
 danmuku_test.py
