@@ -4,6 +4,8 @@ from typing import Any
 
 
 def normalize_danmaku_event(raw_event: dict[str, Any], room_id: int | str) -> dict[str, str] | None:
+    if not isinstance(raw_event, dict):
+        return None
     raw_cmd = str(raw_event.get("cmd") or "")
     if not raw_cmd.startswith("DANMU_MSG"):
         return None

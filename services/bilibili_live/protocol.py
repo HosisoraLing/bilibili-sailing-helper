@@ -49,11 +49,17 @@ def unpack_packets(raw: bytes) -> list[dict[str, Any]]:
 
         body = raw[offset + header_len: offset + packet_len]
         if version == VERSION_DEFLATE:
-            packets.extend(unpack_packets(zlib.decompress(body)))
+            try:
+                packets.extend(unpack_packets(zlib.decompress(body)))
+            except zlib.error:
+                pass
         elif version == VERSION_BROTLI:
-            import brotli
+            try:
+                import brotli
 
-            packets.extend(unpack_packets(brotli.decompress(body)))
+                packets.extend(unpack_packets(brotli.decompress(body)))
+            except Exception:
+                pass
         else:
             packets.append({
                 "operation": operation,
