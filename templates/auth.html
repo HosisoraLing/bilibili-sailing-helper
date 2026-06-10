@@ -358,7 +358,7 @@
 
     socket.on('connect', () => {
         wsConnected = true;
-        stopPolling(); // WebSocket连接成功，停止轮询
+        startPolling(); // 轮询是 split runtime 下的权威成功检测路径
         updateStatus('conn-dot--connected', 'status-pending', '已连接，等待弹幕鉴权…');
         const urlParams = new URLSearchParams(window.location.search);
         socket.emit('join_auth', {

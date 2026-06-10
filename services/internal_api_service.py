@@ -180,11 +180,11 @@ def pending_auth_runtime_state() -> dict[str, Any]:
             "next_action": "管理员需要检查 danmaku-worker",
             "last_error": worker.last_error or worker.delivery_error or "",
         }
-    if worker.state == "delivery_error":
+    if worker.state in {"delivery_error", "queue_full"}:
         return {
             "status": "internal_delivery_delayed",
             "http_status": 202,
-            "next_action": "系统正在重试投递鉴权结果",
+            "next_action": "系统正在恢复鉴权结果投递",
             "retry_count": int(worker.retry_count or 0),
         }
     if worker.state == "reconnecting":

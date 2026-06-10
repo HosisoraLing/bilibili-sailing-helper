@@ -223,6 +223,36 @@ def test_auth_status_reports_retrying_for_reconnecting_worker(client, app):
     assert payload["retry_count"] == 2
 
 
+def test_auth_status_reports_delivery_delay_for_queue_full_worker(client, app):
+    with app.app_context():
+        db.session.add(
+            AuthSession(
+                uid="queue-full-user",
+                code="vc-queue",
+                status="pending",
+                expires_at=get_beijing_now() + timedelta(minutes=5),
+            )
+        )
+        db.session.add(
+            RuntimeStatus(
+                role="danmaku-worker",
+                instance_id="worker-queue",
+                state="queue_full",
+                retry_count=1,
+                delivery_error="auth event queue full",
+                heartbeat_at=get_beijing_now() - timedelta(seconds=3),
+            )
+        )
+        db.session.commit()
+
+    response = client.get("/auth/status?uid=queue-full-user")
+
+    assert response.status_code == 202
+    payload = response.get_json()
+    assert payload["status"] == "internal_delivery_delayed"
+    assert payload["retry_count"] == 1
+
+
 def test_danmaku_webhook_marks_auth_success(client, app):
     with app.app_context():
         session = AuthSession(

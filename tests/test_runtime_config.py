@@ -103,6 +103,27 @@ def test_settings_example_uses_canonical_internal_port():
     assert "7111:7111" in compose
 
 
+def test_auth_page_keeps_polling_after_socketio_connect():
+    auth_source = read("templates/auth.html")
+    connect_handler = auth_source.split("socket.on('connect'", 1)[1].split(
+        "socket.on('connect_error'",
+        1,
+    )[0]
+
+    assert "stopPolling()" not in connect_handler
+    assert "startPolling()" in connect_handler
+
+
+def test_admin_panel_displays_runtime_diagnostics():
+    admin_source = read("templates/admin_panel.html")
+
+    assert "last_error" in admin_source
+    assert "delivery_error" in admin_source
+    assert "retry_count" in admin_source
+    assert "active_cookie_version" in admin_source
+    assert "worker_cookie_version" in admin_source
+
+
 class FakeCookieProvider:
     def __init__(self, *cookies):
         self.cookies = list(cookies)

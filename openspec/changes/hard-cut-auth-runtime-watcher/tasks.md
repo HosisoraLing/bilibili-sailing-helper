@@ -1,6 +1,6 @@
 ## 1. State Model And Tests
 
-- [ ] 1.1 Inventory current auth, Cookie, listener, scheduler, auto-update, Docker port, and healthcheck code paths.
+- [x] 1.1 Inventory current auth, Cookie, listener, scheduler, auto-update, Docker port, and healthcheck code paths.
 - [x] 1.2 Add DB schema/models for QR login tasks, Cookie integrity metadata, auth attempts/success transitions, scheduler jobs, and runtime role status.
 - [x] 1.3 Design internal API contracts for danmaku event reporting, role heartbeat/status, scheduler job requests/results, and shared-secret authentication.
 - [x] 1.3a Add the runtime Cookie contract for internal Cookie status/access, Cookie version tracking, worker heartbeat Cookie version, and stale-worker detection.
@@ -50,9 +50,9 @@
 
 ## 6. Verification
 
-- [ ] 6.1 Run focused unit tests for auth state, QR login, watcher protocol/lifecycle, and runtime status.
-- [ ] 6.2 Run `python3 -m compileall .`.
-- [ ] 6.3 Run Docker Compose config/build checks supported by the local environment.
-- [ ] 6.4 Verify no Playwright, `blivedm`, or runtime `git pull` path remains in production runtime.
-- [ ] 6.5 Verify `danmaku-worker` and `scheduler` do not directly write business DB state in production runtime.
-- [ ] 6.6 Produce a final implementation review report mapping each original user complaint to the fixed behavior and tests.
+- [x] 6.1 Run focused unit tests for auth state, QR login, watcher protocol/lifecycle, and runtime status.
+- [x] 6.2 Run `python3 -m compileall .`.
+- [x] 6.3 Run Docker Compose config/build checks supported by the local environment.
+- [x] 6.4 Verify no Playwright, `blivedm`, or runtime `git pull` path remains in production runtime.
+- [x] 6.5 Verify `danmaku-worker` and `scheduler` do not directly write business DB state in production runtime.
+- [x] 6.6 Produce a final implementation review report mapping each original user complaint to the fixed behavior and tests.

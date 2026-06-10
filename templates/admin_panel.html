@@ -636,7 +636,18 @@
                         alertMsgEl.textContent = 'Cookie无效或已过期，请重新登录B站账号';
                     } else if (runtime.next_action) {
                         const age = worker.heartbeat_age_seconds == null ? '未知' : worker.heartbeat_age_seconds + ' 秒';
-                        alertMsgEl.textContent = runtime.next_action + '；danmaku-worker 状态：' + (worker.state || 'missing') + '，心跳：' + age;
+                        const error = worker.last_error || worker.delivery_error || '无';
+                        const retry = worker.retry_count == null ? 0 : worker.retry_count;
+                        const lastEvent = worker.last_event_at || '无';
+                        const activeVersion = runtime.active_cookie_version || 0;
+                        const workerVersion = runtime.worker_cookie_version || 0;
+                        alertMsgEl.textContent = runtime.next_action
+                            + '；danmaku-worker 状态：' + (worker.state || 'missing')
+                            + '，心跳：' + age
+                            + '，最后弹幕：' + lastEvent
+                            + '，错误：' + error
+                            + '，重试：' + retry
+                            + '，Cookie：' + activeVersion + ' -> ' + workerVersion;
                     }
                 } else {
                     alertEl.style.display = 'none';
