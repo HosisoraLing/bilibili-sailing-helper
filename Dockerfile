@@ -36,26 +36,10 @@ WORKDIR /app
 # 使用国内镜像源
 RUN sed -i s/deb.debian.org/mirrors.aliyun.com/g /etc/apt/sources.list.d/debian.sources
 
-# 安装运行时依赖（包括Playwright所需的系统库）
+# 安装运行时依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
-    wget \
     ca-certificates \
-    fonts-liberation \
-    libasound2 \
-    libatk-bridge2.0-0 \
-    libatk1.0-0 \
-    libcups2 \
-    libdbus-1-3 \
-    libdrm2 \
-    libgbm1 \
-    libgtk-3-0 \
-    libnspr4 \
-    libnss3 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxrandr2 \
-    xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # 从构建阶段复制已安装的依赖
@@ -64,12 +48,6 @@ COPY --from=builder /install /usr/local
 # 创建应用用户（带home目录）
 RUN useradd -m -s /bin/bash appuser
 
-# 在复制代码前安装Playwright浏览器（利用层缓存，代码改动不会触发重新下载）
-USER appuser
-RUN playwright install chromium
-
-# 切换回root复制代码并设置权限
-USER root
 COPY --chown=appuser:appuser app.py config.py routes.py decorators.py constants.py migrate.py ./
 COPY --chown=appuser:appuser db/        ./db/
 COPY --chown=appuser:appuser services/  ./services/

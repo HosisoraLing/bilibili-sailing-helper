@@ -23,10 +23,10 @@ websocket-client>=1.6.0,<2.0.0
 
 # 工具库
 python-dotenv>=1.0.0,<2.0.0
+qrcode[pil]>=7.4.0,<9.0.0
 
 # 开发依赖（可选）
 pytest>=7.4.0,<9.0.0
 pytest-flask>=1.2.0,<2.0.0
 # black>=23.0.0
 # flake8>=6.0.0
-playwright>=1.40.0

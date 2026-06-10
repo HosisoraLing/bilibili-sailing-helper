@@ -162,7 +162,7 @@ docker compose exec app cat /app/logs/error.log
 - **后端**: Flask + Flask-SocketIO + SQLAlchemy
 - **数据库**: SQLite
 - **弹幕监听**: [blivedm](https://github.com/xfgryujk/blivedm)
-- **浏览器自动化**: [Playwright](https://github.com/microsoft/playwright-python)
+- **二维码生成**: [python-qrcode](https://github.com/lincolnloop/python-qrcode)
 - **容器化**: Docker + Docker Compose
 
 ## 第三方依赖
@@ -175,7 +175,7 @@ docker compose exec app cat /app/logs/error.log
 | [blivedm](https://github.com/xfgryujk/blivedm) | B站弹幕监听 | MIT |
 | [aiohttp](https://github.com/aio-libs/aiohttp) | 异步HTTP | Apache-2.0 |
 | [requests](https://github.com/psf/requests) | HTTP库 | Apache-2.0 |
-| [Playwright](https://github.com/microsoft/playwright-python) | 浏览器自动化 | Apache-2.0 |
+| [python-qrcode](https://github.com/lincolnloop/python-qrcode) | 二维码生成 | BSD |
 
 详见 [开源项目使用说明](/opensource)
 

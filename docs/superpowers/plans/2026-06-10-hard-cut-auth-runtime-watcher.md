@@ -272,11 +272,11 @@ git commit -m "feat: add internal runtime API boundary"
 - Modify: `templates/admin.html` or the current admin Cookie template if different
 - Modify: `requirements.txt`
 
-- [ ] **Step 1: Write QR service tests**
+- [x] **Step 1: Write QR service tests**
 
 Create `tests/test_qr_login.py` with mocked HTTP responses covering begin, scanned, expired, success, invalid Cookie, and unknown status. Mock `requests.get` or inject a small HTTP client object.
 
-- [ ] **Step 2: Run QR tests and verify failure**
+- [x] **Step 2: Run QR tests and verify failure**
 
 Run:
 
@@ -286,7 +286,7 @@ pytest tests/test_qr_login.py -q
 
 Expected: fail because `services.bilibili_qr_service` does not exist.
 
-- [ ] **Step 3: Implement QR begin/poll service**
+- [x] **Step 3: Implement QR begin/poll service**
 
 Implement `start_qr_login()`, `poll_qr_login(task_id)`, and `validate_cookie_header(cookie_header)` using:
 
@@ -298,15 +298,15 @@ https://api.bilibili.com/x/web-interface/nav
 
 Persist QR task state in DB and do not replace the current Cookie until validation succeeds.
 
-- [ ] **Step 4: Replace admin QR routes**
+- [x] **Step 4: Replace admin QR routes**
 
 Update admin routes so `/cookie/start-qr-login` returns task id and QR URL, and polling returns explicit states: `pending`, `scanned`, `expired`, `failed`, `succeeded`.
 
-- [ ] **Step 5: Remove Playwright QR code path**
+- [x] **Step 5: Remove Playwright QR code path**
 
 Remove Playwright imports and QR screenshot behavior from `services/cookie_service.py`. Replace admin error copy that mentions installing Playwright.
 
-- [ ] **Step 6: Run QR and auth tests**
+- [x] **Step 6: Run QR and auth tests**
 
 Run:
 
@@ -316,7 +316,7 @@ pytest tests/test_qr_login.py tests/test_internal_api.py tests/test_auth_state.p
 
 Expected: all pass.
 
-- [ ] **Step 7: Commit Task 3**
+- [x] **Step 7: Commit Task 3**
 
 ```bash
 git add services/bilibili_qr_service.py services/cookie_service.py routes.py templates requirements.txt tests/test_qr_login.py

@@ -652,7 +652,7 @@
         const qrStatus = document.getElementById('qrStatus');
         
         qrArea.style.display = 'block';
-        qrStatus.textContent = '正在生成二维码，请稍候（约10秒）...';
+        qrStatus.textContent = '正在生成二维码...';
         
         fetch('/admin/cookie/start-qr-login', {
             method: 'POST',
@@ -664,19 +664,28 @@
         .then(response => response.json().then(data => ({status: response.status, data})))
         .then(({status, data}) => {
             if (data.success) {
-                // 二维码已就绪，直接加载
-                qrImage.src = '/admin/cookie/qrcode?t=' + Date.now();
+                qrImage.src = '/admin/cookie/qrcode/' + encodeURIComponent(data.task_id);
                 qrStatus.textContent = '请使用B站APP扫描二维码';
                 
-                // 轮询检查登录状态
                 let checkCount = 0;
                 const checkInterval = setInterval(() => {
                     checkCount++;
                     
-                    fetch('/admin/cookie/status')
+                    fetch('/admin/cookie/qr-login/' + encodeURIComponent(data.task_id))
                         .then(response => response.json())
                         .then(statusData => {
-                            if (statusData.is_valid) {
+                            if (statusData.status === 'scanned') {
+                                qrStatus.textContent = '已扫码，请在B站APP确认登录';
+                                qrStatus.style.color = '#667eea';
+                            } else if (statusData.status === 'expired') {
+                                clearInterval(checkInterval);
+                                qrStatus.textContent = '二维码已过期，请重新扫码登录';
+                                qrStatus.style.color = '#e53e3e';
+                            } else if (statusData.status === 'failed') {
+                                clearInterval(checkInterval);
+                                qrStatus.textContent = statusData.message || statusData.error || '扫码登录失败，请重试';
+                                qrStatus.style.color = '#e53e3e';
+                            } else if (statusData.status === 'succeeded') {
                                 clearInterval(checkInterval);
                                 const username = statusData.username || '用户';
                                 qrStatus.innerHTML = '✅ 登录成功！欢迎回来，<strong>' + username + '</strong>';
@@ -687,7 +696,7 @@
                                 alertDiv.style.display = 'none';
                                 
                                 // 显示toast提示
-                                showToast('✅ 登录成功！Cookie已更新，弹幕监听已重启');
+                                showToast(statusData.restart_warning || '✅ 登录成功！Cookie已更新，弹幕监听已重启');
                                 
                                 // 3秒后刷新页面
                                 setTimeout(() => {
@@ -699,7 +708,7 @@
                     // 5分钟后停止
                     if (checkCount > 150) {
                         clearInterval(checkInterval);
-                        qrStatus.textContent = '❌ 扫码超时，请重试';
+                        qrStatus.textContent = '扫码超时，请重新开始';
                         qrStatus.style.color = '#e53e3e';
                     }
                 }, 2000);

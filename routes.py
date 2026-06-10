@@ -32,6 +32,8 @@ from services.internal_api_service import (
     record_scheduler_result,
     verify_internal_secret,
 )
+from services.bilibili_qr_service import poll_qr_login, start_qr_login
+from services.bilibili_qr_service import get_qr_login_task, render_qr_png
 from utils.request_utils import get_uid_from_request
 from utils.csv_utils import create_csv_response
 from utils.cache_utils import (
@@ -2030,82 +2032,69 @@ def admin_refresh_buvid3():
     success = CookieService.auto_update_buvid3()
     
     if success:
-        return jsonify({'success': True, 'message': 'buvid3刷新成功'})
+        return jsonify({'success': True, 'message': 'buvid3 已存在'})
     else:
-        return jsonify({'error': 'buvid3刷新失败，请检查playwright是否安装'}), 500
+        return jsonify({'error': '当前 Cookie 缺少 buvid3，请重新扫码登录获取完整 Cookie'}), 500
 
 
-@admin_bp.route('/cookie/qrcode')
+@admin_bp.route('/cookie/qrcode/<task_id>')
 @require_admin
-def admin_cookie_qrcode():
-    """获取登录二维码"""
-    import os
-    import time
+def admin_cookie_qrcode(task_id):
+    """生成登录二维码图片"""
     from flask import send_file
-    
-    QR_IMAGE_PATH = '/tmp/bilibili_qr.png'
-    
-    # 检查二维码是否存在
-    if os.path.exists(QR_IMAGE_PATH):
-        # 检查是否是最近5分钟生成的
-        if time.time() - os.path.getmtime(QR_IMAGE_PATH) < 300:
-            return send_file(QR_IMAGE_PATH, mimetype='image/png')
-    
-    return jsonify({'error': '二维码不存在或已过期，请先启动扫码登录'}), 404
+    from io import BytesIO
+
+    task = get_qr_login_task(task_id)
+    if not task or not task.qr_url:
+        return jsonify({'error': '二维码任务不存在'}), 404
+    if task.status in {'expired', 'failed'}:
+        return jsonify({'error': '二维码已失效，请重新启动扫码登录'}), 410
+
+    return send_file(
+        BytesIO(render_qr_png(task.qr_url)),
+        mimetype='image/png',
+        max_age=0,
+    )
 
 
 @admin_bp.route('/cookie/start-qr-login', methods=['POST'])
 @require_admin
 def admin_start_qr_login():
     """启动扫码登录"""
-    import threading
-    from services.cookie_service import CookieService
-    from services.danmaku_listener import restart_listener
-    
     csrf_token = request.headers.get('X-CSRF-Token')
     if not csrf_token or not UserService.verify_csrf_token(csrf_token):
         return jsonify({'error': 'CSRF token invalid'}), 403
-    
-    # 清除之前的二维码
-    import os
-    QR_PATH = '/tmp/bilibili_qr.png'
-    if os.path.exists(QR_PATH):
-        os.remove(QR_PATH)
-    
-    # 使用事件来同步QR码生成状态
-    qr_ready = threading.Event()
-    qr_result = {'success': False, 'error': None}
-    
-    def do_login():
+
+    try:
+        result = start_qr_login()
+    except Exception as e:
+        logger.error(f"启动扫码登录失败: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 502
+
+    return jsonify({'success': True, **result})
+
+
+@admin_bp.route('/cookie/qr-login/<task_id>', methods=['GET'])
+@require_admin
+def admin_poll_qr_login(task_id):
+    """轮询扫码登录状态"""
+    try:
+        result = poll_qr_login(task_id)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 404
+    except Exception as e:
+        logger.error(f"轮询扫码登录失败: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 502
+
+    if result.get('status') == 'succeeded':
         try:
-            logger.info("开始扫码登录流程...")
-            sessdata, bili_jct = CookieService.get_sessdata_by_qr(qr_ready_event=qr_ready)
-            if sessdata:
-                logger.info(f"获取到SESSDATA，长度: {len(sessdata)}")
-                settings = CookieService.load_settings()
-                settings.setdefault('bilibili', {})['SESSDATA'] = sessdata
-                if bili_jct:
-                    settings['bilibili']['bili_jct'] = bili_jct
-                CookieService.save_settings(settings)
-                logger.info("Cookie已保存到settings.json")
-                
-                # 重启弹幕监听
-                restart_listener()
-                logger.info("弹幕监听已重启")
-            else:
-                logger.warning("扫码登录未获取到SESSDATA")
+            from services.danmaku_listener import restart_listener
+            restart_listener()
         except Exception as e:
-            logger.error(f"扫码登录失败: {e}", exc_info=True)
-            qr_result['error'] = str(e)
-    
-    thread = threading.Thread(target=do_login, daemon=True)
-    thread.start()
-    
-    # 等待二维码生成完成（最多15秒）
-    if qr_ready.wait(timeout=15):
-        return jsonify({'success': True, 'message': '二维码已生成，请扫码登录'})
-    else:
-        return jsonify({'error': '二维码生成超时'}), 504
+            logger.warning(f"Cookie 已更新，但弹幕监听重启失败: {e}")
+            result['restart_warning'] = 'Cookie 已更新，但弹幕监听重启失败，请手动重启监听'
+
+    return jsonify({'success': result.get('status') != 'failed', **result})
 
 
 @admin_bp.route('/cookie/restart-listener', methods=['POST'])

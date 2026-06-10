@@ -9,12 +9,12 @@
 
 ## 2. Browserless QR Login
 
-- [ ] 2.1 Study local `/Users/nowanti/Play/Projects/bili-cli` QR begin, poll, cookie import, and integrity code paths and map the project-specific subset.
-- [ ] 2.2 Implement Bilibili Passport QR begin/poll service without Playwright.
-- [ ] 2.3 Implement Cookie validation and integrity classification with safe persistence that does not replace a usable Cookie on failed validation.
-- [ ] 2.4 Update admin QR login routes/templates/API responses with actionable statuses and retry guidance.
-- [ ] 2.5 Remove Playwright runtime dependency and obsolete browser automation code.
-- [ ] 2.6 Add mocked QR login tests for pending, scanned, expired, success, invalid Cookie, and unknown status code.
+- [x] 2.1 Study local `/Users/nowanti/Play/Projects/bili-cli` QR begin, poll, cookie import, and integrity code paths and map the project-specific subset.
+- [x] 2.2 Implement Bilibili Passport QR begin/poll service without Playwright.
+- [x] 2.3 Implement Cookie validation and integrity classification with safe persistence that does not replace a usable Cookie on failed validation.
+- [x] 2.4 Update admin QR login routes/templates/API responses with actionable statuses and retry guidance.
+- [x] 2.5 Remove Playwright runtime dependency and obsolete browser automation code.
+- [x] 2.6 Add mocked QR login tests for pending, scanned, expired, success, invalid Cookie, and unknown status code.
 
 ## 3. Native Danmaku Watcher
 
