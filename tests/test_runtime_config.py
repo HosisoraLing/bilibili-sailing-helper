@@ -125,6 +125,9 @@ def test_admin_panel_displays_runtime_diagnostics():
     admin_actions = admin_source.split('<div class="admin-actions">', 1)[1].split("</div>", 1)[0]
     assert "startQrLogin()" in admin_actions
     assert "切换B站账号" in admin_actions
+    listener_alert = admin_source.split('id="listenerAlert"', 1)[1].split('id="qrCodeArea"', 1)[0]
+    assert "restartListener()" not in listener_alert
+    assert "查看重启方式" not in listener_alert
 
 
 class FakeCookieProvider:
@@ -352,6 +355,50 @@ def test_scheduler_runs_recurring_jobs_until_stopped():
         "cookie-maintenance",
         "auth-cleanup",
     }
+
+
+def test_scheduler_reports_heartbeat_while_waiting_between_job_cycles():
+    from runtime import scheduler
+
+    posts = []
+    sleeps = []
+
+    class FakeResponse:
+        status = 200
+
+        def release(self):
+            pass
+
+    class FakeSession:
+        async def post(self, url, headers=None, json=None, timeout=None):
+            posts.append((url, json))
+            return FakeResponse()
+
+    async def stop_after_two_sleeps(seconds):
+        sleeps.append(seconds)
+        if len(sleeps) >= 2:
+            raise scheduler.SchedulerStop("test stop")
+
+    asyncio.run(
+        scheduler.run_scheduler_loop(
+            session=FakeSession(),
+            internal_url="http://web:7111",
+            secret="secret",
+            instance_id="scheduler-1",
+            interval_seconds=3600,
+            sleep=stop_after_two_sleeps,
+            heartbeat_interval_seconds=30,
+        )
+    )
+
+    heartbeat_payloads = [
+        payload
+        for url, payload in posts
+        if url.endswith("/internal/runtime/heartbeat")
+        and payload["role"] == "scheduler"
+    ]
+    assert [payload["state"] for payload in heartbeat_payloads] == ["running", "running"]
+    assert sleeps == [30, 30]
 
 
 def test_scheduler_attempts_all_jobs_when_one_request_fails():

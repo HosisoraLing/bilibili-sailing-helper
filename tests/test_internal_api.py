@@ -224,6 +224,66 @@ def test_admin_cookie_status_reports_rescan_action_for_bilibili_rejected_worker(
     assert payload["runtime"]["roles"]["danmaku-worker"]["state"] == "bilibili_rejected"
 
 
+def test_admin_cookie_status_does_not_block_listener_on_stale_scheduler(
+    client,
+    app,
+    monkeypatch,
+):
+    with app.app_context():
+        admin = User(uid="admin-scheduler-stale", nickname="admin")
+        admin.add_role("admin")
+        db.session.add(admin)
+        db.session.add(
+            CookieMetadata(
+                role="admin",
+                status="valid",
+                cookie_version=3,
+                masked_uid="12***34",
+                last_validated_at=get_beijing_now(),
+            )
+        )
+        db.session.add(
+            RuntimeStatus(
+                role="danmaku-worker",
+                instance_id="worker-running",
+                state="running",
+                cookie_version=3,
+                last_error="",
+                delivery_error="",
+                heartbeat_at=get_beijing_now() - timedelta(seconds=2),
+            )
+        )
+        db.session.add(
+            RuntimeStatus(
+                role="scheduler",
+                instance_id="scheduler-stale",
+                state="running",
+                heartbeat_at=get_beijing_now() - timedelta(seconds=3600),
+            )
+        )
+        db.session.commit()
+        admin_id = admin.id
+
+    with client.session_transaction() as flask_session:
+        flask_session["_user_id"] = str(admin_id)
+
+    monkeypatch.setattr(
+        "services.cookie_service.CookieService.load_settings",
+        lambda: {"bilibili": {"SESSDATA": "sess", "bili_jct": "csrf", "buvid3": "buvid"}},
+    )
+    monkeypatch.setattr(
+        "services.cookie_service.CookieService.validate_cookie",
+        lambda _sessdata: (True, "tester"),
+    )
+
+    response = client.get("/admin/cookie/status")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["runtime"]["next_action"] == "无需操作"
+    assert payload["runtime"]["roles"]["scheduler"]["stale"] is True
+
+
 def test_auth_status_reports_listener_unavailable_for_pending_session(client, app):
     with app.app_context():
         db.session.add(

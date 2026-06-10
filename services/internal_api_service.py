@@ -150,8 +150,6 @@ def runtime_health_summary() -> dict[str, Any]:
         next_action = "检查 danmaku-worker 日志并重启该角色"
     elif worker.state == "reconnecting":
         next_action = "等待 danmaku-worker 自动重连"
-    elif scheduler is None or is_runtime_status_stale(scheduler):
-        next_action = "检查 scheduler 角色"
     else:
         next_action = "无需操作"
 

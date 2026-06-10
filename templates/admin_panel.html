@@ -299,14 +299,9 @@
                     <div id="listenerAlertMsg" style="font-size: 13px; opacity: 0.9; margin-top: 3px;">请重新登录B站账号以恢复弹幕鉴权功能</div>
                 </div>
             </div>
-            <div style="display: flex; gap: 10px;">
-                <button onclick="startQrLogin()" style="background: white; color: #ff6b6b; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer;">
-                    <i class="fas fa-qrcode"></i> 扫码授权
-                </button>
-                <button onclick="restartListener()" style="background: rgba(255,255,255,0.2); color: white; border: 2px solid rgba(255,255,255,0.5); padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer;">
-                    <i class="fas fa-sync-alt"></i> 查看重启方式
-                </button>
-            </div>
+            <button onclick="startQrLogin()" style="background: white; color: #ff6b6b; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                <i class="fas fa-qrcode"></i> 扫码授权
+            </button>
         </div>
     </div>
 
@@ -759,10 +754,6 @@
             qrStatus.textContent = '❌ 请求失败: ' + error.message;
             qrStatus.style.color = '#e53e3e';
         });
-    }
-    
-    function restartListener() {
-        alert('弹幕监听已迁移到 danmaku-worker 角色。请在服务器执行：docker compose restart danmaku-worker');
     }
     
     // 页面加载时检查状态
