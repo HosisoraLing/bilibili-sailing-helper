@@ -515,6 +515,126 @@ def test_run_pending_scheduler_job_executes_guard_sync_inside_web(app, monkeypat
         assert "guard-sync completed" in refreshed.result_json
 
 
+def test_run_pending_scheduler_job_executes_all_periodic_jobs_inside_web(app, monkeypatch):
+    from routes import run_pending_scheduler_job
+    import routes
+
+    calls = []
+
+    monkeypatch.setattr(routes, "fetch_and_save_guards", lambda: calls.append("guard-sync"))
+
+    class FakeGuardGiftService:
+        @staticmethod
+        def calculate_monthly_eligible_guards():
+            calls.append("guard-gift-current")
+            return [object()]
+
+        @staticmethod
+        def update_historical_months():
+            calls.append("guard-gift-history")
+            return [object(), object()]
+
+    class FakeCookieService:
+        @staticmethod
+        def auto_update_buvid3():
+            calls.append("cookie-maintenance")
+            return True
+
+    monkeypatch.setattr(routes, "GuardGiftService", FakeGuardGiftService)
+    monkeypatch.setattr(routes, "CookieService", FakeCookieService)
+    monkeypatch.setattr(routes, "cleanup_expired_sessions", lambda: calls.append("auth-cleanup") or 2)
+
+    with app.app_context():
+        for job_name in (
+            "guard-sync",
+            "guard-gift-refresh",
+            "cookie-maintenance",
+            "auth-cleanup",
+        ):
+            job = SchedulerJob(
+                job_id=f"{job_name}-job",
+                job_type=job_name,
+                status="requested",
+            )
+            db.session.add(job)
+            db.session.commit()
+
+            result = run_pending_scheduler_job(job)
+
+            assert result == {"executed": True, "job_status": "success"}
+            refreshed = SchedulerJob.query.filter_by(job_id=f"{job_name}-job").one()
+            assert refreshed.status == "success"
+            assert job_name in refreshed.result_json
+
+    assert calls == [
+        "guard-sync",
+        "guard-gift-current",
+        "guard-gift-history",
+        "cookie-maintenance",
+        "auth-cleanup",
+    ]
+
+
+def test_run_pending_scheduler_job_records_failure(app, monkeypatch):
+    from routes import run_pending_scheduler_job
+    import routes
+
+    def fail_guard_sync():
+        raise RuntimeError("bili api unavailable")
+
+    monkeypatch.setattr(routes, "fetch_and_save_guards", fail_guard_sync)
+
+    with app.app_context():
+        job = SchedulerJob(
+            job_id="guard-sync-failed-job",
+            job_type="guard-sync",
+            status="requested",
+        )
+        db.session.add(job)
+        db.session.commit()
+
+        result = run_pending_scheduler_job(job)
+
+        assert result == {
+            "executed": True,
+            "job_status": "failed",
+            "error": "bili api unavailable",
+        }
+        refreshed = SchedulerJob.query.filter_by(job_id="guard-sync-failed-job").one()
+        assert refreshed.status == "failed"
+        assert refreshed.last_error == "bili api unavailable"
+        assert "guard-sync failed" in refreshed.result_json
+
+
+def test_run_pending_scheduler_job_marks_cookie_maintenance_false_as_failed(app, monkeypatch):
+    from routes import run_pending_scheduler_job
+    import routes
+
+    class FakeCookieService:
+        @staticmethod
+        def auto_update_buvid3():
+            return False
+
+    monkeypatch.setattr(routes, "CookieService", FakeCookieService)
+
+    with app.app_context():
+        job = SchedulerJob(
+            job_id="cookie-maintenance-needs-login",
+            job_type="cookie-maintenance",
+            status="requested",
+        )
+        db.session.add(job)
+        db.session.commit()
+
+        result = run_pending_scheduler_job(job)
+
+        assert result["executed"] is True
+        assert result["job_status"] == "failed"
+        refreshed = SchedulerJob.query.filter_by(job_id="cookie-maintenance-needs-login").one()
+        assert refreshed.status == "failed"
+        assert "needs QR login" in refreshed.last_error
+
+
 def test_internal_scheduler_result_can_record_by_job_name_without_job_id(client, app):
     job_response = client.post(
         "/internal/scheduler/job",

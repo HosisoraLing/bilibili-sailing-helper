@@ -5,12 +5,12 @@
 | Dimension | Status |
 | --- | --- |
 | Completeness | 41/41 OpenSpec tasks checked |
-| Correctness | 4/4 capability specs implemented with one scheduler scope warning |
+| Correctness | 4/4 capability specs implemented |
 | Coherence | Follows internal-API role split design |
 
 ## Verification Evidence
 
-- `.venv/bin/python -m pytest -q`: 81 passed.
+- `.venv/bin/python -m pytest -q`: 82 passed.
 - `.venv/bin/python -m compileall .`: passed.
 - `INTERNAL_API_SECRET=test-secret docker compose config >/tmp/bsh-compose-config.yml`: passed.
 - `INTERNAL_API_SECRET=test-secret docker compose build`: first direct Docker Hub token request timed out; retry with local proxy env passed and built `web`, `danmaku-worker`, and `scheduler` images.
@@ -54,13 +54,11 @@ Evidence: `tests/test_watcher_protocol.py`, `tests/test_runtime_config.py`.
 
 Evidence: `tests/test_runtime_config.py`, Compose config render, DB write scan.
 
-### WARNING: Scheduler Job Breadth
+### PASS: Scheduler Job Breadth
 
-The scheduler role currently has a long-running loop and triggers `guard-sync` through `/internal/scheduler/job`. The design/spec names additional periodic ownership areas such as gift/stat refresh, Cookie maintenance, and expired auth cleanup. Those are not all wired as distinct scheduled jobs in this implementation.
+The scheduler role has a long-running loop and triggers `guard-sync`, `guard-gift-refresh`, `cookie-maintenance`, and `auth-cleanup` through `/internal/scheduler/job`. The web internal job handler executes those jobs inside the web/app process so scheduler remains outside direct DB ownership.
 
-Impact: the role boundary is in place, but not every historical background job has a dedicated scheduler trigger yet. Existing tests cover the internal job mechanism and `guard-sync`, not every periodic job name.
-
-Recommendation: either accept this as a follow-up scheduler expansion or return to build to add job definitions/tests for each periodic task before archive.
+Evidence: `tests/test_runtime_config.py::test_scheduler_runs_recurring_jobs_until_stopped`, `tests/test_internal_api.py::test_run_pending_scheduler_job_executes_all_periodic_jobs_inside_web`.
 
 ## Coherence
 
@@ -84,4 +82,4 @@ Subagent review checkpoints were requested after major runtime stages. Critical 
 
 ## Final Assessment
 
-No CRITICAL issues remain. One WARNING remains for scheduler job breadth. Archive readiness depends on the branch-handling decision and whether the scheduler breadth warning is accepted as a follow-up or sent back to build.
+No CRITICAL or WARNING issues remain. Archive readiness depends on committing the verified worktree state and completing the archive confirmation step.

@@ -6,6 +6,14 @@ from typing import Awaitable, Callable
 import aiohttp
 
 
+PERIODIC_JOBS = (
+    "guard-sync",
+    "guard-gift-refresh",
+    "cookie-maintenance",
+    "auth-cleanup",
+)
+
+
 class SchedulerStop(Exception):
     pass
 
@@ -51,15 +59,24 @@ async def request_scheduler_jobs(
                 "state": "running",
         },
     )
-    await post_json(
-        session,
-        f"{internal_url}/internal/scheduler/job",
-        secret=secret,
-        payload={
-            "job_name": "guard-sync",
-            "requested_at": datetime.now(timezone.utc).isoformat(),
-        },
-    )
+    requested_at = datetime.now(timezone.utc).isoformat()
+    errors = []
+    for job_name in PERIODIC_JOBS:
+        try:
+            await post_json(
+                session,
+                f"{internal_url}/internal/scheduler/job",
+                secret=secret,
+                payload={
+                    "job_name": job_name,
+                    "requested_at": requested_at,
+                },
+            )
+        except Exception as exc:
+            errors.append(f"{job_name}: {exc}")
+
+    if errors:
+        raise RuntimeError("; ".join(errors))
 
 
 async def run_scheduler_loop(

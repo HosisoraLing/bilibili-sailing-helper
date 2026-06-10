@@ -12,6 +12,7 @@ from flask_login import login_user, current_user, logout_user
 from db.models import db, User, Address, Guard, GuardGiftRecord, get_beijing_now
 from services.address_service import save_address, get_user_address
 from services.auth_service import (
+    cleanup_expired_sessions,
     create_auth_session,
     get_active_auth_session,
     get_cached_code,
@@ -37,6 +38,7 @@ from services.internal_api_service import (
 from services.runtime_cookie_service import RuntimeCookieService
 from services.bilibili_qr_service import poll_qr_login, start_qr_login
 from services.bilibili_qr_service import get_qr_login_task, render_qr_png
+from services.cookie_service import CookieService
 from utils.request_utils import get_uid_from_request
 from utils.csv_utils import create_csv_response
 from utils.cache_utils import (
@@ -56,6 +58,12 @@ from decorators import (
 main_bp = Blueprint('main', __name__)
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 internal_bp = Blueprint('internal', __name__, url_prefix='/internal')
+
+
+def fetch_and_save_guards():
+    from app import fetch_and_save_guards as app_fetch_and_save_guards
+
+    return app_fetch_and_save_guards()
 
 
 def _internal_json_payload():
@@ -2166,22 +2174,51 @@ def internal_danmaku_auth_event():
 
 
 def run_pending_scheduler_job(job):
-    from app import fetch_and_save_guards
-
     started_at = get_beijing_now().isoformat()
-    if job.job_type == 'guard-sync':
-        fetch_and_save_guards()
+    try:
+        if job.job_type == 'guard-sync':
+            fetch_and_save_guards()
+            summary = 'guard-sync completed'
+        elif job.job_type == 'guard-gift-refresh':
+            eligible_records = GuardGiftService.calculate_monthly_eligible_guards()
+            historical_records = GuardGiftService.update_historical_months()
+            summary = (
+                f"guard-gift-refresh completed: "
+                f"{len(eligible_records or [])} current, "
+                f"{len(historical_records or [])} historical"
+            )
+        elif job.job_type == 'cookie-maintenance':
+            success = CookieService.auto_update_buvid3()
+            if not success:
+                raise RuntimeError('cookie-maintenance needs QR login or valid buvid3')
+            summary = f"cookie-maintenance completed: {'success' if success else 'needs_qr_login'}"
+        elif job.job_type == 'auth-cleanup':
+            cleaned = cleanup_expired_sessions()
+            summary = f"auth-cleanup completed: {cleaned} expired sessions"
+        else:
+            return {'executed': False, 'job_status': job.status}
+    except Exception as exc:
+        record_scheduler_result({
+            'job_id': job.job_id,
+            'job_name': job.job_type,
+            'status': 'failed',
+            'started_at': started_at,
+            'finished_at': get_beijing_now().isoformat(),
+            'summary': f'{job.job_type} failed',
+            'error': str(exc),
+        })
+        return {'executed': True, 'job_status': 'failed', 'error': str(exc)}
+    else:
         record_scheduler_result({
             'job_id': job.job_id,
             'job_name': job.job_type,
             'status': 'success',
             'started_at': started_at,
             'finished_at': get_beijing_now().isoformat(),
-            'summary': 'guard-sync completed',
+            'summary': summary,
             'error': '',
         })
         return {'executed': True, 'job_status': 'success'}
-    return {'executed': False, 'job_status': job.status}
 
 
 @internal_bp.route('/scheduler/job', methods=['POST'])

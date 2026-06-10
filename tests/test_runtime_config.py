@@ -338,10 +338,69 @@ def test_scheduler_runs_recurring_jobs_until_stopped():
     )
 
     assert any(url.endswith("/internal/runtime/heartbeat") for url, _ in posts)
-    assert any(
-        url.endswith("/internal/scheduler/job") and payload["job_name"] == "guard-sync"
+    job_names = {
+        payload["job_name"]
         for url, payload in posts
-    )
+        if url.endswith("/internal/scheduler/job")
+    }
+    assert job_names == {
+        "guard-sync",
+        "guard-gift-refresh",
+        "cookie-maintenance",
+        "auth-cleanup",
+    }
+
+
+def test_scheduler_attempts_all_jobs_when_one_request_fails():
+    from runtime import scheduler
+
+    posts = []
+
+    class FakeResponse:
+        def __init__(self, status=200):
+            self.status = status
+
+        async def text(self):
+            return "job failed"
+
+        def release(self):
+            pass
+
+    class FakeSession:
+        async def post(self, url, headers=None, json=None, timeout=None):
+            posts.append((url, json))
+            if (
+                url.endswith("/internal/scheduler/job")
+                and json["job_name"] == "guard-gift-refresh"
+            ):
+                return FakeResponse(500)
+            return FakeResponse()
+
+    try:
+        asyncio.run(
+            scheduler.request_scheduler_jobs(
+                session=FakeSession(),
+                internal_url="http://web:7111",
+                secret="secret",
+                instance_id="scheduler-1",
+            )
+        )
+    except RuntimeError as exc:
+        assert "guard-gift-refresh" in str(exc)
+    else:
+        raise AssertionError("request_scheduler_jobs should raise after collecting failures")
+
+    job_names = [
+        payload["job_name"]
+        for url, payload in posts
+        if url.endswith("/internal/scheduler/job")
+    ]
+    assert job_names == [
+        "guard-sync",
+        "guard-gift-refresh",
+        "cookie-maintenance",
+        "auth-cleanup",
+    ]
 
 
 def test_scheduler_raises_on_internal_api_error():
