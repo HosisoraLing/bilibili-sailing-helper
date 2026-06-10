@@ -2,6 +2,8 @@
 comet_change: modularize-routes-and-admin-v2
 role: technical-design
 canonical_spec: openspec
+archived-with: 2026-06-10-modularize-routes-and-admin-v2
+status: final
 ---
 
 # Modularize Routes And Admin V2 Design

@@ -16,7 +16,7 @@ verification_report: docs/superpowers/verification/2026-06-10-modularize-routes-
 branch_status: handled
 created_at: 2026-06-10
 verified_at: 2026-06-10
-archived: false
+archived: true
 handoff_context: openspec/changes/modularize-routes-and-admin-v2/.comet/handoff/design-context.json
 handoff_hash: bde788b4d830fdb820e773a7cea4318c62e56fa79268c53a6c29d478f81660dc
 build_command: .venv/bin/python -m compileall app.py routes.py db services runtime tests get_cookies.py route_handlers

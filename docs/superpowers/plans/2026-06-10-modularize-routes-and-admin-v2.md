@@ -2,6 +2,7 @@
 change: modularize-routes-and-admin-v2
 design-doc: docs/superpowers/specs/2026-06-10-modularize-routes-and-admin-v2-design.md
 base-ref: d5cf50ae5f0fb9b376f0cc70233702d582aedf3a
+archived-with: 2026-06-10-modularize-routes-and-admin-v2
 ---
 
 # Modularize Routes And Admin V2 Implementation Plan
