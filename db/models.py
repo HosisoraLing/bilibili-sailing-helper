@@ -4,10 +4,21 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import json
 import logging
 
-# 设置日志
 logger = logging.getLogger(__name__)
 
 db = SQLAlchemy(session_options={"expire_on_commit": False})
+
+
+def enable_sqlite_wal(engine):
+    """启用 SQLite WAL 模式和忙等待超时"""
+    from sqlalchemy import event
+
+    @event.listens_for(engine, "connect")
+    def _set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA busy_timeout=5000")
+        cursor.close()
 
 # =========================
 # 北京时间工具

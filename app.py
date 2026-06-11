@@ -30,10 +30,10 @@ def register_socketio_events(socketio):
         """
         from services.user_service import UserService
         from services.danmaku_listener import set_auth_mode
+        import re
 
-        # 从数据中获取 UID
         uid = data.get('uid')
-        if not uid:
+        if not uid or not re.match(r'^\d{1,20}$', str(uid)):
             emit('error', {'status': 'error', 'message': '缺少 UID 参数'})
             return
 
@@ -71,14 +71,22 @@ def register_socketio_events(socketio):
 
 def create_app():
     """创建 Flask 应用实例"""
+    from werkzeug.middleware.proxy_fix import ProxyFix
+
     app = Flask(__name__)
     app.config.from_object(Config)
+
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
     # ===== 初始化数据库 =====
     db.init_app(app)
 
+    with app.app_context():
+        from db.models import enable_sqlite_wal
+        enable_sqlite_wal(db.engine)
+
     # ===== Flask-SocketIO =====
-    socketio = SocketIO(app, cors_allowed_origins='*')
+    socketio = SocketIO(app, cors_allowed_origins=Config.CORS_ALLOWED_ORIGINS)
 
     # ===== Flask-Login =====
     login_manager = LoginManager()
@@ -706,7 +714,6 @@ if __name__ == '__main__':
         except KeyboardInterrupt:
             logger.info("服务器已停止")
     else:
-        # 仅启动 HTTP 服务器（默认行为）
         logger.info(f"仅启用 HTTP 支持（端口: {Config.PORT}）")
         socketio.run(
             app_instance,
@@ -714,5 +721,5 @@ if __name__ == '__main__':
             port=Config.PORT,
             debug=Config.DEBUG,
             use_reloader=False,
-            allow_unsafe_werkzeug=True
+            allow_unsafe_werkzeug=not Config.DEBUG
         )

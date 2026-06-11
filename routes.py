@@ -2,6 +2,7 @@
 路由模块
 包含所有 Flask 路由定义
 """
+import logging
 from datetime import date
 from flask import (
     Blueprint, request, render_template, redirect,
@@ -37,6 +38,8 @@ from decorators import (
     require_guard_or_admin,
     require_admin,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # 创建蓝图
@@ -1679,6 +1682,11 @@ def admin_import_csv():
     if not csrf_token or not UserService.verify_csrf_token(csrf_token):
         return jsonify({'error': 'CSRF token invalid or missing'}), 403
 
+    # 验证敏感操作Token
+    is_valid, error_msg = RequestValidator.validate_sensitive_request()
+    if not is_valid:
+        return jsonify({'error': error_msg or '安全验证失败'}), 403
+
     # Get import type
     import_type = request.args.get('type')
     if not import_type:
@@ -1788,7 +1796,7 @@ def admin_import_csv():
                 if accompany_days:
                     try:
                         accompany_days = int(accompany_days)
-                    except:
+                    except (ValueError, TypeError):
                         accompany_days = 0
                 else:
                     accompany_days = 0
@@ -1848,7 +1856,7 @@ def admin_import_csv():
                 if accompany_days:
                     try:
                         accompany_days = int(accompany_days)
-                    except:
+                    except (ValueError, TypeError):
                         accompany_days = 0
                 else:
                     accompany_days = 0
@@ -1907,7 +1915,7 @@ def admin_import_csv():
                 if accompany_days:
                     try:
                         accompany_days = int(accompany_days)
-                    except:
+                    except (ValueError, TypeError):
                         accompany_days = 0
                 else:
                     accompany_days = 0
@@ -1951,8 +1959,8 @@ def admin_import_csv():
 
     except Exception as e:
         db.session.rollback()
-        print(f"CSV import error: {e}")
-        return jsonify({'error': f'CSV导入失败: {str(e)}'}), 500
+        logger.error(f"CSV import error: {e}", exc_info=True)
+        return jsonify({'error': 'CSV导入失败，请检查文件格式'}), 500
 
 
 # =========================

@@ -115,3 +115,15 @@ class Config:
 
     ADMIN_UIDS = ADMIN_UIDS
     RUID = RUID_INT
+
+    # CORS 配置（WebSocket 允许的来源）
+    CORS_ALLOWED_ORIGINS = settings.get('flask', {}).get('cors_allowed_origins', '*')
+
+    # 反向代理配置
+    SERVER_NAME = settings.get('flask', {}).get('server_name', '')
+    PREFERRED_URL_SCHEME = settings.get('flask', {}).get('preferred_url_scheme', 'http')
+
+    # Session Cookie 安全标志
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    SESSION_COOKIE_SECURE = settings.get('flask', {}).get('session_cookie_secure', False)

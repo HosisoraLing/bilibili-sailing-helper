@@ -1,4 +1,4 @@
-import random
+import secrets
 import string
 import threading
 from datetime import timedelta
@@ -38,7 +38,7 @@ def generate_auth_code(uid: str, length: int = 8) -> str:
         old_code = _auth_code_cache.get(uid)
 
         while True:
-            code = ''.join(random.choice(chars) for _ in range(length))
+            code = ''.join(secrets.choice(chars) for _ in range(length))
             if code != old_code:
                 break
 

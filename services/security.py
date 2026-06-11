@@ -39,7 +39,7 @@ class SecurityManager:
             salt, hash_value = hashed.split(":", 1)
             new_hash = hashlib.sha256(f"{salt}{data}".encode()).hexdigest()
             return hmac.compare_digest(new_hash, hash_value)
-        except:
+        except Exception:
             return False
 
     @staticmethod
@@ -212,7 +212,7 @@ class RequestValidator:
             token_data = json.loads(data)
             if str(token_data.get('uid')) != str(current_user.uid):
                 return False, "Token用户不匹配"
-        except:
+        except Exception:
             return False, "Token格式错误"
 
         return True, None

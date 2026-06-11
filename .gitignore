@@ -55,6 +55,9 @@ logs/
 .claude/
 claude.md
 
+# OpenCode files
+.omo/
+
 # Test files
 tests/
 test_*.py
