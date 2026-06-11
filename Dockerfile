@@ -17,12 +17,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # 先复制 requirements 利用 Docker 层缓存
 COPY requirements.txt .
 
-# 使用阿里云pip镜像源（清华源偶发403）
-RUN pip install --no-cache-dir --prefix=/install \
-    -i https://mirrors.aliyun.com/pypi/simple/ \
-    --trusted-host mirrors.aliyun.com \
-    --retries 3 \
-    -r requirements.txt
+# GitHub Actions 构建默认使用 PyPI，避免国内镜像源在 CI 中反而变慢。
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# 本地网络需要加速时，可改用阿里云 pip 镜像源：
+# RUN pip install --no-cache-dir --prefix=/install \
+#     -i https://mirrors.aliyun.com/pypi/simple/ \
+#     --trusted-host mirrors.aliyun.com \
+#     --retries 3 \
+#     -r requirements.txt
 
 
 # ============================================================
