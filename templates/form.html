@@ -166,9 +166,9 @@
             }
         }
 
-        const prefillProvince = '{{ address.province if address else '' }}';
-        const prefillCity = '{{ address.city if address else '' }}';
-        const prefillDistrict = '{{ address.area if address else '' }}';
+        const prefillProvince = {{ address.province|tojson if address else '""' }};
+        const prefillCity = {{ address.city|tojson if address else '""' }};
+        const prefillDistrict = {{ address.area|tojson if address else '""' }};
 
         fetch('/static/china_regions.json')
             .then(r => {
