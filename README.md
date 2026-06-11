@@ -71,7 +71,11 @@ python app.py
         "secret_key": "随机密钥",
         "debug": false,
         "host": "0.0.0.0",
-        "port": 7111
+        "port": 7111,
+        "cors_allowed_origins": "*",
+        "server_name": "",
+        "preferred_url_scheme": "http",
+        "session_cookie_secure": false
     },
     "ssl": {
         "enabled": false,
@@ -84,6 +88,19 @@ python app.py
     }
 }
 ```
+
+### 配置项说明
+
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `flask.secret_key` | `dev-secret` | 会话加密密钥，生产环境务必修改 |
+| `flask.debug` | `false` | 调试模式，生产环境必须为 `false` |
+| `flask.host` | `0.0.0.0` | 监听地址 |
+| `flask.port` | `7111` | 监听端口 |
+| `flask.cors_allowed_origins` | `*` | WebSocket 允许的来源，生产环境建议设为具体域名 |
+| `flask.server_name` | 空 | 公网域名（如 `kuii.cc`），反向代理时必填 |
+| `flask.preferred_url_scheme` | `http` | URL 协议，HTTPS 部署时改为 `https` |
+| `flask.session_cookie_secure` | `false` | Cookie 是否仅 HTTPS 发送，HTTPS 部署时改为 `true` |
 
 ### 获取B站Cookie
 
@@ -107,11 +124,21 @@ bilibili-sailing-helper/
 │   ├── guard_service.py      # 舰长服务
 │   ├── user_service.py       # 用户服务
 │   ├── admin_service.py      # 管理服务
-│   └── address_service.py    # 地址服务
+│   ├── address_service.py    # 地址服务
+│   ├── cookie_service.py     # Cookie管理
+│   ├── guard_gift_service.py # 礼物统计
+│   ├── region_service.py     # 地区数据
+│   └── security.py           # 安全模块
+├── db/                 # 数据库模块
+│   ├── models.py             # 数据模型
+│   └── init_db.py            # 数据库初始化
+├── utils/              # 工具模块
+│   ├── cache_utils.py        # 缓存工具
+│   ├── csv_utils.py          # CSV工具
+│   ├── log_utils.py          # 日志工具
+│   └── request_utils.py      # 请求工具
 ├── templates/          # HTML模板
 ├── static/             # 静态资源
-├── utils/              # 工具模块
-│   └── log_utils.py    # 日志工具
 ├── data/               # 数据库文件
 ├── logs/               # 错误日志
 ├── Dockerfile          # Docker镜像配置
