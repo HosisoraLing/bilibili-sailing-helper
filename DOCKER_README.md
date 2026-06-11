@@ -21,6 +21,31 @@ docker compose up -d
 
 `INTERNAL_API_SECRET` 必须设置，三个角色用它保护内部 API。不要把真实 secret 提交到仓库。
 
+## 镜像自动构建
+
+GitHub Actions 会在以下场景构建多架构镜像：
+
+- Pull Request：只构建验证，不推送镜像。
+- `main` 分支 push：推送到 `ghcr.io/<owner>/<repo>`，包含分支名、`latest` 和 `sha-*` 标签。
+- `v*` tag push：推送到 `ghcr.io/<owner>/<repo>`，包含 semver 标签和 `sha-*` 标签。
+
+默认发布到 GHCR，不需要额外配置。镜像包写入权限来自 GitHub 内置的 `GITHUB_TOKEN`。
+
+如需同步推送一份到阿里云容器镜像服务，在仓库配置中补齐：
+
+- Repository variables:
+  - `ALIYUN_REGISTRY`，例如 `registry.cn-hangzhou.aliyuncs.com`
+  - `ALIYUN_NAMESPACE`，例如 `your-namespace`
+- Repository secrets:
+  - `ALIYUN_USERNAME`
+  - `ALIYUN_PASSWORD`
+
+四项配置都存在时，workflow 会把同一组标签额外推送到：
+
+```text
+${ALIYUN_REGISTRY}/${ALIYUN_NAMESPACE}/bilibili-sailing-helper:<tag>
+```
+
 ## 常用命令
 
 ```bash

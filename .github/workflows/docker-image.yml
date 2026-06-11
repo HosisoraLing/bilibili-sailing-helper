@@ -1,0 +1,108 @@
+name: Docker Image
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: docker-image-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GHCR_IMAGE: ghcr.io/${{ github.repository }}
+  ALIYUN_REGISTRY: ${{ vars.ALIYUN_REGISTRY }}
+  ALIYUN_NAMESPACE: ${{ vars.ALIYUN_NAMESPACE }}
+  ALIYUN_USERNAME: ${{ secrets.ALIYUN_USERNAME }}
+  ALIYUN_PASSWORD: ${{ secrets.ALIYUN_PASSWORD }}
+
+jobs:
+  docker:
+    name: Build multi-arch image
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to Aliyun Container Registry
+        if: >-
+          ${{
+            github.event_name != 'pull_request' &&
+            env.ALIYUN_REGISTRY != '' &&
+            env.ALIYUN_NAMESPACE != '' &&
+            env.ALIYUN_USERNAME != '' &&
+            env.ALIYUN_PASSWORD != ''
+          }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.ALIYUN_REGISTRY }}
+          username: ${{ env.ALIYUN_USERNAME }}
+          password: ${{ env.ALIYUN_PASSWORD }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.GHCR_IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - id: aliyun-tags
+        name: Prepare Aliyun image tags
+        shell: bash
+        env:
+          GHCR_TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${ALIYUN_REGISTRY}" || -z "${ALIYUN_NAMESPACE}" || -z "${ALIYUN_USERNAME}" || -z "${ALIYUN_PASSWORD}" ]]; then
+            echo "tags=" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          image="${ALIYUN_REGISTRY%/}/${ALIYUN_NAMESPACE}/${GITHUB_REPOSITORY#*/}"
+          {
+            echo "tags<<EOF"
+            while IFS= read -r tag; do
+              [[ -z "${tag}" ]] && continue
+              suffix="${tag#"${GHCR_IMAGE}:"}"
+              echo "${image}:${suffix}"
+            done <<< "${GHCR_TAGS}"
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+            ${{ steps.aliyun-tags.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
