@@ -1373,49 +1373,7 @@ def admin_companion_get(uid):
 @admin_bp.route('/companion/edit', methods=['POST'])
 @require_admin
 def admin_companion_edit():
-
-    # 验证CSRF Token
-    csrf_token = request.form.get('csrf_token') or request.headers.get('X-CSRF-Token')
-    if not csrf_token or not UserService.verify_csrf_token(csrf_token):
-        return jsonify({'error': 'CSRF token invalid or missing'}), 403
-
-    uid = request.form.get('uid')
-    nickname = request.form.get('nickname')
-    guard_level = request.form.get('guard_level')
-    in_guard = request.form.get('in_guard')
-    accompany_days = request.form.get('accompany_days')
-
-    if not uid:
-        return jsonify({'error': 'UID is required'}), 400
-
-    # Find guard
-    guard = Guard.query.filter_by(uid=uid).first()
-    if not guard:
-        return jsonify({'error': 'Guard not found'}), 404
-
-    # Update fields if provided
-    if nickname:
-        guard.nickname = nickname
-    if guard_level:
-        guard.guard_level = guard_level
-    if in_guard is not None:
-        guard.in_guard = in_guard.lower() == 'true'
-    if accompany_days is not None:
-        try:
-            guard.accompany_days = int(accompany_days)
-        except (ValueError, TypeError):
-            guard.accompany_days = 0
-
-    guard.updated_at = get_beijing_now()
-    db.session.commit()
-
-    # 清除相关缓存
-    guard_cache.clear_pattern(f"guard:{uid}")
-    guard_cache.clear_pattern(f"guard_info:{uid}")
-    if nickname:
-        guard_cache.clear_pattern(f"guard_nickname:{uid}")
-
-    return jsonify({'success': True, 'message': 'Guard updated'})
+    return admin_guard_edit()
 
 
 # =========================
@@ -1425,32 +1383,7 @@ def admin_companion_edit():
 @admin_bp.route('/companion/delete', methods=['POST'])
 @require_admin
 def admin_companion_delete():
-
-    # 验证CSRF Token
-    csrf_token = request.form.get('csrf_token') or request.headers.get('X-CSRF-Token')
-    if not csrf_token or not UserService.verify_csrf_token(csrf_token):
-        return jsonify({'error': 'CSRF token invalid or missing'}), 403
-
-    uid = request.form.get('uid')
-
-    if not uid:
-        return jsonify({'error': 'UID is required'}), 400
-
-    # Find guard
-    guard = Guard.query.filter_by(uid=uid).first()
-    if not guard:
-        return jsonify({'error': 'Guard not found'}), 404
-
-    # Delete guard
-    db.session.delete(guard)
-    db.session.commit()
-
-    # 清除相关缓存
-    guard_cache.clear_pattern(f"guard:{uid}")
-    guard_cache.clear_pattern(f"guard_info:{uid}")
-    guard_cache.clear_pattern(f"guard_nickname:{uid}")
-
-    return jsonify({'success': True, 'message': 'Guard deleted'})
+    return admin_guard_delete()
 
 
 # =========================
