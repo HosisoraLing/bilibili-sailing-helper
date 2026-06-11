@@ -472,8 +472,8 @@ def admin_import_csv():
 
     except Exception as e:
         db.session.rollback()
-        print(f"CSV import error: {e}")
-        return jsonify({'error': f'CSV导入失败: {str(e)}'}), 500
+        logger.error("CSV import error: %s", e, exc_info=True)
+        return jsonify({'error': 'CSV导入失败，请检查文件格式'}), 500
 
 
 # =========================

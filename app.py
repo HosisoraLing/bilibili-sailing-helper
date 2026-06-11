@@ -5,6 +5,7 @@ Flask 应用主模块
 from flask import Flask, session
 from flask_login import LoginManager, current_user
 from flask_socketio import SocketIO, emit, join_room
+from werkzeug.middleware.proxy_fix import ProxyFix
 from config import Config
 from db.models import db, User, Guard
 from services.region_service import ensure_region_json
@@ -30,10 +31,10 @@ def register_socketio_events(socketio):
         """
         from services.user_service import UserService
         from services.danmaku_listener import set_auth_mode
+        import re
 
-        # 从数据中获取 UID
         uid = data.get('uid')
-        if not uid:
+        if not uid or not re.match(r'^\d{1,20}$', str(uid)):
             emit('error', {'status': 'error', 'message': '缺少 UID 参数'})
             return
 
@@ -73,12 +74,13 @@ def create_app():
     """创建 Flask 应用实例"""
     app = Flask(__name__)
     app.config.from_object(Config)
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
     # ===== 初始化数据库 =====
     db.init_app(app)
 
     # ===== Flask-SocketIO =====
-    socketio = SocketIO(app, cors_allowed_origins='*')
+    socketio = SocketIO(app, cors_allowed_origins=Config.CORS_ALLOWED_ORIGINS)
 
     # ===== Flask-Login =====
     login_manager = LoginManager()
@@ -669,7 +671,7 @@ def run_web_server(app_instance, socketio, config=Config):
             port=config.PORT,
             debug=config.DEBUG,
             use_reloader=False,
-            allow_unsafe_werkzeug=True
+            allow_unsafe_werkzeug=not config.DEBUG
         )
 
 
