@@ -15,11 +15,28 @@
 ```bash
 cp settings.json.example settings.json
 export INTERNAL_API_SECRET="$(openssl rand -hex 32)"
+python -m db.init_db
 docker compose build
 docker compose up -d
 ```
 
 `INTERNAL_API_SECRET` 必须设置，三个角色用它保护内部 API。不要把真实 secret 提交到仓库。
+
+## 从旧版升级
+
+从上游旧版单进程部署升级到当前三角色运行时前，先停服务并显式迁移 SQLite。服务启动不会自动迁移已有数据库。
+
+```bash
+docker compose down
+python scripts/migrate_legacy_db.py --db data/app.db --settings settings.json
+docker compose up -d
+```
+
+迁移脚本会先把数据库备份到 `backups/`，再补齐新版运行时表和字段，并把旧版 `users.is_admin`、`settings.json` 中已有的 B 站 Cookie 转成新版可识别的运行时状态。预演可用：
+
+```bash
+python scripts/migrate_legacy_db.py --db data/app.db --settings settings.json --dry-run
+```
 
 ## 镜像自动构建
 

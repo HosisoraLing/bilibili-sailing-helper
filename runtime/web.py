@@ -5,10 +5,18 @@ from app import (
     ensure_region_json,
     fetch_and_save_guards,
     register_admins,
-    run_migrations,
     run_web_server,
     start_runtime_services,
 )
+
+
+def initialize_empty_database_only():
+    """Create schema only for a brand-new empty database."""
+    from sqlalchemy import inspect
+
+    inspector = inspect(db.engine)
+    if not inspector.get_table_names():
+        db.create_all()
 
 
 def main():
@@ -16,8 +24,7 @@ def main():
     app_instance, socketio = create_app()
 
     with app_instance.app_context():
-        db.create_all()
-        run_migrations()
+        initialize_empty_database_only()
         fetch_and_save_guards()
         register_admins()
 

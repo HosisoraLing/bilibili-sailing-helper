@@ -1,6 +1,8 @@
 import asyncio
 from pathlib import Path
 
+from sqlalchemy import inspect, text
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -93,6 +95,48 @@ def test_web_startup_does_not_own_background_worker_loops():
     assert "start_guard_gift_scheduler" not in start_runtime_source
     assert "start_session_cleanup_scheduler" not in start_runtime_source
     assert "start_runtime_services" in app_source
+
+
+def test_web_startup_does_not_run_database_migrations():
+    web_source = read("runtime/web.py")
+
+    assert "run_migrations" not in web_source
+    assert "if not inspector.get_table_names()" in web_source
+
+
+def test_empty_database_initializer_only_creates_brand_new_schema(app):
+    from db.models import db
+    from runtime.web import initialize_empty_database_only
+
+    with app.app_context():
+        db.drop_all()
+        initialize_empty_database_only()
+        assert "users" in inspect(db.engine).get_table_names()
+
+        db.drop_all()
+        db.session.execute(
+            text(
+                """
+                CREATE TABLE users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    uid VARCHAR(32) UNIQUE NOT NULL,
+                    nickname VARCHAR(64) NOT NULL,
+                    password_hash VARCHAR(256),
+                    is_admin BOOLEAN DEFAULT 0,
+                    created_at DATETIME
+                )
+                """
+            )
+        )
+        db.session.commit()
+
+        initialize_empty_database_only()
+
+        user_columns = {
+            row[1]
+            for row in db.session.execute(text("PRAGMA table_info(users)"))
+        }
+        assert "roles" not in user_columns
 
 
 def test_settings_example_uses_canonical_internal_port():
