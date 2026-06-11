@@ -49,9 +49,21 @@ check_docker() {
 # ---------- 拉取最新代码 ----------
 pull_latest_code() {
     if [ -d ".git" ]; then
+        local max_retries=3
+        local retry=0
         info "拉取最新代码..."
-        git pull origin main 2>/dev/null || warn "git pull 失败，使用本地代码继续"
-        success "代码更新完成"
+        while [ $retry -lt $max_retries ]; do
+            if git pull origin main 2>&1; then
+                success "代码更新完成"
+                return 0
+            fi
+            retry=$((retry + 1))
+            if [ $retry -lt $max_retries ]; then
+                warn "git pull 失败，${retry}/${max_retries} 次重试..."
+                sleep 3
+            fi
+        done
+        error "git pull 连续失败 ${max_retries} 次，放弃部署"
     fi
 }
 
