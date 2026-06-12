@@ -64,6 +64,7 @@ skills-lock.json
 
 # Local scratch test files
 danmuku_test.py
+scripts/web-refresh-probe/
 
 # Cache
 .cache/

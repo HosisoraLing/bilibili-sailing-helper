@@ -290,6 +290,8 @@ def run_migrations():
             'reload_requested_at': 'DATETIME',
             'tv_access_token': 'TEXT DEFAULT ""',
             'tv_refresh_token': 'TEXT DEFAULT ""',
+            'web_refresh_token': 'TEXT DEFAULT ""',
+            'cookie_header': 'TEXT DEFAULT ""',
             'tv_auth_payload_json': 'TEXT',
             'sessdata_expires_at': 'DATETIME',
             'last_refresh_at': 'DATETIME',
@@ -306,6 +308,25 @@ def run_migrations():
                     conn.execute(text(f"ALTER TABLE cookie_metadata ADD COLUMN {name} {ddl}"))
                 conn.commit()
                 logger.info("Migration completed: Cookie metadata columns added")
+        if 'cookie_header' in columns or any(name == 'cookie_header' for name, _ in missing_columns):
+            with db.engine.connect() as conn:
+                result = conn.execute(text("""
+                    UPDATE cookie_metadata
+                    SET status = 'rescan_required',
+                        source = CASE
+                            WHEN source IS NULL OR source = '' THEN 'migration'
+                            ELSE source
+                        END,
+                        last_error = '当前 DB 缺少 Web Cookie，请重新扫码授权 B 站账号'
+                    WHERE status = 'valid'
+                      AND (cookie_header IS NULL OR cookie_header = '')
+                """))
+                conn.commit()
+                if result.rowcount:
+                    logger.info(
+                        "Migration completed: marked %s Cookie metadata row(s) for Web QR rescan",
+                        result.rowcount,
+                    )
 
 
 # =========================
@@ -671,7 +692,7 @@ def run_web_server(app_instance, socketio, config=Config):
             port=config.PORT,
             debug=config.DEBUG,
             use_reloader=False,
-            allow_unsafe_werkzeug=not config.DEBUG
+            allow_unsafe_werkzeug=True
         )
 
 

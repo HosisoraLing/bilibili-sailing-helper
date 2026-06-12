@@ -39,15 +39,21 @@ class CookieService:
     @staticmethod
     def get_buvid3() -> Optional[str]:
         """
-        从现有配置读取 buvid3。
+        从 DB 中的 Web QR Cookie 读取 buvid3。
 
-        Browserless QR 登录成功时会保存 B 站返回的 buvid3；不再通过浏览器自动生成。
+        Browserless QR 登录成功时会保存 B 站返回的完整 Cookie；不再从
+        settings.json 读取运行态 Cookie，也不再通过浏览器自动生成。
         
         Returns:
             str: buvid3值，失败返回None
         """
-        settings = CookieService.load_settings()
-        return settings.get('bilibili', {}).get('buvid3') or None
+        from db.models import CookieMetadata
+        from services.bilibili_qr_service import parse_cookie_header
+
+        metadata = CookieMetadata.query.filter_by(role="admin").first()
+        if not metadata or not metadata.cookie_header:
+            return None
+        return parse_cookie_header(metadata.cookie_header).get('buvid3') or None
     
     @staticmethod
     def get_sessdata_by_qr(qr_ready_event=None) -> Tuple[Optional[str], Optional[str]]:
@@ -73,11 +79,7 @@ class CookieService:
         Returns:
             bool: 是否成功更新
         """
-        settings = CookieService.load_settings()
-        if not settings:
-            return False
-        
-        buvid3 = settings.get('bilibili', {}).get('buvid3')
+        buvid3 = CookieService.get_buvid3()
         if buvid3:
             logger.info("buvid3 已存在，无需浏览器刷新")
             return True

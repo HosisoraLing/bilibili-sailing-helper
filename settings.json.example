@@ -4,10 +4,15 @@
         "room_id": 22900497,
         "ruid": 98094853
     },
-    "bilibili": {
-        "SESSDATA": "",
-        "bili_jct": "",
-        "buvid3": ""
+    "bilibili_auth_mirror": {
+        "source": "db.cookie_metadata",
+        "role": "admin",
+        "status": "missing",
+        "cookie_version": 0,
+        "cookie_header": "",
+        "has_web_refresh_token": false,
+        "masked_uid": "",
+        "updated_at": ""
     },
     "database": {
         "url": "sqlite:///data/app.db"

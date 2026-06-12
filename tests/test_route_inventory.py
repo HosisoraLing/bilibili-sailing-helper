@@ -44,6 +44,11 @@ EXPECTED_ROUTE_INVENTORY = {
         "methods": ["GET"],
         "blueprint": "admin",
     },
+    "admin.admin_force_refresh_cookie": {
+        "rule": "/admin/cookie/force-refresh",
+        "methods": ["POST"],
+        "blueprint": "admin",
+    },
     "admin.admin_delete_address": {
         "rule": "/admin/delete-address/<int:address_id>",
         "methods": ["POST"],
@@ -310,6 +315,7 @@ def test_admin_url_generation_is_stable(app):
         assert url_for("admin.admin_users") == "/admin/users"
         assert url_for("admin.admin_user_delete") == "/admin/users/delete"
         assert url_for("admin.admin_cookie_status") == "/admin/cookie/status"
+        assert url_for("admin.admin_force_refresh_cookie") == "/admin/cookie/force-refresh"
         assert (
             url_for("admin.admin_poll_qr_login", task_id="task-1")
             == "/admin/cookie/qr-login/task-1"

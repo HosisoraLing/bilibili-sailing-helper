@@ -222,6 +222,8 @@ def ensure_new_tables(conn: sqlite3.Connection) -> list[str]:
             reload_requested_at DATETIME,
             tv_access_token TEXT DEFAULT '',
             tv_refresh_token TEXT DEFAULT '',
+            web_refresh_token TEXT DEFAULT '',
+            cookie_header TEXT DEFAULT '',
             tv_auth_payload_json TEXT,
             sessdata_expires_at DATETIME,
             last_refresh_at DATETIME,
@@ -324,6 +326,8 @@ def ensure_cookie_metadata_columns(conn: sqlite3.Connection) -> list[str]:
         ("reload_requested_at", "DATETIME"),
         ("tv_access_token", "TEXT DEFAULT ''"),
         ("tv_refresh_token", "TEXT DEFAULT ''"),
+        ("web_refresh_token", "TEXT DEFAULT ''"),
+        ("cookie_header", "TEXT DEFAULT ''"),
         ("tv_auth_payload_json", "TEXT"),
         ("sessdata_expires_at", "DATETIME"),
         ("last_refresh_at", "DATETIME"),
@@ -360,20 +364,19 @@ def initialize_cookie_metadata(conn: sqlite3.Connection, settings_path: Path) ->
     if existing is not None:
         return False
 
-    settings = load_json_file(settings_path)
-    bilibili = settings.get("bilibili") if isinstance(settings.get("bilibili"), dict) else {}
-    has_sessdata = bool((bilibili or {}).get("SESSDATA"))
-    status = "valid" if has_sessdata else "missing"
-    source = "legacy_settings" if has_sessdata else "migration"
-    version = 1 if has_sessdata else 0
+    cookie_header = ""
+    status = "missing"
+    source = "migration"
+    version = 0
     now = now_text()
-    last_error = "" if has_sessdata else "No SESSDATA found in settings.json"
+    last_error = "请重新扫码授权 B 站账号"
     conn.execute(
         """
         INSERT INTO cookie_metadata (
             role, status, source, masked_uid, payload_json,
             cookie_version, reload_requested_version, reload_requested_at,
             tv_access_token, tv_refresh_token, tv_auth_payload_json,
+            web_refresh_token, cookie_header,
             sessdata_expires_at, last_refresh_at, last_validated_at, last_error,
             created_at, updated_at
         )
@@ -381,6 +384,7 @@ def initialize_cookie_metadata(conn: sqlite3.Connection, settings_path: Path) ->
             'admin', ?, ?, '', '{}',
             ?, ?, ?,
             '', '', NULL,
+            '', ?,
             NULL, NULL, ?, ?,
             ?, ?
         )
@@ -390,14 +394,37 @@ def initialize_cookie_metadata(conn: sqlite3.Connection, settings_path: Path) ->
             source,
             version,
             version,
-            now if has_sessdata else None,
-            now if has_sessdata else None,
+            None,
+            cookie_header,
+            None,
             last_error,
             now,
             now,
         ),
     )
     return True
+
+
+def normalize_cookie_metadata_auth_state(conn: sqlite3.Connection) -> int:
+    if not table_exists(conn, "cookie_metadata"):
+        return 0
+    cookie_columns = columns(conn, "cookie_metadata")
+    if "cookie_header" not in cookie_columns:
+        return 0
+    cursor = conn.execute(
+        """
+        UPDATE cookie_metadata
+        SET status = 'rescan_required',
+            source = CASE
+                WHEN source IS NULL OR source = '' THEN 'migration'
+                ELSE source
+            END,
+            last_error = '当前 DB 缺少 Web Cookie，请重新扫码授权 B 站账号'
+        WHERE status = 'valid'
+          AND (cookie_header IS NULL OR cookie_header = '')
+        """
+    )
+    return cursor.rowcount or 0
 
 
 def migrate_database(db_path: Path, settings_path: Path) -> list[str]:
@@ -416,6 +443,9 @@ def migrate_database(db_path: Path, settings_path: Path) -> list[str]:
         changes.extend(ensure_runtime_status_columns(conn))
         if initialize_cookie_metadata(conn, settings_path):
             changes.append("Initialized cookie metadata from legacy settings")
+        normalized_count = normalize_cookie_metadata_auth_state(conn)
+        if normalized_count:
+            changes.append(f"Marked {normalized_count} cookie metadata row(s) for Web QR rescan")
         conn.commit()
         return changes
     except Exception:

@@ -5,6 +5,7 @@ from app import (
     ensure_region_json,
     fetch_and_save_guards,
     register_admins,
+    run_migrations,
     run_web_server,
     start_runtime_services,
 )
@@ -25,6 +26,7 @@ def main():
 
     with app_instance.app_context():
         initialize_empty_database_only()
+        run_migrations()
         fetch_and_save_guards()
         register_admins()
 

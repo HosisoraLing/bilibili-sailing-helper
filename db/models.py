@@ -285,6 +285,8 @@ class CookieMetadata(db.Model):
     reload_requested_at = db.Column(db.DateTime)
     tv_access_token = db.Column(db.Text, default="")
     tv_refresh_token = db.Column(db.Text, default="")
+    web_refresh_token = db.Column(db.Text, default="")
+    cookie_header = db.Column(db.Text, default="")
     tv_auth_payload_json = db.Column(db.Text)
     sessdata_expires_at = db.Column(db.DateTime)
     last_refresh_at = db.Column(db.DateTime)

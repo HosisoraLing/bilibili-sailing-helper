@@ -46,6 +46,8 @@ def internal_danmaku_auth_event():
 
 def run_pending_scheduler_job(job):
     started_at = get_beijing_now().isoformat()
+    job_status = 'success'
+    error = ''
     try:
         if job.job_type == 'guard-sync':
             fetch_and_save_guards()
@@ -59,14 +61,10 @@ def run_pending_scheduler_job(job):
                 f"{len(historical_records or [])} historical"
             )
         elif job.job_type == 'cookie-maintenance':
-            result = CookieMaintenanceService.run_cookie_maintenance()
-            if result.get("status") != "success":
-                raise RuntimeError(
-                    result.get("error")
-                    or result.get("next_action")
-                    or "cookie-maintenance failed"
-                )
-            summary = result.get("summary") or f"cookie-maintenance completed: {result.get('action')}"
+            maintenance_result = CookieMaintenanceService.run_cookie_maintenance()
+            job_status = maintenance_result.get('status') or 'unknown'
+            summary = maintenance_result.get('summary') or 'cookie-maintenance completed'
+            error = maintenance_result.get('error') or ''
         elif job.job_type == 'auth-cleanup':
             cleaned = cleanup_expired_sessions()
             summary = f"auth-cleanup completed: {cleaned} expired sessions"
@@ -87,13 +85,16 @@ def run_pending_scheduler_job(job):
         record_scheduler_result({
             'job_id': job.job_id,
             'job_name': job.job_type,
-            'status': 'success',
+            'status': job_status,
             'started_at': started_at,
             'finished_at': get_beijing_now().isoformat(),
             'summary': summary,
-            'error': '',
+            'error': error,
         })
-        return {'executed': True, 'job_status': 'success'}
+        result = {'executed': True, 'job_status': job_status}
+        if error:
+            result['error'] = error
+        return result
 
 
 @internal_bp.route('/scheduler/job', methods=['POST'])

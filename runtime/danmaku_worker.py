@@ -164,6 +164,26 @@ async def wait_for_new_cookie_version(
             return
 
 
+async def report_runtime_heartbeat(
+    *,
+    webhook: InternalWebhookClient,
+    instance_id: str,
+    cookie_version: int,
+    interval: float,
+    sleep=asyncio.sleep,
+):
+    while True:
+        await sleep(interval)
+        await webhook.report_heartbeat(
+            role="danmaku-worker",
+            instance_id=instance_id,
+            state="running",
+            cookie_version=cookie_version,
+            retry_count=0,
+            last_error="",
+        )
+
+
 async def run_connection(
     *,
     room_id: int,

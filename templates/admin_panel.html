@@ -90,6 +90,64 @@
             margin-top: 15px;
         }
 
+        .account-status-panel {
+            margin-top: 18px;
+            padding: 14px 16px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background: #f8fafc;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        .account-status-main {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex: 1;
+            min-width: 0;
+            flex-wrap: wrap;
+            font-size: 13px;
+            color: #4b5563;
+        }
+
+        .account-status-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 700;
+            color: #1f2937;
+            white-space: nowrap;
+        }
+
+        .account-status-item {
+            white-space: nowrap;
+        }
+
+        .account-status-detail {
+            flex-basis: 100%;
+            font-size: 12px;
+            color: #6b7280;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .account-status-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            align-items: stretch;
+            min-width: 160px;
+        }
+
+        .account-status-actions .btn {
+            justify-content: center;
+        }
+
         /* Content card */
         .content-card {
             background: white;
@@ -281,6 +339,20 @@
             .search-box input {
                 width: 100%;
             }
+
+            .account-status-panel {
+                align-items: stretch;
+            }
+
+            .account-status-main,
+            .account-status-actions,
+            .account-status-panel .btn {
+                width: 100%;
+            }
+
+            .account-status-detail {
+                white-space: normal;
+            }
         }
     </style>
 </head>
@@ -308,7 +380,7 @@
     <!-- 二维码显示区域 -->
     <div id="qrCodeArea" style="display:none; background: white; padding: 20px; border-radius: 12px; margin-bottom: 20px; text-align: center; box-shadow: var(--shadow-lg);">
         <h3 style="margin-bottom: 15px;"><i class="fas fa-qrcode"></i> B站账号授权</h3>
-        <p style="color: #666; margin-bottom: 15px;">请使用B站APP扫描二维码授权；成功后系统会自动维护 Cookie，refresh token 失效时需要重新扫码。</p>
+        <p style="color: #666; margin-bottom: 15px;">请使用B站APP扫描二维码授权；Cookie 过期后需要重新扫码。</p>
         <img id="qrCodeImage" src="" alt="二维码" style="max-width: 300px; border: 1px solid #eee; border-radius: 8px;">
         <div id="qrStatus" style="margin-top: 15px; color: #666;">等待扫码...</div>
     </div>
@@ -332,21 +404,27 @@
             </div>
         </div>
 
-        <div id="accountStatusPanel" style="margin-top: 18px; padding: 14px 16px; border: 1px solid #e5e7eb; border-radius: 8px; background: #f8fafc;">
-            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px;">
-                <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; color: #1f2937;">
+        <div id="accountStatusPanel" class="account-status-panel">
+            <div class="account-status-main">
+                <div class="account-status-title">
                     <i class="fas fa-id-card" style="color: var(--primary);"></i>
                     <span>B站账号授权状态</span>
                 </div>
                 <span id="accountStatusAuth" class="badge badge-primary">检查中</span>
+                <div class="account-status-item">UID：<strong id="accountStatusUid">-</strong></div>
+                <div class="account-status-item">Cookie：<strong id="accountStatusCookieVersion">-</strong></div>
+                <div class="account-status-item">Worker：<strong id="accountStatusWorker">-</strong></div>
+                <div class="account-status-item">同步：<strong id="accountStatusReload">-</strong></div>
+                <div id="accountStatusDetail" class="account-status-detail">正在读取运行态...</div>
             </div>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; font-size: 13px; color: #4b5563;">
-                <div>账号 UID：<strong id="accountStatusUid">-</strong></div>
-                <div>Cookie版本：<strong id="accountStatusCookieVersion">-</strong></div>
-                <div>Worker：<strong id="accountStatusWorker">-</strong></div>
-                <div>同步：<strong id="accountStatusReload">-</strong></div>
+            <div class="account-status-actions">
+                <button class="btn btn-primary btn-sm" onclick="startQrLogin()">
+                    <i class="fas fa-qrcode"></i> 切换B站账号
+                </button>
+                <button id="forceRefreshCookieButton" class="btn btn-light btn-sm" onclick="forceRefreshCookie()">
+                    <i class="fas fa-sync-alt"></i> 强制刷新 Cookie
+                </button>
             </div>
-            <div id="accountStatusDetail" style="margin-top: 8px; font-size: 12px; color: #6b7280;">正在读取运行态...</div>
         </div>
 
         <div class="admin-actions">
@@ -362,9 +440,6 @@
             <a href="/admin/companion-ranking" class="btn btn-primary btn-sm">
                 <i class="fas fa-crown"></i> 陪伴榜
             </a>
-            <button class="btn btn-primary btn-sm" onclick="startQrLogin()">
-                <i class="fas fa-qrcode"></i> 切换B站账号
-            </button>
             <a href="/admin/add-address" class="btn btn-success btn-sm">
                 <i class="fas fa-plus"></i> 新增地址
             </a>
@@ -639,19 +714,41 @@
     function authStatusLabel(status) {
         if (status === 'valid') return '已授权';
         if (status === 'rescan_required') return '需重新扫码';
+        if (status === 'invalid') return '授权失效';
         if (status === 'missing') return '未授权';
         return status || '未知';
+    }
+
+    function runtimeRequiresManualAction(runtime, auth) {
+        const worker = (runtime.roles && runtime.roles['danmaku-worker']) || {};
+        const needsAuth = auth.status === 'missing' || auth.status === 'invalid' || auth.status === 'rescan_required';
+        const workerState = worker.state || 'missing';
+        const workerError = worker.last_error || worker.delivery_error || '';
+
+        if (needsAuth || runtime.worker_cookie_stale) {
+            return true;
+        }
+        if (!worker.state || workerState === 'missing' || workerState === 'bilibili_rejected') {
+            return true;
+        }
+        if (workerState === 'failed' || workerState === 'cookie_unavailable') {
+            return true;
+        }
+        if (worker.stale && workerState !== 'running') {
+            return true;
+        }
+        return Boolean(workerError && workerError !== '无');
     }
 
     function updateAccountStatus(data) {
         const runtime = data.runtime || {};
         const worker = (runtime.roles && runtime.roles['danmaku-worker']) || {};
-        const tvAuth = data.tv_auth || {};
-        const activeVersion = runtime.active_cookie_version || tvAuth.cookie_version || 0;
+        const auth = data.auth || {};
+        const activeVersion = runtime.active_cookie_version || auth.cookie_version || 0;
         const workerVersion = runtime.worker_cookie_version || 0;
-        const reloadRequestedVersion = tvAuth.reload_requested_version || 0;
+        const reloadRequestedVersion = auth.reload_requested_version || 0;
         const workerState = worker.state || 'missing';
-        const lastReportAge = worker.heartbeat_age_seconds == null ? '未知' : worker.heartbeat_age_seconds + ' 秒前';
+        const lastReportAge = worker.heartbeat_age_seconds == null ? '未知' : worker.heartbeat_age_seconds + '秒前';
         const hasLatestCookie = activeVersion > 0 && workerVersion >= activeVersion;
 
         const authEl = document.getElementById('accountStatusAuth');
@@ -665,11 +762,11 @@
             return;
         }
 
-        authEl.textContent = authStatusLabel(tvAuth.status);
-        authEl.className = 'badge ' + (tvAuth.status === 'valid' ? 'badge-success' : 'badge-primary');
-        uidEl.textContent = tvAuth.masked_uid || '未授权';
+        authEl.textContent = authStatusLabel(auth.status);
+        authEl.className = 'badge ' + (auth.status === 'valid' ? 'badge-success' : 'badge-primary');
+        uidEl.textContent = auth.masked_uid || '未授权';
         cookieEl.textContent = activeVersion ? ('当前 ' + activeVersion + ' / worker ' + workerVersion) : '无';
-        workerEl.textContent = workerState + '，上报于 ' + lastReportAge;
+        workerEl.textContent = workerState + ' / ' + lastReportAge;
 
         if (runtime.worker_cookie_stale) {
             reloadEl.textContent = '正在同步到 worker';
@@ -681,12 +778,11 @@
             reloadEl.textContent = '无待同步 Cookie';
         }
 
-        const expires = tvAuth.sessdata_expires_at ? '授权有效期：' + tvAuth.sessdata_expires_at : '授权有效期：未知';
-        const refreshed = tvAuth.last_refresh_at ? '上次维护：' + tvAuth.last_refresh_at : '上次维护：无';
-        const error = worker.last_error || worker.delivery_error || tvAuth.last_error || '';
-        detailEl.textContent = expires + '；' + refreshed + (error ? '；错误：' + error : '');
+        const error = worker.last_error || worker.delivery_error || auth.last_error || '';
+        const validated = auth.last_validated_at ? '最近验证 ' + auth.last_validated_at : '最近验证 无';
+        detailEl.textContent = error ? (validated + '；错误：' + error) : validated;
     }
-    
+
     function checkListenerStatus() {
         fetch('/admin/cookie/status')
             .then(response => response.json())
@@ -694,20 +790,18 @@
                 updateAccountStatus(data);
                 const alertEl = document.getElementById('listenerAlert');
                 const alertMsgEl = document.getElementById('listenerAlertMsg');
-                
+
                 const runtime = data.runtime || {};
                 const worker = (runtime.roles && runtime.roles['danmaku-worker']) || {};
-                const tvAuth = data.tv_auth || {};
-                const needsTvAuth = tvAuth.status === 'missing' || tvAuth.status === 'rescan_required';
-                const needsWarning = !data.is_valid || needsTvAuth || runtime.next_action !== '无需操作';
-                
+                const auth = data.auth || {};
+                const needsAuth = auth.status === 'missing' || auth.status === 'invalid' || auth.status === 'rescan_required';
+                const needsWarning = runtimeRequiresManualAction(runtime, auth);
+
                 if (needsWarning) {
                     alertEl.style.display = 'block';
-                    
-                    if (needsTvAuth) {
-                        alertMsgEl.textContent = tvAuth.next_action || '请扫码授权 B 站账号以启用自动 Cookie 维护';
-                    } else if (!data.is_valid) {
-                        alertMsgEl.textContent = 'Cookie无效或已过期，请重新扫码授权B站账号';
+
+                    if (needsAuth) {
+                        alertMsgEl.textContent = auth.next_action || '请扫码授权 B 站账号';
                     } else if (runtime.next_action) {
                         const age = worker.heartbeat_age_seconds == null ? '未知' : worker.heartbeat_age_seconds + ' 秒前';
                         const error = worker.last_error || worker.delivery_error || '无';
@@ -715,8 +809,8 @@
                         const lastEvent = worker.last_event_at || '无';
                         const activeVersion = runtime.active_cookie_version || 0;
                         const workerVersion = runtime.worker_cookie_version || 0;
-                        const tvSummary = tvAuth.sessdata_expires_at
-                            ? '，授权有效期：' + tvAuth.sessdata_expires_at
+                        const authSummary = auth.last_validated_at
+                            ? '，最近验证：' + auth.last_validated_at
                             : '';
                         alertMsgEl.textContent = runtime.next_action
                             + '；danmaku-worker 状态：' + (worker.state || 'missing')
@@ -725,7 +819,9 @@
                             + '，错误：' + error
                             + '，重试：' + retry
                             + '，Cookie版本：' + activeVersion + ' -> ' + workerVersion
-                            + tvSummary;
+                            + authSummary;
+                    } else {
+                        alertMsgEl.textContent = '检查 danmaku-worker 日志并重启该角色';
                     }
                 } else {
                     alertEl.style.display = 'none';
@@ -735,17 +831,58 @@
                 console.error('检查状态失败:', error);
             });
     }
-    
+
+    function forceRefreshCookie() {
+        const csrfToken = document.querySelector('input[name="csrf_token"]')?.value || '';
+        const button = document.getElementById('forceRefreshCookieButton');
+        const originalHtml = button ? button.innerHTML : '';
+
+        if (button) {
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 刷新中';
+        }
+
+        fetch('/admin/cookie/force-refresh', {
+            method: 'POST',
+            headers: {
+                'X-CSRF-Token': csrfToken,
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json().then(data => ({ok: response.ok, data})))
+        .then(({ok, data}) => {
+            if (!ok || !data.success) {
+                const action = data.next_action ? '；' + data.next_action : '';
+                throw new Error((data.error || data.summary || '强制刷新失败') + action);
+            }
+            showToast('Cookie 已强制刷新，danmaku-worker 会自动加载新版本');
+            checkListenerStatus();
+            setTimeout(checkListenerStatus, 3000);
+            setTimeout(checkListenerStatus, 10000);
+        })
+        .catch(error => {
+            showToast('强制刷新失败：' + error.message);
+        })
+        .finally(() => {
+            if (button) {
+                button.disabled = false;
+                button.innerHTML = originalHtml;
+            }
+        });
+    }
+
     function startQrLogin() {
         const csrfToken = document.querySelector('input[name="csrf_token"]')?.value || '';
         const qrArea = document.getElementById('qrCodeArea');
         const qrImage = document.getElementById('qrCodeImage');
         const qrStatus = document.getElementById('qrStatus');
-        
+
         qrArea.style.display = 'block';
+        qrImage.style.display = 'inline-block';
         qrStatus.textContent = '正在生成授权二维码...';
-        
-        fetch('/admin/cookie/start-tv-qr-login', {
+        qrStatus.style.color = '#666';
+
+        fetch('/admin/cookie/start-qr-login', {
             method: 'POST',
             headers: {
                 'X-CSRF-Token': csrfToken,
@@ -757,12 +894,12 @@
             if (data.success) {
                 qrImage.src = '/admin/cookie/qrcode/' + encodeURIComponent(data.task_id);
                 qrStatus.textContent = '请使用B站APP扫描二维码授权';
-                
+
                 let checkCount = 0;
                 const checkInterval = setInterval(() => {
                     checkCount++;
-                    
-                    fetch('/admin/cookie/tv-qr-login/' + encodeURIComponent(data.task_id))
+
+                    fetch('/admin/cookie/qr-login/' + encodeURIComponent(data.task_id))
                         .then(response => response.json().then(statusData => {
                             if (!response.ok) {
                                 throw new Error(statusData.error || '扫码状态检查失败');
@@ -790,15 +927,21 @@
                                 const username = statusData.username || '用户';
                                 qrStatus.innerHTML = '授权成功，正在同步到 danmaku-worker：<strong>' + username + '</strong>';
                                 qrStatus.style.color = '#48bb78';
-                                
+
                                 // 显示成功提示框
                                 const alertDiv = document.getElementById('listenerAlert');
                                 alertDiv.style.display = 'none';
-                                
+
                                 // 显示toast提示
                                 showToast('授权成功，Cookie 已更新，danmaku-worker 会自动加载新版本');
                                 checkListenerStatus();
-                                
+                                setTimeout(() => {
+                                    qrArea.style.display = 'none';
+                                    qrImage.src = '';
+                                    qrStatus.textContent = '等待扫码...';
+                                    qrStatus.style.color = '#666';
+                                }, 1200);
+
                                 // 成功后继续观察同步状态，避免让管理员手动刷新页面
                                 setTimeout(checkListenerStatus, 3000);
                                 setTimeout(checkListenerStatus, 10000);
@@ -809,7 +952,7 @@
                             qrStatus.textContent = '扫码状态检查失败，请重新开始: ' + error.message;
                             qrStatus.style.color = '#e53e3e';
                         });
-                    
+
                     // 5分钟后停止
                     if (checkCount > 150) {
                         clearInterval(checkInterval);
@@ -827,19 +970,19 @@
             qrStatus.style.color = '#e53e3e';
         });
     }
-    
+
     // 页面加载时检查状态
     checkListenerStatus();
     // 每30秒检查一次
     setInterval(checkListenerStatus, 30000);
-    
+
     // Toast提示函数
     function showToast(message, duration = 5000) {
         const toast = document.createElement('div');
         toast.style.cssText = 'position:fixed;top:20px;right:20px;background:linear-gradient(135deg, #48bb78 0%, #38a169 100%);color:white;padding:16px 24px;border-radius:12px;box-shadow:0 8px 24px rgba(72, 187, 120, 0.3);z-index:10000;font-weight:600;font-size:15px;animation:slideIn 0.3s ease;max-width:400px;';
         toast.textContent = message;
         document.body.appendChild(toast);
-        
+
         setTimeout(() => {
             toast.style.opacity = '0';
             toast.style.transition = 'opacity 0.5s';

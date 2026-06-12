@@ -14,13 +14,14 @@
 
 ```bash
 cp settings.json.example settings.json
-export INTERNAL_API_SECRET="$(openssl rand -hex 32)"
+cp .env.example .env
+# 编辑 .env，把 INTERNAL_API_SECRET 固定为一次性生成的强随机值
 python -m db.init_db
 docker compose build
 docker compose up -d
 ```
 
-`INTERNAL_API_SECRET` 必须设置，三个角色用它保护内部 API。不要把真实 secret 提交到仓库。
+`INTERNAL_API_SECRET` 必须写入 `.env`，三个角色用它保护内部 API。不要每次 shell 临时 `export` 新值；一旦三个角色使用的 secret 不一致，worker/scheduler 会无法调用 web 内部 API。不要把真实 secret 提交到仓库。
 
 ## 从旧版升级
 
@@ -32,7 +33,7 @@ python scripts/migrate_legacy_db.py --db data/app.db --settings settings.json
 docker compose up -d
 ```
 
-迁移脚本会先把数据库备份到 `backups/`，再补齐新版运行时表和字段，并把旧版 `users.is_admin`、`settings.json` 中已有的 B 站 Cookie 转成新版可识别的运行时状态。预演可用：
+迁移脚本会先把数据库备份到 `backups/`，再补齐新版运行时表和字段，并迁移旧版 `users.is_admin`。旧 `settings.json` 中已有的 B 站 Cookie 不会导入 DB；升级后请在后台重新 Web 扫码授权，避免旧 Cookie 与 Web refresh token 错配。预演可用：
 
 ```bash
 python scripts/migrate_legacy_db.py --db data/app.db --settings settings.json --dry-run
@@ -98,11 +99,13 @@ docker compose up -d
 
 ## Cookie 更新
 
-管理员在后台扫码授权成功后，`web` 会保存 TV 授权 token 和从授权结果提取出的 Web Cookie，并更新 Cookie version。`danmaku-worker` 会通过内部 Cookie 接口检测版本变化并自动重连。
+管理员在后台使用 Web 扫码授权成功后，`web` 会把完整 Web `cookie_header` 和同源 refresh token 保存到 DB，并更新 Cookie version。`danmaku-worker` 会通过内部 Cookie 接口检测版本变化并自动重连。
 
-`scheduler` 会定时触发 `cookie-maintenance`。当 `SESSDATA` 距离过期不足默认 10 天时，`web` 使用已保存的 TV refresh token 刷新授权；刷新成功会替换 Web Cookie 并推进 Cookie version。refresh token 失效、B 站风控或上游接口异常时，系统会保留最后可用 Cookie，并在管理后台提示重新扫码授权。
+运行时 Cookie 只以 DB `cookie_metadata.cookie_header` 为准；`settings.json` 只写出 `bilibili_auth_mirror` 作为本地审计镜像，不再作为读取来源。
 
-TV `access_token`、`refresh_token`、`SESSDATA`、`bili_jct`、`buvid3` 都是敏感凭据，只能存在本地配置或数据库中，不要写入文档、日志或提交记录。
+`scheduler` 会定时触发 `cookie-maintenance`。`web` 先调用 B 站 Web Cookie 检查接口；无需刷新时保持现有 Cookie 不变，需要刷新时使用 Web refresh token 获取新的 Web Cookie，确认旧 token 失效，并推进 Cookie version。refresh token 失效、B 站风控或上游接口异常时，系统会保留最后可用 Cookie，并在管理后台提示重新扫码授权。
+
+Web refresh token、`SESSDATA`、`bili_jct`、`buvid3` 都是敏感凭据，只能存在本地数据库或本地镜像配置中，不要写入文档、日志或提交记录。
 
 ## 故障定位
 
@@ -112,7 +115,7 @@ docker compose logs --tail=200 danmaku-worker
 docker compose logs --tail=200 scheduler
 ```
 
-管理后台的 Cookie 状态接口会显示 TV 授权状态、Cookie 有效期、最近刷新/验证时间、角色状态、心跳年龄、最后错误、重试次数、Cookie version 和下一步建议。
+管理后台的 Cookie 状态接口会显示 Web QR 授权状态、最近验证时间、角色状态、心跳年龄、最后错误、重试次数、Cookie version 和下一步建议。
 
 ## SSL
 

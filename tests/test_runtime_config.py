@@ -97,10 +97,36 @@ def test_web_startup_does_not_own_background_worker_loops():
     assert "start_runtime_services" in app_source
 
 
-def test_web_startup_does_not_run_database_migrations():
+def test_web_server_allows_werkzeug_for_container_runtime():
+    app_source = read("app.py")
+    run_web_server_source = app_source.split("def run_web_server", 1)[1].split(
+        "\n\n# =========================",
+        1,
+    )[0]
+
+    assert "allow_unsafe_werkzeug=True" in run_web_server_source
+    assert "allow_unsafe_werkzeug=not config.DEBUG" not in run_web_server_source
+
+
+def test_admin_cookie_ui_uses_web_qr_without_tv_auth_controls():
+    admin_source = read("templates/admin_panel.html")
+
+    forbidden = [
+        "start-tv-qr-login",
+        "tv-qr-login",
+    ]
+    for text in forbidden:
+        assert text not in admin_source
+
+    assert "start-qr-login" in admin_source
+    assert "qr-login/" in admin_source
+
+
+def test_web_startup_runs_schema_migrations_before_runtime_requests():
     web_source = read("runtime/web.py")
 
-    assert "run_migrations" not in web_source
+    assert "run_migrations" in web_source
+    assert "run_migrations()" in web_source
     assert "if not inspector.get_table_names()" in web_source
 
 
@@ -177,9 +203,12 @@ def test_admin_panel_displays_runtime_diagnostics():
     assert 'id="accountStatusWorker"' in admin_source
     assert 'id="accountStatusReload"' in admin_source
     assert "function updateAccountStatus" in admin_source
-    admin_actions = admin_source.split('<div class="admin-actions">', 1)[1].split("</div>", 1)[0]
-    assert "startQrLogin()" in admin_actions
-    assert "切换B站账号" in admin_actions
+    account_panel = admin_source.split('id="accountStatusPanel"', 1)[1].split(
+        '<div class="admin-actions">',
+        1,
+    )[0]
+    assert "startQrLogin()" in account_panel
+    assert "切换B站账号" in account_panel
     listener_alert = admin_source.split('id="listenerAlert"', 1)[1].split('id="qrCodeArea"', 1)[0]
     assert "restartListener()" not in listener_alert
     assert "查看重启方式" not in listener_alert
@@ -326,6 +355,51 @@ def test_danmaku_worker_closes_connection_when_cookie_version_changes():
 
     assert websocket.closed is True
     assert any(item["state"] == "cookie_reloading" for item in webhook.heartbeats)
+
+
+def test_danmaku_worker_reports_web_heartbeat_periodically():
+    from runtime import danmaku_worker
+
+    webhook = FakeWebhook()
+    sleeps = []
+
+    async def stop_after_first_heartbeat(seconds):
+        sleeps.append(seconds)
+        return None
+
+    async def run_test():
+        original = webhook.report_heartbeat
+
+        async def stop_after_first_report(**payload):
+            await original(**payload)
+            raise danmaku_worker.WorkerStop("heartbeat captured")
+
+        webhook.report_heartbeat = stop_after_first_report
+        try:
+            await danmaku_worker.report_runtime_heartbeat(
+                webhook=webhook,
+                instance_id="worker-1",
+                cookie_version=3,
+                interval=5,
+                sleep=stop_after_first_heartbeat,
+            )
+        finally:
+            webhook.report_heartbeat = original
+
+    try:
+        asyncio.run(run_test())
+    except danmaku_worker.WorkerStop:
+        pass
+
+    assert sleeps == [5]
+    assert webhook.heartbeats == [{
+        "role": "danmaku-worker",
+        "instance_id": "worker-1",
+        "state": "running",
+        "cookie_version": 3,
+        "retry_count": 0,
+        "last_error": "",
+    }]
 
 
 def test_danmaku_worker_uses_short_default_cookie_poll_interval():

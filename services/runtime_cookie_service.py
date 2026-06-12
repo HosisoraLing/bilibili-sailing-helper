@@ -1,19 +1,15 @@
 from typing import Any
 
 from db.models import CookieMetadata, RuntimeStatus
-from services.cookie_service import CookieService
+from services.bilibili_qr_service import parse_cookie_header
 
 
 class RuntimeCookieService:
     @staticmethod
-    def load_cookie_settings() -> dict[str, str]:
-        settings = CookieService.load_settings()
-        bilibili = settings.get("bilibili", {})
-        return {
-            "SESSDATA": bilibili.get("SESSDATA") or "",
-            "bili_jct": bilibili.get("bili_jct") or "",
-            "buvid3": bilibili.get("buvid3") or "",
-        }
+    def load_runtime_cookie(metadata: CookieMetadata | None = None) -> dict[str, str]:
+        if metadata and metadata.cookie_header:
+            return parse_cookie_header(metadata.cookie_header)
+        return {}
 
     @staticmethod
     def get_runtime_cookie_payload(role: str = "admin") -> dict[str, Any]:
@@ -27,7 +23,7 @@ class RuntimeCookieService:
                 "cookie": {},
             }
 
-        cookie = RuntimeCookieService.load_cookie_settings()
+        cookie = RuntimeCookieService.load_runtime_cookie(metadata)
         missing_keys = [
             key
             for key in ("SESSDATA",)

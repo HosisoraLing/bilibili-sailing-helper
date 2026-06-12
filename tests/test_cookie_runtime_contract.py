@@ -53,18 +53,6 @@ def test_internal_runtime_cookie_requires_secret(client):
 
 
 def test_internal_runtime_cookie_returns_validated_cookie_state(client, app, monkeypatch):
-    from services.runtime_cookie_service import RuntimeCookieService
-
-    monkeypatch.setattr(
-        RuntimeCookieService,
-        "load_cookie_settings",
-        staticmethod(lambda: {
-            "SESSDATA": "sess-value",
-            "bili_jct": "csrf-value",
-            "buvid3": "buvid-value",
-        }),
-    )
-
     with app.app_context():
         db.session.add(CookieMetadata(
             role="admin",
@@ -72,6 +60,7 @@ def test_internal_runtime_cookie_returns_validated_cookie_state(client, app, mon
             source="qr_login",
             masked_uid="42",
             cookie_version=7,
+            cookie_header="SESSDATA=sess-value; bili_jct=csrf-value; buvid3=buvid-value; DedeUserID=42",
             last_validated_at=get_beijing_now(),
         ))
         db.session.commit()
@@ -88,6 +77,56 @@ def test_internal_runtime_cookie_returns_validated_cookie_state(client, app, mon
     assert payload["cookie"]["SESSDATA"] == "sess-value"
     assert payload["cookie"]["bili_jct"] == "csrf-value"
     assert payload["cookie"]["buvid3"] == "buvid-value"
+    assert payload["cookie"]["DedeUserID"] == "42"
+
+
+def test_runtime_cookie_comes_only_from_metadata_cookie_header(app):
+    from services.runtime_cookie_service import RuntimeCookieService
+
+    with app.app_context():
+        metadata = CookieMetadata(
+            role="admin",
+            status="valid",
+            cookie_header=(
+                "SESSDATA=full-sess; bili_jct=full-csrf; DedeUserID=42; "
+                "DedeUserID__ckMd5=ck-md5; sid=sid-value; buvid3=buvid-value"
+            ),
+        )
+        cookie = RuntimeCookieService.load_runtime_cookie(metadata)
+
+    assert cookie["SESSDATA"] == "full-sess"
+    assert cookie["bili_jct"] == "full-csrf"
+    assert cookie["DedeUserID"] == "42"
+    assert cookie["DedeUserID__ckMd5"] == "ck-md5"
+    assert cookie["sid"] == "sid-value"
+    assert cookie["buvid3"] == "buvid-value"
+
+
+def test_internal_runtime_cookie_prefers_web_qr_source_without_refresh(client, app, monkeypatch):
+    with app.app_context():
+        db.session.add(CookieMetadata(
+            role="admin",
+            status="valid",
+            source="qr_login",
+            cookie_version=11,
+            web_refresh_token="web-refresh-secret",
+            cookie_header="SESSDATA=db-sess; bili_jct=db-csrf; buvid3=db-buvid",
+        ))
+        db.session.commit()
+
+    response = client.get(
+        "/internal/runtime/cookie",
+        headers={"Authorization": "test-secret"},
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["status"] == "valid"
+    assert payload["version"] == 11
+    assert payload["cookie"]["SESSDATA"] == "db-sess"
+    assert payload["cookie"]["bili_jct"] == "db-csrf"
+    assert payload["cookie"]["buvid3"] == "db-buvid"
+    assert "refresh" not in str(payload).lower()
 
 
 def test_internal_runtime_cookie_hides_incomplete_cookie_even_when_metadata_is_valid(
@@ -95,18 +134,6 @@ def test_internal_runtime_cookie_hides_incomplete_cookie_even_when_metadata_is_v
     app,
     monkeypatch,
 ):
-    from services.runtime_cookie_service import RuntimeCookieService
-
-    monkeypatch.setattr(
-        RuntimeCookieService,
-        "load_cookie_settings",
-        staticmethod(lambda: {
-            "SESSDATA": "",
-            "bili_jct": "csrf-value",
-            "buvid3": "buvid-value",
-        }),
-    )
-
     with app.app_context():
         db.session.add(CookieMetadata(
             role="admin",
@@ -114,6 +141,7 @@ def test_internal_runtime_cookie_hides_incomplete_cookie_even_when_metadata_is_v
             source="qr_login",
             masked_uid="42",
             cookie_version=7,
+            cookie_header="bili_jct=csrf-value; buvid3=buvid-value",
             last_validated_at=get_beijing_now(),
         ))
         db.session.commit()
@@ -130,30 +158,19 @@ def test_internal_runtime_cookie_hides_incomplete_cookie_even_when_metadata_is_v
     assert "缺少 SESSDATA" in payload["last_error"]
 
 
-def test_internal_runtime_cookie_allows_tv_cookie_without_buvid3(
+def test_internal_runtime_cookie_allows_web_qr_cookie_without_persisted_buvid3(
     client,
     app,
     monkeypatch,
 ):
-    from services.runtime_cookie_service import RuntimeCookieService
-
-    monkeypatch.setattr(
-        RuntimeCookieService,
-        "load_cookie_settings",
-        staticmethod(lambda: {
-            "SESSDATA": "sess-value",
-            "bili_jct": "csrf-value",
-            "buvid3": "",
-        }),
-    )
-
     with app.app_context():
         db.session.add(CookieMetadata(
             role="admin",
             status="valid",
-            source="tv_auth",
+            source="qr_login",
             masked_uid="42",
             cookie_version=7,
+            cookie_header="SESSDATA=sess-value; bili_jct=csrf-value; buvid3=",
             last_validated_at=get_beijing_now(),
         ))
         db.session.commit()
@@ -287,6 +304,20 @@ def test_legacy_runtime_cookie_schema_is_migrated(app):
         db.session.execute(
             text(
                 """
+                INSERT INTO cookie_metadata (
+                    role, status, source, masked_uid, payload_json,
+                    last_validated_at, last_error, created_at, updated_at
+                )
+                VALUES (
+                    'admin', 'valid', 'qr_login', '42', '{}',
+                    NULL, '', NULL, NULL
+                )
+                """
+            )
+        )
+        db.session.execute(
+            text(
+                """
                 CREATE TABLE runtime_statuses (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     role VARCHAR(32) NOT NULL,
@@ -320,3 +351,28 @@ def test_legacy_runtime_cookie_schema_is_migrated(app):
         assert "cookie_version" in runtime_columns
         assert "reload_requested_version" in cookie_columns
         assert "reload_requested_at" in cookie_columns
+        assert "cookie_header" in cookie_columns
+        metadata = db.session.execute(
+            text("SELECT status, last_error FROM cookie_metadata WHERE role='admin'")
+        ).mappings().one()
+        assert metadata["status"] == "rescan_required"
+        assert "重新扫码" in metadata["last_error"]
+
+        db.session.execute(
+            text(
+                """
+                UPDATE cookie_metadata
+                SET status='valid', cookie_header='', last_error=''
+                WHERE role='admin'
+                """
+            )
+        )
+        db.session.commit()
+
+        run_migrations()
+
+        metadata = db.session.execute(
+            text("SELECT status, last_error FROM cookie_metadata WHERE role='admin'")
+        ).mappings().one()
+        assert metadata["status"] == "rescan_required"
+        assert "重新扫码" in metadata["last_error"]

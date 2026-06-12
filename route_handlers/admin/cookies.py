@@ -1,38 +1,86 @@
 from route_handlers.common import *
+from db.models import CookieMetadata
+
+
+def _iso_or_empty(value):
+    return value.isoformat() if value else ""
+
+
+def web_qr_auth_status_payload(metadata=None, *, is_valid: bool = False):
+    if metadata is None:
+        metadata = CookieMetadata.query.filter_by(role="admin").first()
+
+    if metadata is None:
+        return {
+            "status": "missing",
+            "source": "",
+            "masked_uid": "",
+            "cookie_version": 0,
+            "reload_requested_version": 0,
+            "reload_requested_at": "",
+            "has_web_refresh_token": False,
+            "last_validated_at": "",
+            "last_error": "",
+            "next_action": "请重新扫码授权 B 站账号",
+        }
+
+    status = metadata.status or "unknown"
+    if status == "valid" and not is_valid:
+        status = "invalid"
+
+    return {
+        "status": status,
+        "source": metadata.source or "",
+        "masked_uid": metadata.masked_uid or "",
+        "cookie_version": int(metadata.cookie_version or 0),
+        "reload_requested_version": int(metadata.reload_requested_version or 0),
+        "reload_requested_at": _iso_or_empty(metadata.reload_requested_at),
+        "has_web_refresh_token": bool(getattr(metadata, "web_refresh_token", "")),
+        "last_validated_at": _iso_or_empty(metadata.last_validated_at),
+        "last_error": metadata.last_error or "",
+        "next_action": "无需操作" if status == "valid" and is_valid else "请重新扫码授权 B 站账号",
+    }
+
 
 @admin_bp.route('/cookie/status')
 @require_admin
 def admin_cookie_status():
     """获取Cookie和弹幕监听状态"""
-    from services.cookie_service import CookieService
+    from services.bilibili_qr_service import cookie_header_from_map, cookie_map_from_metadata, validate_cookie_header
     from services.danmaku_listener import get_listener_status
-    
-    settings = CookieService.load_settings()
-    bilibili = settings.get('bilibili', {})
-    
-    has_sessdata = bool(bilibili.get('SESSDATA'))
-    has_buvid3 = bool(bilibili.get('buvid3'))
-    
+
+    metadata = CookieMetadata.query.filter_by(role="admin").first()
+    cookie_map = cookie_map_from_metadata(metadata)
+    has_sessdata = bool(cookie_map.get('SESSDATA'))
+    has_buvid3 = bool(cookie_map.get('buvid3'))
+
     # 验证SESSDATA是否有效（只在有SESSDATA时验证）
     is_valid = False
     username = None
     if has_sessdata:
         try:
-            is_valid, result = CookieService.validate_cookie(bilibili['SESSDATA'])
+            result = validate_cookie_header(cookie_header_from_map(cookie_map))
+            is_valid = bool(result.get("valid"))
             if is_valid:
-                username = result
+                username = result.get("username") or ""
         except Exception as e:
             logger.warning(f"验证Cookie失败: {e}")
-    
+
     # 获取弹幕监听状态
     listener_status = get_listener_status()
-    
+    auth_status = web_qr_auth_status_payload(metadata, is_valid=is_valid)
+
     return jsonify({
         'has_sessdata': has_sessdata,
         'has_buvid3': has_buvid3,
         'is_valid': is_valid,
         'username': username,
-        'tv_auth': tv_auth_status_payload(),
+        'auth': auth_status,
+        'tv_auth': {
+            'status': 'disabled',
+            'source': '',
+            'next_action': '请使用 Web 扫码授权 B 站账号',
+        },
         'listener': listener_status,
         'runtime': runtime_health_summary(),
     })
@@ -43,17 +91,31 @@ def admin_cookie_status():
 def admin_refresh_buvid3():
     """刷新buvid3"""
     from services.cookie_service import CookieService
-    
+
     csrf_token = request.headers.get('X-CSRF-Token')
     if not csrf_token or not UserService.verify_csrf_token(csrf_token):
         return jsonify({'error': 'CSRF token invalid'}), 403
-    
+
     success = CookieService.auto_update_buvid3()
-    
+
     if success:
         return jsonify({'success': True, 'message': 'buvid3 已存在'})
     else:
         return jsonify({'error': '当前 Cookie 缺少 buvid3，请重新扫码登录获取完整 Cookie'}), 500
+
+
+@admin_bp.route('/cookie/force-refresh', methods=['POST'])
+@require_admin
+def admin_force_refresh_cookie():
+    """强制刷新 Web QR Cookie"""
+    csrf_token = request.headers.get('X-CSRF-Token')
+    if not csrf_token or not UserService.verify_csrf_token(csrf_token):
+        return jsonify({'error': 'CSRF token invalid'}), 403
+
+    result = CookieMaintenanceService.run_cookie_maintenance(force=True)
+    if result.get("status") == "success":
+        return jsonify({'success': True, **result})
+    return jsonify({'success': False, **result}), 502
 
 
 @admin_bp.route('/cookie/qrcode/<task_id>')
@@ -147,13 +209,13 @@ def admin_poll_tv_qr_login(task_id):
 def admin_restart_listener():
     """重启弹幕监听"""
     from services.danmaku_listener import restart_listener
-    
+
     csrf_token = request.headers.get('X-CSRF-Token')
     if not csrf_token or not UserService.verify_csrf_token(csrf_token):
         return jsonify({'error': 'CSRF token invalid'}), 403
-    
+
     success = restart_listener()
-    
+
     if success:
         return jsonify({'success': True, 'message': '弹幕监听已重启'})
     else:

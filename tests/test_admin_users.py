@@ -84,6 +84,48 @@ def test_admin_panel_links_to_user_management(client, app):
     assert "用户管理" in html
 
 
+def test_admin_panel_shows_force_cookie_refresh_under_account_switch(client, app):
+    login_admin(client, app)
+
+    response = client.get("/admin/panel")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert html.index("切换B站账号") < html.index("强制刷新 Cookie")
+    assert "forceRefreshCookie()" in html
+    assert "/admin/cookie/force-refresh" in html
+
+
+def test_admin_force_cookie_refresh_uses_force_mode(client, app, monkeypatch):
+    login_admin(client, app)
+    csrf, _secure = admin_tokens(client)
+    calls = []
+
+    def fake_run_cookie_maintenance(**kwargs):
+        calls.append(kwargs)
+        return {
+            "status": "success",
+            "action": "refreshed",
+            "summary": "cookie-maintenance refreshed Web QR Cookie",
+            "next_action": "无需操作",
+        }
+
+    monkeypatch.setattr(
+        "route_handlers.admin.cookies.CookieMaintenanceService.run_cookie_maintenance",
+        fake_run_cookie_maintenance,
+    )
+
+    response = client.post(
+        "/admin/cookie/force-refresh",
+        headers={"X-CSRF-Token": csrf},
+        json={},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["success"] is True
+    assert calls == [{"force": True}]
+
+
 def test_admin_user_add_edit_and_admin_role(client, app):
     login_admin(client, app)
     csrf, _secure = admin_tokens(client)

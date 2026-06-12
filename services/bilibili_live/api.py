@@ -7,6 +7,11 @@ from typing import Any
 NAV_URL = "https://api.bilibili.com/x/web-interface/nav"
 DANMU_INFO_URL = "https://api.live.bilibili.com/xlive/web-room/v1/index/getDanmuInfo"
 ROOM_INFO_URL = "https://api.live.bilibili.com/room/v1/Room/get_info"
+DEFAULT_USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/132.0.0.0 Safari/537.36"
+)
 WBI_MIXIN_ORDER = [
     46, 47, 18, 2, 53, 8, 23, 32,
     15, 50, 10, 31, 58, 3, 45, 35,
