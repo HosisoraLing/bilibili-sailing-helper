@@ -107,6 +107,14 @@ docker compose up -d
 
 Web refresh token、`SESSDATA`、`bili_jct`、`buvid3` 都是敏感凭据，只能存在本地数据库或本地镜像配置中，不要写入文档、日志或提交记录。
 
+如需排查 B 站 Web QR 登录或 Cookie refresh 协议是否变化，可在本地运行独立探针：
+
+```bash
+python scripts/web_qr_refresh_probe.py --terminal-qr
+```
+
+探针不会读取 `settings.json`，不会连接或修改应用数据库，默认把原始请求审计文件写到 `scripts/web-refresh-probe/<timestamp>/`。这些输出仅用于排查，已被 `.gitignore` 忽略。
+
 ## 故障定位
 
 ```bash

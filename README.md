@@ -165,6 +165,14 @@ scheduler 会定时检查 B 站是否要求刷新 Cookie。无需刷新时保持
 
 所有 B 站凭据都是敏感信息，不要提交到仓库、截图或日志。运行时不再读取 `settings.json` 里的旧 `bilibili` Cookie 字段；需要授权或修复错配时请重新 Web 扫码。
 
+如果需要验证 B 站 Web QR 登录和 Cookie refresh 协议本身，可使用独立探针：
+
+```bash
+python scripts/web_qr_refresh_probe.py --terminal-qr
+```
+
+探针只用于人工排查上游协议变化。它不会读取 `settings.json`，不会连接或修改应用数据库，默认把原始请求审计文件写到 `scripts/web-refresh-probe/<timestamp>/`；这些输出已被 `.gitignore` 忽略，不要提交。
+
 ## Docker 常用命令
 
 ```bash
@@ -208,7 +216,8 @@ bilibili-sailing-helper/
 │   ├── danmaku_worker.py     # B 站直播弹幕 Worker
 │   └── scheduler.py          # 定时任务角色
 ├── scripts/
-│   └── migrate_legacy_db.py  # 上游旧版 SQLite 到当前运行时 schema 的显式迁移脚本
+│   ├── migrate_legacy_db.py     # 上游旧版 SQLite 到当前运行时 schema 的显式迁移脚本
+│   └── web_qr_refresh_probe.py  # B 站 Web QR / Cookie refresh 协议探针
 ├── services/
 │   ├── bilibili_live/        # 原生直播弹幕协议、客户端、事件归一化
 │   ├── runtime_cookie_service.py
