@@ -293,6 +293,9 @@ def test_legacy_runtime_cookie_schema_is_migrated(app):
                     source VARCHAR(32),
                     masked_uid VARCHAR(32),
                     payload_json TEXT,
+                    tv_access_token TEXT DEFAULT '',
+                    tv_refresh_token TEXT DEFAULT '',
+                    tv_auth_payload_json TEXT,
                     last_validated_at DATETIME,
                     last_error VARCHAR(512),
                     created_at DATETIME,
@@ -352,6 +355,9 @@ def test_legacy_runtime_cookie_schema_is_migrated(app):
         assert "reload_requested_version" in cookie_columns
         assert "reload_requested_at" in cookie_columns
         assert "cookie_header" in cookie_columns
+        assert "tv_access_token" not in cookie_columns
+        assert "tv_refresh_token" not in cookie_columns
+        assert "tv_auth_payload_json" not in cookie_columns
         metadata = db.session.execute(
             text("SELECT status, last_error FROM cookie_metadata WHERE role='admin'")
         ).mappings().one()

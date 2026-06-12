@@ -211,7 +211,6 @@ bilibili-sailing-helper/
 │   └── migrate_legacy_db.py  # 上游旧版 SQLite 到当前运行时 schema 的显式迁移脚本
 ├── services/
 │   ├── bilibili_live/        # 原生直播弹幕协议、客户端、事件归一化
-│   ├── tv_auth_service.py    # TV 授权兼容代码，当前版本不启用
 │   ├── runtime_cookie_service.py
 │   ├── internal_api_service.py
 │   ├── auth_service.py

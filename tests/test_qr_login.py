@@ -213,7 +213,6 @@ def test_poll_qr_login_saves_web_refresh_token_only_after_valid_cookie(app, monk
         assert metadata.source == "qr_login"
         assert metadata.web_refresh_token == "web-refresh-secret"
         assert metadata.cookie_header == "DedeUserID=42; SESSDATA=new-sess; bili_jct=new-csrf"
-        assert metadata.tv_refresh_token in (None, "")
         assert "web-refresh-secret" not in str(result)
 
 

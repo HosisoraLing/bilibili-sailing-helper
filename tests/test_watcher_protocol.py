@@ -506,7 +506,7 @@ def test_live_api_fetches_danmu_info_with_cookie_headers():
     asyncio.run(run_test())
 
 
-def test_worker_adds_ephemeral_buvid3_for_tv_cookie_without_persisted_buvid():
+def test_worker_adds_ephemeral_buvid3_for_cookie_without_persisted_buvid():
     from runtime.danmaku_worker import cookie_header, runtime_live_cookie
 
     original = {"SESSDATA": "sess", "bili_jct": "csrf", "buvid3": ""}

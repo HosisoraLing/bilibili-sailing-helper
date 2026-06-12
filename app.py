@@ -134,6 +134,78 @@ def run_migrations():
     """
     from sqlalchemy import inspect, text
 
+    def rebuild_cookie_metadata_without_legacy_tv_columns():
+        inspector = inspect(db.engine)
+        if 'cookie_metadata' not in inspector.get_table_names():
+            return
+
+        existing_columns = [col["name"] for col in inspector.get_columns('cookie_metadata')]
+        legacy_tv_columns = ('tv_access_token', 'tv_refresh_token', 'tv_auth_payload_json')
+        dropped_columns = [name for name in legacy_tv_columns if name in existing_columns]
+        if not dropped_columns:
+            return
+
+        target_columns = [
+            'id',
+            'role',
+            'status',
+            'source',
+            'masked_uid',
+            'payload_json',
+            'cookie_version',
+            'reload_requested_version',
+            'reload_requested_at',
+            'web_refresh_token',
+            'cookie_header',
+            'sessdata_expires_at',
+            'last_refresh_at',
+            'last_validated_at',
+            'last_error',
+            'created_at',
+            'updated_at',
+        ]
+        retained_columns = [name for name in target_columns if name in existing_columns]
+        column_sql = ", ".join(f'"{name}"' for name in retained_columns)
+        logger.info(
+            "Migrating: Dropping legacy TV auth columns from cookie_metadata: %s",
+            ", ".join(dropped_columns),
+        )
+        with db.engine.connect() as conn:
+            conn.execute(text("PRAGMA foreign_keys=OFF"))
+            conn.execute(text('DROP TABLE IF EXISTS "cookie_metadata_new"'))
+            conn.execute(text("""
+                CREATE TABLE "cookie_metadata_new" (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    role VARCHAR(32) NOT NULL,
+                    status VARCHAR(32) NOT NULL DEFAULT 'unknown',
+                    source VARCHAR(32),
+                    masked_uid VARCHAR(32),
+                    payload_json TEXT,
+                    cookie_version INTEGER NOT NULL DEFAULT 0,
+                    reload_requested_version INTEGER NOT NULL DEFAULT 0,
+                    reload_requested_at DATETIME,
+                    web_refresh_token TEXT DEFAULT '',
+                    cookie_header TEXT DEFAULT '',
+                    sessdata_expires_at DATETIME,
+                    last_refresh_at DATETIME,
+                    last_validated_at DATETIME,
+                    last_error VARCHAR(512),
+                    created_at DATETIME,
+                    updated_at DATETIME
+                )
+            """))
+            conn.execute(text(
+                f'INSERT INTO "cookie_metadata_new" ({column_sql}) '
+                f'SELECT {column_sql} FROM "cookie_metadata"'
+            ))
+            conn.execute(text('DROP TABLE "cookie_metadata"'))
+            conn.execute(text('ALTER TABLE "cookie_metadata_new" RENAME TO "cookie_metadata"'))
+            conn.execute(text('CREATE INDEX IF NOT EXISTS ix_cookie_metadata_role ON cookie_metadata(role)'))
+            conn.execute(text('CREATE INDEX IF NOT EXISTS ix_cookie_metadata_status ON cookie_metadata(status)'))
+            conn.execute(text('CREATE INDEX IF NOT EXISTS ix_cookie_metadata_masked_uid ON cookie_metadata(masked_uid)'))
+            conn.commit()
+        logger.info("Migration completed: legacy TV auth columns dropped from cookie_metadata")
+
     inspector = inspect(db.engine)
 
     # Check users table
@@ -284,15 +356,15 @@ def run_migrations():
     # Check cookie_metadata table for runtime Cookie version column
     if 'cookie_metadata' in inspector.get_table_names():
         columns = {col['name']: col for col in inspector.get_columns('cookie_metadata')}
+        rebuild_cookie_metadata_without_legacy_tv_columns()
+        inspector = inspect(db.engine)
+        columns = {col['name']: col for col in inspector.get_columns('cookie_metadata')}
         cookie_metadata_columns = {
             'cookie_version': 'INTEGER DEFAULT 0',
             'reload_requested_version': 'INTEGER DEFAULT 0',
             'reload_requested_at': 'DATETIME',
-            'tv_access_token': 'TEXT DEFAULT ""',
-            'tv_refresh_token': 'TEXT DEFAULT ""',
             'web_refresh_token': 'TEXT DEFAULT ""',
             'cookie_header': 'TEXT DEFAULT ""',
-            'tv_auth_payload_json': 'TEXT',
             'sessdata_expires_at': 'DATETIME',
             'last_refresh_at': 'DATETIME',
         }
@@ -310,6 +382,11 @@ def run_migrations():
                 logger.info("Migration completed: Cookie metadata columns added")
         if 'cookie_header' in columns or any(name == 'cookie_header' for name, _ in missing_columns):
             with db.engine.connect() as conn:
+                conn.execute(text("""
+                    UPDATE cookie_metadata
+                    SET source = 'migration'
+                    WHERE source = 'tv_auth'
+                """))
                 result = conn.execute(text("""
                     UPDATE cookie_metadata
                     SET status = 'rescan_required',

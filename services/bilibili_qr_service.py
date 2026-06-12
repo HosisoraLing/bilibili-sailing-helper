@@ -265,9 +265,6 @@ def _upsert_cookie_metadata(
     if validation.get("valid"):
         metadata.cookie_header = cookie_header_from_map(validation.get("cookie_map") or {})
         metadata.web_refresh_token = web_refresh_token or metadata.web_refresh_token or ""
-        metadata.tv_access_token = ""
-        metadata.tv_refresh_token = ""
-        metadata.tv_auth_payload_json = None
         metadata.cookie_version = int(metadata.cookie_version or 0) + 1
         metadata.reload_requested_version = int(metadata.cookie_version or 0)
         metadata.reload_requested_at = now

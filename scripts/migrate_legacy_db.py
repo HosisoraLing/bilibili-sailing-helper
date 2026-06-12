@@ -57,6 +57,73 @@ def add_column(conn: sqlite3.Connection, table: str, name: str, ddl: str) -> boo
     return True
 
 
+def drop_legacy_tv_auth_cookie_metadata_columns(conn: sqlite3.Connection) -> list[str]:
+    table_columns = columns(conn, "cookie_metadata")
+    legacy_columns = {"tv_access_token", "tv_refresh_token", "tv_auth_payload_json"}
+    existing_drop_columns = [name for name in legacy_columns if name in table_columns]
+    if not existing_drop_columns:
+        return []
+
+    target_columns = [
+        "id",
+        "role",
+        "status",
+        "source",
+        "masked_uid",
+        "payload_json",
+        "cookie_version",
+        "reload_requested_version",
+        "reload_requested_at",
+        "web_refresh_token",
+        "cookie_header",
+        "sessdata_expires_at",
+        "last_refresh_at",
+        "last_validated_at",
+        "last_error",
+        "created_at",
+        "updated_at",
+    ]
+    retained_columns = [name for name in target_columns if name in table_columns]
+    retained_sql = ", ".join(quote_identifier(name) for name in retained_columns)
+    temp_table = "cookie_metadata__without_legacy_tv_auth"
+    conn.execute(f"DROP TABLE IF EXISTS {quote_identifier(temp_table)}")
+    conn.executescript(
+        f"""
+        CREATE TABLE {quote_identifier(temp_table)} (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            role VARCHAR(32) NOT NULL,
+            status VARCHAR(32) NOT NULL DEFAULT 'unknown',
+            source VARCHAR(32),
+            masked_uid VARCHAR(32),
+            payload_json TEXT,
+            cookie_version INTEGER NOT NULL DEFAULT 0,
+            reload_requested_version INTEGER NOT NULL DEFAULT 0,
+            reload_requested_at DATETIME,
+            web_refresh_token TEXT DEFAULT '',
+            cookie_header TEXT DEFAULT '',
+            sessdata_expires_at DATETIME,
+            last_refresh_at DATETIME,
+            last_validated_at DATETIME,
+            last_error VARCHAR(512),
+            created_at DATETIME,
+            updated_at DATETIME
+        );
+        """
+    )
+    conn.execute(
+        f"INSERT INTO {quote_identifier(temp_table)} ({retained_sql}) "
+        f"SELECT {retained_sql} FROM cookie_metadata"
+    )
+    conn.execute("DROP TABLE cookie_metadata")
+    conn.execute(
+        f"ALTER TABLE {quote_identifier(temp_table)} RENAME TO cookie_metadata"
+    )
+    create_index(conn, "ix_cookie_metadata_role", "cookie_metadata", "role")
+    create_index(conn, "ix_cookie_metadata_status", "cookie_metadata", "status")
+    create_index(conn, "ix_cookie_metadata_masked_uid", "cookie_metadata", "masked_uid")
+    return [f"Dropped cookie_metadata.{name}" for name in existing_drop_columns]
+
+
 def create_index(conn: sqlite3.Connection, name: str, table: str, columns_sql: str, unique: bool = False):
     unique_sql = "UNIQUE " if unique else ""
     conn.execute(
@@ -220,11 +287,8 @@ def ensure_new_tables(conn: sqlite3.Connection) -> list[str]:
             cookie_version INTEGER NOT NULL DEFAULT 0,
             reload_requested_version INTEGER NOT NULL DEFAULT 0,
             reload_requested_at DATETIME,
-            tv_access_token TEXT DEFAULT '',
-            tv_refresh_token TEXT DEFAULT '',
             web_refresh_token TEXT DEFAULT '',
             cookie_header TEXT DEFAULT '',
-            tv_auth_payload_json TEXT,
             sessdata_expires_at DATETIME,
             last_refresh_at DATETIME,
             last_validated_at DATETIME,
@@ -320,15 +384,13 @@ def ensure_cookie_metadata_columns(conn: sqlite3.Connection) -> list[str]:
     changes: list[str] = []
     if not table_exists(conn, "cookie_metadata"):
         return changes
+    changes.extend(drop_legacy_tv_auth_cookie_metadata_columns(conn))
     for name, ddl in (
         ("cookie_version", "INTEGER NOT NULL DEFAULT 0"),
         ("reload_requested_version", "INTEGER NOT NULL DEFAULT 0"),
         ("reload_requested_at", "DATETIME"),
-        ("tv_access_token", "TEXT DEFAULT ''"),
-        ("tv_refresh_token", "TEXT DEFAULT ''"),
         ("web_refresh_token", "TEXT DEFAULT ''"),
         ("cookie_header", "TEXT DEFAULT ''"),
-        ("tv_auth_payload_json", "TEXT"),
         ("sessdata_expires_at", "DATETIME"),
         ("last_refresh_at", "DATETIME"),
         ("last_validated_at", "DATETIME"),
@@ -375,7 +437,6 @@ def initialize_cookie_metadata(conn: sqlite3.Connection, settings_path: Path) ->
         INSERT INTO cookie_metadata (
             role, status, source, masked_uid, payload_json,
             cookie_version, reload_requested_version, reload_requested_at,
-            tv_access_token, tv_refresh_token, tv_auth_payload_json,
             web_refresh_token, cookie_header,
             sessdata_expires_at, last_refresh_at, last_validated_at, last_error,
             created_at, updated_at
@@ -383,7 +444,6 @@ def initialize_cookie_metadata(conn: sqlite3.Connection, settings_path: Path) ->
         VALUES (
             'admin', ?, ?, '', '{}',
             ?, ?, ?,
-            '', '', NULL,
             '', ?,
             NULL, NULL, ?, ?,
             ?, ?
@@ -411,6 +471,13 @@ def normalize_cookie_metadata_auth_state(conn: sqlite3.Connection) -> int:
     cookie_columns = columns(conn, "cookie_metadata")
     if "cookie_header" not in cookie_columns:
         return 0
+    conn.execute(
+        """
+        UPDATE cookie_metadata
+        SET source = 'migration'
+        WHERE source = 'tv_auth'
+        """
+    )
     cursor = conn.execute(
         """
         UPDATE cookie_metadata

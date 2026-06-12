@@ -265,3 +265,81 @@ def test_script_marks_valid_cookie_metadata_without_db_cookie_for_rescan(tmp_pat
         assert "重新扫码" in metadata["last_error"]
     finally:
         conn.close()
+
+
+def test_script_drops_legacy_tv_auth_cookie_metadata_columns(tmp_path):
+    db_path = tmp_path / "app.db"
+    settings_path = tmp_path / "settings.json"
+    backup_dir = tmp_path / "backups"
+    create_upstream_like_db(db_path)
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.executescript(
+            """
+            CREATE TABLE cookie_metadata (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                role VARCHAR(32) NOT NULL,
+                status VARCHAR(32) NOT NULL DEFAULT 'unknown',
+                source VARCHAR(32),
+                masked_uid VARCHAR(32),
+                payload_json TEXT,
+                tv_access_token TEXT DEFAULT '',
+                tv_refresh_token TEXT DEFAULT '',
+                tv_auth_payload_json TEXT,
+                web_refresh_token TEXT DEFAULT '',
+                cookie_header TEXT DEFAULT '',
+                last_validated_at DATETIME,
+                last_error VARCHAR(512),
+                created_at DATETIME,
+                updated_at DATETIME
+            );
+            INSERT INTO cookie_metadata (
+                role, status, source, masked_uid, payload_json,
+                tv_access_token, tv_refresh_token, tv_auth_payload_json,
+                web_refresh_token, cookie_header, last_error
+            )
+            VALUES (
+                'admin', 'valid', 'tv_auth', '42', '{}',
+                'legacy-access', 'legacy-refresh', '{"legacy": true}',
+                '', '', ''
+            );
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    settings_path.write_text(json.dumps({"bilibili": {"SESSDATA": "legacy"}}), encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            str(SCRIPT),
+            "--db",
+            str(db_path),
+            "--settings",
+            str(settings_path),
+            "--backup-dir",
+            str(backup_dir),
+        ],
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Dropped cookie_metadata.tv_access_token" in result.stdout
+    assert "Dropped cookie_metadata.tv_refresh_token" in result.stdout
+    assert "Dropped cookie_metadata.tv_auth_payload_json" in result.stdout
+    conn = sqlite3.connect(db_path)
+    try:
+        cookie_columns = {row["name"] for row in rows(conn, "PRAGMA table_info(cookie_metadata)")}
+        assert "tv_access_token" not in cookie_columns
+        assert "tv_refresh_token" not in cookie_columns
+        assert "tv_auth_payload_json" not in cookie_columns
+        metadata = rows(conn, "SELECT status, source, cookie_header, last_error FROM cookie_metadata WHERE role='admin'")[0]
+        assert metadata["status"] == "rescan_required"
+        assert metadata["source"] == "migration"
+        assert metadata["cookie_header"] == ""
+        assert "重新扫码" in metadata["last_error"]
+    finally:
+        conn.close()
