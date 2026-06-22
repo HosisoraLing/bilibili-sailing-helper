@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>舰长地址填写</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/fonts/fonts.css">
+    <link rel="stylesheet" href="/static/css/common.css">
+    <style>
+        .container {
+            max-width: 550px;
+        }
+
+        .header-actions {
+            margin-top: 10px;
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .detail-input {
+            resize: vertical;
+            min-height: 80px;
+            font-family: var(--font-family);
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, var(--bg-start) 0%, var(--bg-end) 100%);
+            color: white;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            margin-top: 10px;
+            letter-spacing: 0.5px;
+            font-family: var(--font-family);
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-primary-hover);
+        }
+
+        .submit-btn:active {
+            transform: translateY(0);
+        }
+
+        .submit-btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .page-footer {
+            margin-top: 20px;
+            border-top: 1px solid var(--border-light);
+            padding-top: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container animate-slideUp">
+        <div class="card-header">
+            <h2>📦 舰长地址填写</h2>
+            <div class="nickname">舰长 {{ nickname }}</div>
+            <div class="header-actions">
+                <a href="/logout" class="btn-pill"><i class="fas fa-sign-out-alt"></i> 退出登录</a>
+                <a href="/reset-password?uid={{ uid }}" class="btn-pill"><i class="fas fa-key"></i> 修改密码</a>
+                {% if current_user.is_admin() %}
+                    <a href="/admin/panel" class="btn-pill"><i class="fas fa-user-shield"></i> 管理员面板</a>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card-body stagger">
+            <div id="errorMessage" class="msg-error"></div>
+            <div id="successMessage" class="msg-success"></div>
+
+            <form method="post" action="/submit" id="addressForm">
+                <input type="hidden" name="uid" value="{{ uid }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                <div class="form-group">
+                    <label class="required" for="name">收件人姓名</label>
+                    <input type="text" id="name" name="name" required placeholder="无需填写真实姓名" value="{{ address.receiver if address else '' }}">
+                </div>
+
+                <div class="form-group">
+                    <label class="required" for="phone">手机号码</label>
+                    <input type="tel" id="phone" name="phone" required pattern="^1[3-9]\d{9}$" placeholder="11位手机号码" inputmode="numeric" value="{{ address.phone if address else '' }}">
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="required" for="province">省</label>
+                        <select id="province" name="province" required>
+                            <option value="">请选择</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="required" for="city">市</label>
+                        <select id="city" name="city" required disabled>
+                            <option value="">请选择</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="required" for="district">区/县</label>
+                        <select id="district" name="district" required disabled>
+                            <option value="">请选择</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="required" for="detail">详细地址</label>
+                    <input type="text" id="detail" name="detail" class="detail-input" required placeholder="街道、门牌号等" value="{{ address.address if address else '' }}">
+                </div>
+
+                <button type="submit" class="submit-btn">
+                    <i class="fas fa-paper-plane"></i> 提交地址信息
+                </button>
+            </form>
+
+            <div class="tips mt-25">
+                <strong>💡 温馨提示</strong>
+                • 请确保填写的信息准确无误<br>
+                • 提交后可联系小蝰确认<br>
+                • 地址仅用于邮寄舰长福利
+            </div>
+        </div>
+
+        <div class="page-footer">
+            <a href="https://github.com/HosisoraLing/bilibili-sailing-helper" target="_blank">
+                <i class="fab fa-github"></i> bilibili-sailing-helper
+            </a>
+            <span> | AGPLv3 Licensed</span>
+        </div>
+    </div>
+
+    <script>
+        let regions = {};
+        const provinceSelect = document.getElementById('province');
+        const citySelect = document.getElementById('city');
+        const districtSelect = document.getElementById('district');
+        const errorMessage = document.getElementById('errorMessage');
+        const successMessage = document.getElementById('successMessage');
+        const form = document.getElementById('addressForm');
+
+        function showMessage(message, type) {
+            if (type === 'error') {
+                errorMessage.textContent = message;
+                errorMessage.style.display = 'block';
+                successMessage.style.display = 'none';
+            } else {
+                successMessage.textContent = message;
+                successMessage.style.display = 'block';
+                errorMessage.style.display = 'none';
+            }
+        }
+
+        const prefillProvince = {{ address.province|tojson if address else '""' }};
+        const prefillCity = {{ address.city|tojson if address else '""' }};
+        const prefillDistrict = {{ address.area|tojson if address else '""' }};
+
+        fetch('/static/china_regions.json')
+            .then(r => {
+                if (!r.ok) throw new Error('网络错误');
+                return r.json();
+            })
+            .then(data => {
+                regions = data;
+                for (const province in regions) {
+                    const option = document.createElement('option');
+                    option.value = province;
+                    option.textContent = province;
+                    provinceSelect.appendChild(option);
+                }
+
+                if (prefillProvince) {
+                    provinceSelect.value = prefillProvince;
+                    provinceSelect.dispatchEvent(new Event('change'));
+
+                    setTimeout(() => {
+                        if (prefillCity) {
+                            citySelect.value = prefillCity;
+                            citySelect.dispatchEvent(new Event('change'));
+
+                            setTimeout(() => {
+                                if (prefillDistrict) {
+                                    districtSelect.value = prefillDistrict;
+                                }
+                            }, 100);
+                        }
+                    }, 100);
+                }
+            })
+            .catch(() => {
+                showMessage('加载地区数据失败，请刷新页面重试', 'error');
+            });
+
+        provinceSelect.onchange = function() {
+            citySelect.textContent = '';
+            districtSelect.textContent = '';
+            const defaultCity = document.createElement('option');
+            defaultCity.value = '';
+            defaultCity.textContent = '请选择';
+            citySelect.appendChild(defaultCity);
+            const defaultDist = document.createElement('option');
+            defaultDist.value = '';
+            defaultDist.textContent = '请选择';
+            districtSelect.appendChild(defaultDist);
+            citySelect.disabled = !this.value;
+            districtSelect.disabled = true;
+
+            if (this.value && regions[this.value]) {
+                for (const city in regions[this.value]) {
+                    const option = document.createElement('option');
+                    option.value = city;
+                    option.textContent = city;
+                    citySelect.appendChild(option);
+                }
+            }
+        };
+
+        citySelect.onchange = function() {
+            districtSelect.textContent = '';
+            const defaultDist = document.createElement('option');
+            defaultDist.value = '';
+            defaultDist.textContent = '请选择';
+            districtSelect.appendChild(defaultDist);
+            districtSelect.disabled = !this.value;
+
+            const city = this.value;
+            const province = provinceSelect.value;
+
+            if (province && city && regions[province] && regions[province][city]) {
+                regions[province][city].forEach(district => {
+                    const option = document.createElement('option');
+                    option.value = district;
+                    option.textContent = district;
+                    districtSelect.appendChild(option);
+                });
+            }
+        };
+
+        form.onsubmit = function(e) {
+            const phone = document.getElementById('phone').value;
+            if (!/^1[3-9]\d{9}$/.test(phone)) {
+                e.preventDefault();
+                showMessage('请输入有效的11位手机号码', 'error');
+                return false;
+            }
+
+            if (!provinceSelect.value || !citySelect.value || !districtSelect.value) {
+                e.preventDefault();
+                showMessage('请完整选择省市区', 'error');
+                return false;
+            }
+
+            errorMessage.style.display = 'none';
+            const submitBtn = document.querySelector('.submit-btn');
+            submitBtn.textContent = '提交中...';
+            submitBtn.disabled = true;
+
+            setTimeout(() => {
+                submitBtn.textContent = '提交地址信息';
+                submitBtn.disabled = false;
+            }, 3000);
+        };
+
+        document.getElementById('phone').addEventListener('input', function() {
+            this.value = this.value.replace(/\D/g, '').slice(0, 11);
+        });
+    </script>
+</body>
+</html>

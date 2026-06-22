@@ -1,0 +1,66 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bilibili-sailing-helper-web
+    restart: unless-stopped
+    command: ["python", "-m", "runtime.web"]
+    ports:
+      - "7111:7111"
+    volumes:
+      - ./settings.json:/app/settings.json
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - TZ=Asia/Shanghai
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:?set INTERNAL_API_SECRET}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  danmaku-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bilibili-sailing-helper-danmaku-worker
+    restart: unless-stopped
+    command: ["python", "-m", "runtime.danmaku_worker"]
+    depends_on:
+      - web
+    volumes:
+      - ./settings.json:/app/settings.json:ro
+      - ./logs:/app/logs
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - TZ=Asia/Shanghai
+      - INTERNAL_API_URL=http://web:7111
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:?set INTERNAL_API_SECRET}
+    healthcheck:
+      disable: true
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bilibili-sailing-helper-scheduler
+    restart: unless-stopped
+    command: ["python", "-m", "runtime.scheduler"]
+    depends_on:
+      - web
+    volumes:
+      - ./settings.json:/app/settings.json:ro
+      - ./logs:/app/logs
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - TZ=Asia/Shanghai
+      - INTERNAL_API_URL=http://web:7111
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:?set INTERNAL_API_SECRET}
+    healthcheck:
+      disable: true

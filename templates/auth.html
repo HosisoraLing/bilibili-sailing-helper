@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>弹幕鉴权</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/fonts/fonts.css">
+    <link rel="stylesheet" href="/static/css/common.css">
+    <style>
+        .container {
+            max-width: 500px;
+            padding: 40px 30px;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.97);
+        }
+
+        .header h2 {
+            font-size: 24px;
+            color: var(--primary-dark);
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: var(--text-secondary);
+            font-size: 15px;
+        }
+
+        .code-container {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%);
+            border-radius: 15px;
+            padding: 25px;
+            margin: 25px 0 15px;
+            box-shadow: 0 8px 24px rgba(255, 107, 107, 0.3);
+        }
+
+        .code-label {
+            color: rgba(255, 255, 255, 0.9);
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .code-value {
+            color: white;
+            font-size: 34px;
+            font-weight: 800;
+            font-family: 'Courier New', monospace;
+            background: rgba(0, 0, 0, 0.15);
+            padding: 14px;
+            border-radius: 10px;
+            letter-spacing: 8px;
+            user-select: all;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .code-value:active {
+            background: rgba(0, 0, 0, 0.25);
+            transform: scale(0.97);
+        }
+
+        .copy-btn {
+            margin-top: 14px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.6);
+            color: white;
+            padding: 10px 20px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-weight: 600;
+            font-family: var(--font-family);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: var(--transition);
+        }
+
+        .copy-btn:hover {
+            background: rgba(255, 255, 255, 0.35);
+        }
+
+        .copy-btn.copied {
+            background: #48bb78;
+            border-color: #48bb78;
+        }
+
+        .status-container {
+            background: var(--bg-light);
+            border-radius: 15px;
+            padding: 18px;
+            margin-top: 20px;
+            border: 1px solid var(--border-color);
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+        }
+
+        .status-pending { color: var(--text-secondary); }
+        .status-success { color: #48bb78; font-weight: 600; }
+        .status-expired { color: var(--error); }
+
+        .auth-info {
+            margin-top: 15px;
+            padding: 12px;
+            background: #e6f7ff;
+            border-radius: var(--radius-sm);
+            border: 1px solid #91d5ff;
+        }
+
+        .auth-info p {
+            color: #0050b3;
+            font-size: 14px;
+            margin: 0;
+        }
+
+        .footer {
+            margin-top: 20px;
+            color: var(--text-secondary);
+            font-size: 13px;
+            border-top: 1px solid var(--border-color);
+            padding-top: 14px;
+        }
+
+        @media (max-width: 600px) {
+            .container { padding: 30px 20px; }
+            .code-value { font-size: 28px; letter-spacing: 6px; padding: 12px; }
+            .copy-btn { width: 100%; justify-content: center; padding: 14px 20px; }
+        }
+
+        @media (max-width: 360px) {
+            .code-value { font-size: 24px; letter-spacing: 4px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container animate-slideUp">
+    <div class="header">
+        <h2><i class="fas fa-shield-alt"></i> 弹幕鉴权</h2>
+        <p>请在直播间发送以下弹幕完成身份验证</p>
+    </div>
+
+    <div class="code-container">
+        <div class="code-label">鉴权码（点击可复制）</div>
+        <div class="code-value" id="authCode" title="点击复制">{{ code }}</div>
+
+        <button class="copy-btn" id="copyBtn">
+            <i class="fas fa-copy"></i> 一键复制鉴权码
+        </button>
+    </div>
+
+    <a href="{{ config.ANCHOR_LIVE_URL }}" target="_blank" class="btn btn-gradient btn-block">
+        🚢 前往 {{ config.ANCHOR_NICKNAME }} 的直播间
+    </a>
+
+    {% if login_mode %}
+    <div class="auth-info">
+        <p><i class="fas fa-info-circle"></i> 鉴权成功后将自动登录并跳转到首页</p>
+    </div>
+    {% endif %}
+
+    <div class="status-container">
+        <div id="status">
+            <span class="conn-dot conn-dot--connecting"></span>
+            <span class="status-pending">连接中…</span>
+        </div>
+    </div>
+
+    <div class="footer">
+        <i class="fas fa-lock"></i> 安全验证中，请勿关闭页面
+    </div>
+
+    <div class="page-footer">
+        <a href="https://github.com/HosisoraLing/bilibili-sailing-helper" target="_blank">
+            <i class="fab fa-github"></i> bilibili-sailing-helper
+        </a>
+        <span> | AGPLv3 Licensed</span>
+    </div>
+</div>
+
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+    const uid = "{{ uid }}";
+    const copyBtn = document.getElementById("copyBtn");
+    const authCode = document.getElementById("authCode").innerText;
+    const statusDiv = document.getElementById("status");
+
+    async function copyAuthCode() {
+        const text = `鉴权码：${authCode}`;
+
+        try {
+            await navigator.clipboard.writeText(text);
+            showCopySuccess();
+            return true;
+        } catch (err) {
+            console.log("Clipboard API failed, trying fallback:", err);
+        }
+
+        try {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+
+            const successful = document.execCommand('copy');
+            document.body.removeChild(textarea);
+
+            if (successful) {
+                showCopySuccess();
+                return true;
+            } else {
+                showCopyFallback();
+                return false;
+            }
+        } catch (err) {
+            showCopyFallback();
+            return false;
+        }
+    }
+
+    copyBtn.addEventListener("click", copyAuthCode);
+
+    document.getElementById("authCode").addEventListener("click", async () => {
+        const success = await copyAuthCode();
+        if (success) {
+            const codeEl = document.getElementById("authCode");
+            codeEl.style.transform = "scale(0.95)";
+            setTimeout(() => { codeEl.style.transform = "scale(1)"; }, 100);
+        }
+    });
+
+    function showCopySuccess() {
+        copyBtn.classList.add("copied");
+        copyBtn.textContent = '';
+        const icon = document.createElement('i');
+        icon.className = 'fas fa-check';
+        copyBtn.appendChild(icon);
+        copyBtn.appendChild(document.createTextNode(' 已复制'));
+        setTimeout(() => {
+            copyBtn.classList.remove("copied");
+            copyBtn.textContent = '';
+            const copyIcon = document.createElement('i');
+            copyIcon.className = 'fas fa-copy';
+            copyBtn.appendChild(copyIcon);
+            copyBtn.appendChild(document.createTextNode(' 一键复制鉴权码'));
+        }, 2000);
+    }
+
+    function showCopyFallback() {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
+
+        const modal = document.createElement('div');
+        modal.style.cssText = 'background:white;padding:24px;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.3);max-width:90%;text-align:center;';
+
+        const title = document.createElement('div');
+        title.style.cssText = 'font-size:16px;font-weight:600;margin-bottom:12px;color:#333;';
+        title.textContent = '复制鉴权码';
+
+        const codeBox = document.createElement('div');
+        codeBox.style.cssText = 'background:#f8f9ff;padding:14px;border-radius:10px;font-family:monospace;font-size:18px;font-weight:700;color:#667eea;margin-bottom:15px;user-select:all;cursor:text;word-break:break-all;';
+        codeBox.textContent = '鉴权码：' + authCode;
+
+        const hint = document.createElement('div');
+        hint.style.cssText = 'font-size:13px;color:#666;margin-bottom:15px;';
+        hint.textContent = '长按上方文本，选择"复制"';
+
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'btn btn-primary';
+        closeBtn.style.minWidth = '100px';
+        closeBtn.textContent = '关闭';
+        closeBtn.addEventListener('click', () => overlay.remove());
+
+        modal.appendChild(title);
+        modal.appendChild(codeBox);
+        modal.appendChild(hint);
+        modal.appendChild(closeBtn);
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) overlay.remove();
+        });
+    }
+
+    // WebSocket connection - 尝试WebSocket，失败回退到polling
+    const socket = io({
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        timeout: 10000
+    });
+
+    // 轮询备用机制
+    let pollingTimer = null;
+    let wsConnected = false;
+
+    function startPolling() {
+        if (pollingTimer) return;
+        console.log('Starting polling fallback...');
+        pollingTimer = setInterval(async () => {
+            try {
+                const urlParams = new URLSearchParams(window.location.search);
+                const loginMode = urlParams.get('login_mode') === 'true';
+                const resetMode = urlParams.get('reset_mode') === 'true';
+                const resp = await fetch(`/auth/status?uid=${uid}&login_mode=${loginMode}&reset_mode=${resetMode}`);
+                const data = await resp.json();
+                console.log('Polling result:', data);
+                if (data.status === 'success') {
+                    stopPolling();
+                    updateStatus('conn-dot--connected', 'status-success', '✅ 鉴权成功，正在跳转…');
+                    setTimeout(() => {
+                        location.href = data.redirect || ('/?uid=' + uid);
+                    }, 800);
+                } else if (data.status === 'expired') {
+                    stopPolling();
+                    updateStatus('conn-dot--disconnected', 'status-expired', '鉴权已过期，请刷新页面重试');
+                } else if (data.status === 'listener_unavailable') {
+                    stopPolling();
+                    updateStatus('conn-dot--disconnected', 'status-expired', data.next_action || '弹幕鉴权服务暂不可用，请稍后重试');
+                } else if (data.status === 'retrying') {
+                    updateStatus('conn-dot--disconnected', 'status-pending', data.next_action || '弹幕连接正在自动重试…');
+                } else if (data.status === 'internal_delivery_delayed') {
+                    updateStatus('conn-dot--connected', 'status-pending', data.next_action || '系统正在同步鉴权结果…');
+                } else if (data.status === 'pending') {
+                    updateStatus('conn-dot--connected', 'status-pending', data.next_action || '已连接，等待弹幕鉴权…');
+                }
+            } catch (e) {
+                console.error('Polling error:', e);
+            }
+        }, 2000); // 每2秒轮询一次
+    }
+
+    function stopPolling() {
+        if (pollingTimer) {
+            clearInterval(pollingTimer);
+            pollingTimer = null;
+        }
+    }
+
+    function updateStatus(dotClass, textClass, text) {
+        statusDiv.textContent = '';
+        const dot = document.createElement('span');
+        dot.className = 'conn-dot ' + dotClass;
+        const span = document.createElement('span');
+        span.className = textClass;
+        span.textContent = text;
+        statusDiv.appendChild(dot);
+        statusDiv.appendChild(span);
+    }
+
+    socket.on('connect', () => {
+        wsConnected = true;
+        startPolling(); // 轮询是 split runtime 下的权威成功检测路径
+        updateStatus('conn-dot--connected', 'status-pending', '已连接，等待弹幕鉴权…');
+        const urlParams = new URLSearchParams(window.location.search);
+        socket.emit('join_auth', {
+            uid: uid,
+            login_mode: urlParams.get('login_mode') === 'true',
+            reset_mode: urlParams.get('reset_mode') === 'true'
+        });
+    });
+
+    socket.on('connect_error', () => {
+        if (!wsConnected) {
+            startPolling(); // WebSocket连接失败，启动轮询
+        }
+        updateStatus('conn-dot--disconnected', 'status-expired', '连接失败，使用轮询模式…');
+    });
+
+    socket.on('disconnect', () => {
+        wsConnected = false;
+        startPolling(); // WebSocket断开，启动轮询
+        updateStatus('conn-dot--disconnected', 'status-expired', '连接断开，使用轮询模式…');
+    });
+
+    socket.on('auth_success', (data) => {
+        stopPolling();
+        updateStatus('conn-dot--connected', 'status-success', '✅ 鉴权成功，正在跳转…');
+        setTimeout(() => {
+            location.href = data.redirect || ('/?uid=' + uid);
+        }, 800);
+    });
+
+    socket.on('joined', (data) => {
+        console.log('Joined room:', data);
+    });
+
+    // 页面加载时立即启动轮询（作为备用）
+    setTimeout(() => {
+        if (!wsConnected) {
+            startPolling();
+        }
+    }, 3000); // 3秒后如果WebSocket未连接，启动轮询
+</script>
+
+
+
+</body>
+</html>

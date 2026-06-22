@@ -1,0 +1,38 @@
+{
+    "anchor": {
+        "nickname": "小蝰Kuii",
+        "room_id": 22900497,
+        "ruid": 98094853
+    },
+    "bilibili_auth_mirror": {
+        "source": "db.cookie_metadata",
+        "role": "admin",
+        "status": "missing",
+        "cookie_version": 0,
+        "cookie_header": "",
+        "has_web_refresh_token": false,
+        "masked_uid": "",
+        "updated_at": ""
+    },
+    "database": {
+        "url": "sqlite:///data/app.db"
+    },
+    "flask": {
+        "secret_key": "replace-this-secret",
+        "debug": true,
+        "host": "0.0.0.0",
+        "port": 7111
+    },
+    "ssl": {
+        "enabled": false,
+        "cert_file": "",
+        "key_file": "",
+        "port": 7112
+    },    
+    "admin": {
+        "uids": []
+    },
+    "internal": {
+        "api_secret": "replace-this-internal-secret"
+    }
+}

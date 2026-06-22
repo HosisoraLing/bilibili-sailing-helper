@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>编辑地址 - 管理员</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/fonts/fonts.css">
+    <link rel="stylesheet" href="/static/css/common.css">
+    <style>
+        .container {
+            max-width: 550px;
+        }
+
+        .header-uid {
+            font-size: 14px;
+            opacity: 0.8;
+            margin-top: 3px;
+        }
+
+        .detail-input {
+            resize: vertical;
+            min-height: 80px;
+            font-family: var(--font-family);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .btn-group .btn {
+            flex: 1;
+        }
+
+        .delete-section {
+            margin-top: 15px;
+            text-align: center;
+        }
+
+        .btn-delete-full {
+            background: #ef4444;
+            color: white;
+            border: none;
+            width: 100%;
+            padding: 14px;
+            border-radius: var(--radius-sm);
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-family: var(--font-family);
+        }
+
+        .btn-delete-full:hover {
+            background: #dc2626;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
+        }
+
+        @media (max-width: 600px) {
+            .btn-group {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container animate-slideUp">
+        <div class="card-header">
+            <h2>✏️ 编辑地址信息</h2>
+            <div class="nickname">{{ address.nickname }}</div>
+            <div class="header-uid">UID: {{ address.uid }}</div>
+            <a href="/admin/panel?uid={{ admin_uid }}" class="btn-pill mt-10" style="display: inline-block;">
+                <i class="fas fa-arrow-left"></i> 返回管理面板
+            </a>
+        </div>
+
+        <div class="card-body stagger">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">
+                            <i class="fas fa-{{ 'check-circle' if category == 'success' else 'exclamation-circle' }}"></i>
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <form method="post" action="/admin/edit-address/{{ address.id }}?uid={{ admin_uid }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="secure_token" value="{{ secure_token() }}">
+                <div class="form-group">
+                    <label class="required" for="name">收件人姓名</label>
+                    <input type="text" id="name" name="name" required placeholder="请填写真实姓名" value="{{ address.receiver or '' }}">
+                </div>
+
+                <div class="form-group">
+                    <label class="required" for="phone">手机号码</label>
+                    <input type="tel" id="phone" name="phone" required pattern="^1[3-9]\d{9}$" placeholder="11位手机号码" inputmode="numeric" value="{{ address.phone or '' }}">
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="required" for="province">省</label>
+                        <select id="province" name="province" required>
+                            <option value="">请选择</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="required" for="city">市</label>
+                        <select id="city" name="city" required disabled>
+                            <option value="">请选择</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="required" for="district">区/县</label>
+                        <select id="district" name="district" required disabled>
+                            <option value="">请选择</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="required" for="detail">详细地址</label>
+                    <input type="text" id="detail" name="detail" class="detail-input" required placeholder="街道、门牌号等" value="{{ address.address or '' }}">
+                </div>
+
+                <div class="btn-group">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-check"></i> 保存修改
+                    </button>
+                    <a href="/admin/panel?uid={{ admin_uid }}" class="btn btn-light">
+                        <i class="fas fa-times"></i> 取消
+                    </a>
+                </div>
+            </form>
+
+            <form class="delete-section" action="/admin/delete-address/{{ address.id }}?uid={{ admin_uid }}" method="post"
+                  onsubmit="return confirm('确定要删除此地址信息吗？此操作无法撤销。');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="secure_token" value="{{ secure_token() }}">
+                <button type="submit" class="btn-delete-full">
+                    <i class="fas fa-trash"></i> 删除地址
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let regions = {};
+        const provinceSelect = document.getElementById('province');
+        const citySelect = document.getElementById('city');
+        const districtSelect = document.getElementById('district');
+
+        const prefillProvince = '{{ address.province or "" }}';
+        const prefillCity = '{{ address.city or "" }}';
+        const prefillDistrict = '{{ address.area or "" }}';
+
+        fetch('/static/china_regions.json')
+            .then(r => {
+                if (!r.ok) throw new Error('网络错误');
+                return r.json();
+            })
+            .then(data => {
+                regions = data;
+                for (const province in regions) {
+                    const option = document.createElement('option');
+                    option.value = province;
+                    option.textContent = province;
+                    provinceSelect.appendChild(option);
+                }
+
+                if (prefillProvince) {
+                    provinceSelect.value = prefillProvince;
+                    provinceSelect.dispatchEvent(new Event('change'));
+
+                    setTimeout(() => {
+                        if (prefillCity) {
+                            citySelect.value = prefillCity;
+                            citySelect.dispatchEvent(new Event('change'));
+
+                            setTimeout(() => {
+                                if (prefillDistrict) {
+                                    districtSelect.value = prefillDistrict;
+                                }
+                            }, 100);
+                        }
+                    }, 100);
+                }
+            })
+            .catch(() => {
+                console.error('加载地区数据失败');
+            });
+
+        provinceSelect.onchange = function() {
+            citySelect.textContent = '';
+            districtSelect.textContent = '';
+            const dc = document.createElement('option');
+            dc.value = ''; dc.textContent = '请选择';
+            citySelect.appendChild(dc);
+            const dd = document.createElement('option');
+            dd.value = ''; dd.textContent = '请选择';
+            districtSelect.appendChild(dd);
+            citySelect.disabled = !this.value;
+            districtSelect.disabled = true;
+
+            if (this.value && regions[this.value]) {
+                for (const city in regions[this.value]) {
+                    const option = document.createElement('option');
+                    option.value = city;
+                    option.textContent = city;
+                    citySelect.appendChild(option);
+                }
+            }
+        };
+
+        citySelect.onchange = function() {
+            districtSelect.textContent = '';
+            const dd = document.createElement('option');
+            dd.value = ''; dd.textContent = '请选择';
+            districtSelect.appendChild(dd);
+            districtSelect.disabled = !this.value;
+
+            const city = this.value;
+            const province = provinceSelect.value;
+
+            if (province && city && regions[province] && regions[province][city]) {
+                regions[province][city].forEach(district => {
+                    const option = document.createElement('option');
+                    option.value = district;
+                    option.textContent = district;
+                    districtSelect.appendChild(option);
+                });
+            }
+        };
+
+        document.getElementById('phone').addEventListener('input', function() {
+            this.value = this.value.replace(/\D/g, '').slice(0, 11);
+        });
+    </script>
+</body>
+</html>

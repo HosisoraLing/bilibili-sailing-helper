@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>你还不是舰长</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/fonts/fonts.css">
+    <link rel="stylesheet" href="/static/css/common.css">
+    <style>
+        .container {
+            padding: 40px 30px;
+            text-align: center;
+        }
+
+        .icon {
+            font-size: 60px;
+            margin-bottom: 15px;
+            animation: pulseScale 2s ease-in-out infinite;
+        }
+
+        h1 {
+            font-size: 22px;
+            color: var(--text-primary);
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .message {
+            font-size: 15px;
+            color: var(--text-secondary);
+            margin: 15px 0 25px 0;
+            line-height: 1.6;
+        }
+
+        .uid {
+            font-weight: 600;
+            color: var(--primary);
+        }
+    </style>
+</head>
+<body>
+
+<div class="container animate-slideUp">
+    <div class="icon">🚫</div>
+
+    <h1>你还不是舰长</h1>
+
+    <p class="message">
+        UID <span class="uid">{{ uid }}</span><br>
+        当前不在舰长名单中，暂时无法填写收货地址。
+    </p>
+
+    <div class="highlight-box mb-20">
+        如果你支持 {{ config.ANCHOR_NICKNAME }}，<br>
+        欢迎前往直播间上舰后再回来填写～
+    </div>
+
+    <div class="actions">
+        <a href="{{ config.ANCHOR_LIVE_URL }}" target="_blank" class="btn btn-gradient">
+            🚢 前往 {{ config.ANCHOR_NICKNAME }} 的直播间
+        </a>
+    </div>
+
+    <a href="/" class="btn btn-ghost btn-block btn-sm mt-20">
+        <i class="fas fa-arrow-left"></i> 返回首页（重新输入 UID）
+    </a>
+    <div class="page-footer">
+        <a href="https://github.com/HosisoraLing/bilibili-sailing-helper" target="_blank">
+            <i class="fab fa-github"></i> bilibili-sailing-helper
+        </a>
+        <span> | AGPLv3 Licensed</span>
+    </div>
+
+
+    
+</div>
+
+</body>
+</html>

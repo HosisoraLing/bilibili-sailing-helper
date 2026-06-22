@@ -1,0 +1,73 @@
+# 版本控制
+.git/
+.gitignore
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# 敏感配置（运行时 bind mount 提供）
+settings.json
+.env
+.env.*
+cookies.txt
+*.cookie
+
+# 数据库和持久化数据（volume 提供）
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# 日志
+*.log
+logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 测试脚本
+scripts/
+tests/
+test_*.py
+*_test.py
+danmuku_test.py
+guard_test.py
+
+# 构建产物
+dist/
+build/
+*.egg-info/
+
+# Claude
+.claude/
+
+# 文档
+*.md
+LICENSE
+
+# Docker 自身
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# SSL（挂载提供，不打入镜像）
+ssl/
+*.pem
+*.crt
+*.key
