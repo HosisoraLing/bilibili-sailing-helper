@@ -85,14 +85,21 @@ class UserService:
         # 检查是否是管理员（管理员可以不是陪伴榜用户）
         is_admin = UserService.is_admin_uid(uid)
 
+        if is_admin:
+            return True, None
+
+        # 检查是否已有用户记录且已设置密码（已注册用户保留访问权限）
+        user = User.query.filter_by(uid=uid).first()
+        if user and user.password_hash:
+            return True, None
+
         # 检查是否是陪伴榜用户（粉丝团成员）
         is_companion = UserService.is_companion_user(uid)
 
-        # 如果既不是管理员也不是陪伴榜用户
-        if not is_admin and not is_companion:
-            return False, "您不在当前陪伴榜名单中"
+        if is_companion:
+            return True, None
 
-        return True, None
+        return False, "您不在当前陪伴榜名单中"
 
     @staticmethod
     def is_companion_user(uid: str) -> bool:

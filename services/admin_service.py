@@ -458,6 +458,11 @@ class AdminService:
         # 删除用户
         db.session.delete(user)
         db.session.commit()
+
+        # 清除鉴权模式
+        from services.danmaku_listener import clear_auth_mode
+        clear_auth_mode(uid)
+
         return True, None
 
     @staticmethod

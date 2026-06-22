@@ -282,11 +282,11 @@ def start_danmaku_auth_listener(app_instance, socketio_instance=None):
 def stop_danmaku_auth_listener():
     _stop_event.set()
 
-    if _current_client and _listener_loop:
-        asyncio.run_coroutine_threadsafe(
-            _current_client.stop(),
-            _listener_loop
-        )
+    if _current_client and _listener_loop and not _listener_loop.is_closed():
+        try:
+            _current_client.stop()
+        except Exception as e:
+            logger.warning(f"停止弹幕客户端时出错: {e}")
 
 def watch_uid(uid: str):
     """允许某 UID 重新鉴权"""
