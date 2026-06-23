@@ -468,7 +468,7 @@
                                     {{ user.created_at.strftime('%Y-%m-%d %H:%M') if user.created_at else '-' }}
                                 </td>
                                 <td class="action-cell">
-                                    <button class="btn-edit" onclick="openEditModal('{{ user.uid }}', '{{ user.nickname }}')">
+                                    <button class="btn-edit" data-uid="{{ user.uid }}" data-nickname="{{ user.nickname }}">
                                         <i class="fas fa-edit"></i> 编辑
                                     </button>
                                     {% if user.is_admin() %}
@@ -477,17 +477,17 @@
                                                 <i class="fas fa-shield-alt"></i> 主播管理员
                                             </button>
                                         {% else %}
-                                            <button class="btn-unadmin" onclick="unsetAdmin('{{ user.uid }}', '{{ user.nickname }}')">
+                                            <button class="btn-unadmin" data-uid="{{ user.uid }}" data-nickname="{{ user.nickname }}">
                                                 <i class="fas fa-user-minus"></i> 取消管理员
                                             </button>
                                         {% endif %}
                                     {% else %}
-                                        <button class="btn-admin" onclick="setAdmin('{{ user.uid }}', '{{ user.nickname }}')">
+                                        <button class="btn-admin" data-uid="{{ user.uid }}" data-nickname="{{ user.nickname }}">
                                             <i class="fas fa-user-shield"></i> 设为管理员
                                         </button>
                                     {% endif %}
                                     {% if user.uid != anchor_uid %}
-                                        <button class="btn-delete btn-small" onclick="deleteUser('{{ user.uid }}', '{{ user.nickname }}')">
+                                        <button class="btn-delete btn-small" data-uid="{{ user.uid }}" data-nickname="{{ user.nickname }}">
                                             <i class="fas fa-trash"></i> 删除
                                         </button>
                                     {% endif %}
@@ -630,6 +630,19 @@
                 currentSort = { column, direction };
                 sortTable(column, direction);
             });
+        });
+
+        document.querySelectorAll('.btn-edit[data-uid]').forEach(button => {
+            button.addEventListener('click', () => openEditModal(button.dataset.uid, button.dataset.nickname));
+        });
+        document.querySelectorAll('.btn-admin[data-uid]').forEach(button => {
+            button.addEventListener('click', () => setAdmin(button.dataset.uid, button.dataset.nickname));
+        });
+        document.querySelectorAll('.btn-unadmin[data-uid]').forEach(button => {
+            button.addEventListener('click', () => unsetAdmin(button.dataset.uid, button.dataset.nickname));
+        });
+        document.querySelectorAll('.btn-delete[data-uid]').forEach(button => {
+            button.addEventListener('click', () => deleteUser(button.dataset.uid, button.dataset.nickname));
         });
     });
 

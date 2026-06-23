@@ -61,8 +61,10 @@ def create_auth_session(uid: str) -> Tuple[AuthSession, str]:
         ).order_by(AuthSession.created_at.desc()).first()
         
         if existing and not existing.is_expired():
-            # 复用现有session，返回新的验证码
+            # 复用现有session，并把新验证码持久化到当前session
             code = generate_auth_code(uid)
+            existing.code = code
+            db.session.commit()
             return existing, code
         
         # 创建新session
@@ -71,6 +73,7 @@ def create_auth_session(uid: str) -> Tuple[AuthSession, str]:
         now = get_beijing_now()
         session = AuthSession(
             uid=uid,
+            code=code,
             status='pending',
             expires_at=now + timedelta(minutes=5)
         )
@@ -96,10 +99,17 @@ def get_cached_code(uid: str) -> Optional[str]:
     获取当前 UID 的内存验证码（线程安全）
     """
     with _auth_cache_lock:
-        return _auth_code_cache.get(str(uid))
+        cached_code = _auth_code_cache.get(str(uid))
+    if cached_code:
+        return cached_code
+
+    session = get_active_auth_session(uid)
+    if session and session.status == 'pending' and not session.is_expired():
+        return session.code
+    return None
 
 
-def mark_auth_success(session: AuthSession) -> bool:
+def mark_auth_success(session: AuthSession, expected_code: str | None = None) -> bool:
     """
     标记鉴权成功（带并发保护）
     
@@ -111,21 +121,42 @@ def mark_auth_success(session: AuthSession) -> bool:
     with _get_session_lock(uid):
         # 重新从数据库获取session，确保状态最新
         db.session.refresh(session)
+        attempted_at = get_beijing_now()
         
         # 检查session是否仍处于pending状态
         if session.status != 'pending':
             logger.warning(f"Session已被处理: uid={uid}, status={session.status}")
-            return False
-        
-        # 检查session是否过期
-        if session.is_expired():
-            logger.warning(f"Session已过期: uid={uid}")
-            session.mark_expired()
+            session.last_attempt_at = attempted_at
             db.session.commit()
             return False
-        
-        # 标记成功
-        session.mark_success()
+
+        update_time = get_beijing_now()
+        success_query = AuthSession.query.filter(
+            AuthSession.id == session.id,
+            AuthSession.status == 'pending',
+            AuthSession.expires_at >= update_time,
+        )
+        if expected_code is not None:
+            success_query = success_query.filter(AuthSession.code == expected_code)
+
+        updated_count = success_query.update({
+            'status': 'success',
+            'succeeded_at': update_time,
+            'last_attempt_at': update_time,
+        })
+        if updated_count != 1:
+            db.session.refresh(session)
+            session.last_attempt_at = update_time
+            if session.status == 'pending' and session.expires_at < update_time:
+                logger.warning(f"Session已过期: uid={uid}")
+                session.mark_expired()
+            db.session.commit()
+            logger.warning(f"Session并发更新失败: uid={uid}, session_id={session.id}")
+            return False
+
+        session.status = 'success'
+        session.succeeded_at = update_time
+        session.last_attempt_at = update_time
         
         # 清理验证码，防止复用
         with _auth_cache_lock:
@@ -204,5 +235,3 @@ def cleanup_expired_sessions():
         logger.info(f"清理了 {expired_count} 个过期session")
     
     return expired_count
-
-

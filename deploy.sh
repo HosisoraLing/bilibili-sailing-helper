@@ -49,26 +49,25 @@ check_docker() {
 # ---------- 拉取最新代码 ----------
 pull_latest_code() {
     if [ -d ".git" ]; then
-        local max_retries=3
-        local retry=0
         info "拉取最新代码..."
-        while [ $retry -lt $max_retries ]; do
-            if git pull origin main 2>&1; then
-                success "代码更新完成"
-                return 0
-            fi
-            retry=$((retry + 1))
-            if [ $retry -lt $max_retries ]; then
-                warn "git pull 失败，${retry}/${max_retries} 次重试..."
-                sleep 3
-            fi
-        done
-        error "git pull 连续失败 ${max_retries} 次，放弃部署"
+        git pull origin main 2>/dev/null || warn "git pull 失败，使用本地代码继续"
+        success "代码更新完成"
     fi
 }
 
 # ---------- 检查配置 ----------
 check_config() {
+    if [ ! -f ".env" ]; then
+        if [ -f ".env.example" ]; then
+            warn ".env 不存在，从 .env.example 创建..."
+            cp .env.example .env
+        fi
+        warn "请编辑 .env，固定设置 INTERNAL_API_SECRET 后重新运行"
+        exit 0
+    fi
+    if ! grep -Eq '^INTERNAL_API_SECRET=.{16,}$' .env || grep -q 'replace-with-one-stable' .env; then
+        error ".env 中 INTERNAL_API_SECRET 未设置为固定密钥"
+    fi
     if [ ! -f "settings.json" ]; then
         if [ -f "settings.json.example" ]; then
             warn "settings.json 不存在，从示例文件创建..."
@@ -133,7 +132,7 @@ wait_for_service() {
     info "等待服务就绪..."
     local retry=0
     while [ $retry -lt 15 ]; do
-        if curl -s -o /dev/null -w "%{http_code}" http://localhost:80/ 2>/dev/null | grep -q "200\|302"; then
+        if curl -s -o /dev/null -w "%{http_code}" http://localhost:7111/ 2>/dev/null | grep -q "200\|302"; then
             success "服务就绪"
             return 0
         fi
@@ -148,13 +147,13 @@ show_status() {
     echo ""
     docker compose ps 2>/dev/null
     echo ""
-    echo "访问: http://localhost"
+    echo "访问: http://localhost:7111"
     echo ""
     echo "常用命令:"
     echo "  日志:   docker compose logs -f"
     echo "  停止:   docker compose down"
     echo "  重启:   docker compose restart"
-    echo "  错误:   docker compose logs --tail=50 app"
+    echo "  错误:   docker compose logs --tail=50 web danmaku-worker scheduler"
     echo ""
 }
 

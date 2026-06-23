@@ -10,7 +10,10 @@ STATIC_DIR = os.path.join(BASE_DIR, 'static')
 os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(STATIC_DIR, exist_ok=True)
 
-SETTINGS_PATH = os.path.join(BASE_DIR, 'settings.json')
+SETTINGS_PATH = os.environ.get(
+    'BILIBILI_SAILING_SETTINGS',
+    os.path.join(BASE_DIR, 'settings.json')
+)
 
 # 安全地加载配置文件
 try:
@@ -97,6 +100,12 @@ class Config:
     DEBUG = settings.get('flask', {}).get('debug', False)
     HOST = settings.get('flask', {}).get('host', '127.0.0.1')
     PORT = settings.get('flask', {}).get('port', 5000)
+    CORS_ALLOWED_ORIGINS = settings.get('flask', {}).get('cors_allowed_origins', '*')
+    SERVER_NAME = settings.get('flask', {}).get('server_name') or None
+    PREFERRED_URL_SCHEME = settings.get('flask', {}).get('preferred_url_scheme', 'http')
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    SESSION_COOKIE_SECURE = settings.get('flask', {}).get('session_cookie_secure', False)
 
     # HTTPS 配置（可选，默认关闭）
     ssl_cfg = settings.get('ssl', {})
@@ -116,14 +125,7 @@ class Config:
     ADMIN_UIDS = ADMIN_UIDS
     RUID = RUID_INT
 
-    # CORS 配置（WebSocket 允许的来源）
-    CORS_ALLOWED_ORIGINS = settings.get('flask', {}).get('cors_allowed_origins', '*')
-
-    # 反向代理配置
-    SERVER_NAME = settings.get('flask', {}).get('server_name', '')
-    PREFERRED_URL_SCHEME = settings.get('flask', {}).get('preferred_url_scheme', 'http')
-
-    # Session Cookie 安全标志
-    SESSION_COOKIE_HTTPONLY = True
-    SESSION_COOKIE_SAMESITE = 'Lax'
-    SESSION_COOKIE_SECURE = settings.get('flask', {}).get('session_cookie_secure', False)
+    INTERNAL_API_SECRET = (
+        os.environ.get('INTERNAL_API_SECRET')
+        or settings.get('internal', {}).get('api_secret', '')
+    )

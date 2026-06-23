@@ -21,6 +21,7 @@ __pycache__/
 *.sqlite
 *.sqlite3
 data/
+backups/
 !data/.gitkeep
 
 # Configuration files (may contain secrets)
@@ -50,22 +51,25 @@ logs/
 # Temporary files
 *.tmp
 *.temp
+.worktrees/
 
-# Claude files
+# Agent workflow files
 .claude/
 claude.md
+.agents/
+.codex/
+AGENTS.md
+CLAUDE.md
+.mcp.json
+skills-lock.json
 
-# OpenCode files
-.omo/
-
-# Test files
-tests/
-test_*.py
-*_test.py
+# Local scratch test files
 danmuku_test.py
+scripts/web-refresh-probe/
 
 # Cache
 .cache/
+.codegraph/
 .mypy_cache/
 .pytest_cache/
 __pycache__/

@@ -5,6 +5,7 @@ Flask 应用主模块
 from flask import Flask, session
 from flask_login import LoginManager, current_user
 from flask_socketio import SocketIO, emit, join_room
+from werkzeug.middleware.proxy_fix import ProxyFix
 from config import Config
 from db.models import db, User, Guard
 from services.region_service import ensure_region_json
@@ -71,19 +72,12 @@ def register_socketio_events(socketio):
 
 def create_app():
     """创建 Flask 应用实例"""
-    from werkzeug.middleware.proxy_fix import ProxyFix
-
     app = Flask(__name__)
     app.config.from_object(Config)
-
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
     # ===== 初始化数据库 =====
     db.init_app(app)
-
-    with app.app_context():
-        from db.models import enable_sqlite_wal
-        enable_sqlite_wal(db.engine)
 
     # ===== Flask-SocketIO =====
     socketio = SocketIO(app, cors_allowed_origins=Config.CORS_ALLOWED_ORIGINS)
@@ -139,6 +133,78 @@ def run_migrations():
     自动迁移数据库 schema，处理列变更等
     """
     from sqlalchemy import inspect, text
+
+    def rebuild_cookie_metadata_without_legacy_tv_columns():
+        inspector = inspect(db.engine)
+        if 'cookie_metadata' not in inspector.get_table_names():
+            return
+
+        existing_columns = [col["name"] for col in inspector.get_columns('cookie_metadata')]
+        legacy_tv_columns = ('tv_access_token', 'tv_refresh_token', 'tv_auth_payload_json')
+        dropped_columns = [name for name in legacy_tv_columns if name in existing_columns]
+        if not dropped_columns:
+            return
+
+        target_columns = [
+            'id',
+            'role',
+            'status',
+            'source',
+            'masked_uid',
+            'payload_json',
+            'cookie_version',
+            'reload_requested_version',
+            'reload_requested_at',
+            'web_refresh_token',
+            'cookie_header',
+            'sessdata_expires_at',
+            'last_refresh_at',
+            'last_validated_at',
+            'last_error',
+            'created_at',
+            'updated_at',
+        ]
+        retained_columns = [name for name in target_columns if name in existing_columns]
+        column_sql = ", ".join(f'"{name}"' for name in retained_columns)
+        logger.info(
+            "Migrating: Dropping legacy TV auth columns from cookie_metadata: %s",
+            ", ".join(dropped_columns),
+        )
+        with db.engine.connect() as conn:
+            conn.execute(text("PRAGMA foreign_keys=OFF"))
+            conn.execute(text('DROP TABLE IF EXISTS "cookie_metadata_new"'))
+            conn.execute(text("""
+                CREATE TABLE "cookie_metadata_new" (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    role VARCHAR(32) NOT NULL,
+                    status VARCHAR(32) NOT NULL DEFAULT 'unknown',
+                    source VARCHAR(32),
+                    masked_uid VARCHAR(32),
+                    payload_json TEXT,
+                    cookie_version INTEGER NOT NULL DEFAULT 0,
+                    reload_requested_version INTEGER NOT NULL DEFAULT 0,
+                    reload_requested_at DATETIME,
+                    web_refresh_token TEXT DEFAULT '',
+                    cookie_header TEXT DEFAULT '',
+                    sessdata_expires_at DATETIME,
+                    last_refresh_at DATETIME,
+                    last_validated_at DATETIME,
+                    last_error VARCHAR(512),
+                    created_at DATETIME,
+                    updated_at DATETIME
+                )
+            """))
+            conn.execute(text(
+                f'INSERT INTO "cookie_metadata_new" ({column_sql}) '
+                f'SELECT {column_sql} FROM "cookie_metadata"'
+            ))
+            conn.execute(text('DROP TABLE "cookie_metadata"'))
+            conn.execute(text('ALTER TABLE "cookie_metadata_new" RENAME TO "cookie_metadata"'))
+            conn.execute(text('CREATE INDEX IF NOT EXISTS ix_cookie_metadata_role ON cookie_metadata(role)'))
+            conn.execute(text('CREATE INDEX IF NOT EXISTS ix_cookie_metadata_status ON cookie_metadata(status)'))
+            conn.execute(text('CREATE INDEX IF NOT EXISTS ix_cookie_metadata_masked_uid ON cookie_metadata(masked_uid)'))
+            conn.commit()
+        logger.info("Migration completed: legacy TV auth columns dropped from cookie_metadata")
 
     inspector = inspect(db.engine)
 
@@ -239,6 +305,105 @@ def run_migrations():
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_guard_gift_records_month ON guard_gift_records(month)"))
             conn.commit()
             logger.info("Migration completed: guard_gift_records table created")
+
+    # Check auth_sessions table for durable auth state columns
+    if 'auth_sessions' in inspector.get_table_names():
+        columns = {col['name']: col for col in inspector.get_columns('auth_sessions')}
+        auth_session_columns = {
+            'code': 'VARCHAR(32)',
+            'succeeded_at': 'DATETIME',
+            'consumed_at': 'DATETIME',
+            'last_attempt_at': 'DATETIME',
+        }
+        missing_columns = [
+            (name, ddl)
+            for name, ddl in auth_session_columns.items()
+            if name not in columns
+        ]
+        if missing_columns:
+            logger.info("Migrating: Adding durable auth state columns...")
+            with db.engine.connect() as conn:
+                for name, ddl in missing_columns:
+                    conn.execute(text(f"ALTER TABLE auth_sessions ADD COLUMN {name} {ddl}"))
+                conn.execute(text(
+                    "CREATE INDEX IF NOT EXISTS ix_auth_sessions_code "
+                    "ON auth_sessions(code)"
+                ))
+                conn.commit()
+                logger.info("Migration completed: auth_sessions durable state columns added")
+
+    # Check runtime_statuses table for delivery visibility columns
+    if 'runtime_statuses' in inspector.get_table_names():
+        columns = {col['name']: col for col in inspector.get_columns('runtime_statuses')}
+        runtime_status_columns = {
+            'delivery_error': 'VARCHAR(512)',
+            'retry_count': 'INTEGER DEFAULT 0',
+            'cookie_version': 'INTEGER DEFAULT 0',
+        }
+        missing_columns = [
+            (name, ddl)
+            for name, ddl in runtime_status_columns.items()
+            if name not in columns
+        ]
+        if missing_columns:
+            logger.info("Migrating: Adding runtime status delivery columns...")
+            with db.engine.connect() as conn:
+                for name, ddl in missing_columns:
+                    conn.execute(text(f"ALTER TABLE runtime_statuses ADD COLUMN {name} {ddl}"))
+                conn.commit()
+                logger.info("Migration completed: runtime_statuses delivery columns added")
+
+    # Check cookie_metadata table for runtime Cookie version column
+    if 'cookie_metadata' in inspector.get_table_names():
+        columns = {col['name']: col for col in inspector.get_columns('cookie_metadata')}
+        rebuild_cookie_metadata_without_legacy_tv_columns()
+        inspector = inspect(db.engine)
+        columns = {col['name']: col for col in inspector.get_columns('cookie_metadata')}
+        cookie_metadata_columns = {
+            'cookie_version': 'INTEGER DEFAULT 0',
+            'reload_requested_version': 'INTEGER DEFAULT 0',
+            'reload_requested_at': 'DATETIME',
+            'web_refresh_token': 'TEXT DEFAULT ""',
+            'cookie_header': 'TEXT DEFAULT ""',
+            'sessdata_expires_at': 'DATETIME',
+            'last_refresh_at': 'DATETIME',
+        }
+        missing_columns = [
+            (name, ddl)
+            for name, ddl in cookie_metadata_columns.items()
+            if name not in columns
+        ]
+        if missing_columns:
+            logger.info("Migrating: Adding Cookie metadata columns...")
+            with db.engine.connect() as conn:
+                for name, ddl in missing_columns:
+                    conn.execute(text(f"ALTER TABLE cookie_metadata ADD COLUMN {name} {ddl}"))
+                conn.commit()
+                logger.info("Migration completed: Cookie metadata columns added")
+        if 'cookie_header' in columns or any(name == 'cookie_header' for name, _ in missing_columns):
+            with db.engine.connect() as conn:
+                conn.execute(text("""
+                    UPDATE cookie_metadata
+                    SET source = 'migration'
+                    WHERE source = 'tv_auth'
+                """))
+                result = conn.execute(text("""
+                    UPDATE cookie_metadata
+                    SET status = 'rescan_required',
+                        source = CASE
+                            WHEN source IS NULL OR source = '' THEN 'migration'
+                            ELSE source
+                        END,
+                        last_error = '当前 DB 缺少 Web Cookie，请重新扫码授权 B 站账号'
+                    WHERE status = 'valid'
+                      AND (cookie_header IS NULL OR cookie_header = '')
+                """))
+                conn.commit()
+                if result.rowcount:
+                    logger.info(
+                        "Migration completed: marked %s Cookie metadata row(s) for Web QR rescan",
+                        result.rowcount,
+                    )
 
 
 # =========================
@@ -481,87 +646,6 @@ def start_session_cleanup_scheduler(app):
     logger.info("Session清理定时任务已启动（每10分钟执行一次）")
 
 
-def start_auto_update_scheduler(app):
-    """
-    启动自动更新检查定时任务
-    - 每天凌晨3点检查GitHub更新
-    - 发现更新后自动拉取并重启
-    """
-    import threading
-    import time
-    import subprocess
-    from datetime import datetime
-
-    last_check_date = None
-
-    def scheduler():
-        nonlocal last_check_date
-        
-        while True:
-            try:
-                now = datetime.now()
-                today_str = now.strftime('%Y-%m-%d')
-                
-                # 每天凌晨3点检查更新
-                if now.hour == 3 and now.minute == 0 and last_check_date != today_str:
-                    logger.info("开始检查GitHub更新...")
-                    
-                    try:
-                        # 检查是否有更新
-                        result = subprocess.run(
-                            ['git', 'fetch', 'origin', 'main'],
-                            capture_output=True, text=True, timeout=30
-                        )
-                        
-                        if result.returncode == 0:
-                            # 比较本地和远程
-                            local = subprocess.run(
-                                ['git', 'rev-parse', 'HEAD'],
-                                capture_output=True, text=True
-                            ).stdout.strip()
-                            
-                            remote = subprocess.run(
-                                ['git', 'rev-parse', 'origin/main'],
-                                capture_output=True, text=True
-                            ).stdout.strip()
-                            
-                            if local != remote:
-                                logger.info(f"发现新版本，开始自动更新...")
-                                
-                                # 拉取更新
-                                pull_result = subprocess.run(
-                                    ['git', 'pull', 'origin', 'main'],
-                                    capture_output=True, text=True, timeout=60
-                                )
-                                
-                                if pull_result.returncode == 0:
-                                    logger.info("代码更新成功，将在下次启动时生效")
-                                    # 注意：不自动重启，需要手动重启或通过Docker自动重启
-                                else:
-                                    logger.error(f"代码更新失败: {pull_result.stderr}")
-                            else:
-                                logger.info("已是最新版本")
-                        else:
-                            logger.warning(f"检查更新失败: {result.stderr}")
-                    
-                    except subprocess.TimeoutExpired:
-                        logger.warning("检查更新超时")
-                    except Exception as e:
-                        logger.error(f"检查更新异常: {e}")
-                    
-                    last_check_date = today_str
-
-            except Exception as e:
-                logger.error(f"自动更新检查任务出错: {e}", exc_info=True)
-
-            # 每分钟检查一次
-            time.sleep(60)
-
-    thread = threading.Thread(target=scheduler, daemon=True)
-    thread.start()
-    logger.info("自动更新检查任务已启动（每天凌晨3点检查）")
-
-
 def register_admins():
     """
     系统启动时自动注册管理员
@@ -611,94 +695,59 @@ def register_admins():
     logger.info(f"管理员注册完成，共处理 {len(admin_uids)} 个管理员")
 
 
-if __name__ == '__main__':
-    ensure_region_json()
+def start_runtime_services(app_instance, role: str = "web"):
+    logger.info("runtime role %s owns no in-process background loops", role)
 
-    app_instance, socketio = create_app()
 
-    with app_instance.app_context():
-        db.create_all()
-        run_migrations()  # Run any pending migrations
-        fetch_and_save_guards()  # 首次爬取舰长数据
-        register_admins()  # 注册管理员
-
-    # 启动舰长爬取定时任务（每5分钟一次）
-    with app_instance.app_context():
-        start_guards_scheduler(app_instance)
-
-    # 启动舰长礼物统计定时任务
-    with app_instance.app_context():
-        start_guard_gift_scheduler(app_instance)
-
-    # 启动session清理定时任务
-    with app_instance.app_context():
-        start_session_cleanup_scheduler(app_instance)
-
-    # 启动Cookie自动刷新任务
-    with app_instance.app_context():
-        from services.cookie_service import CookieService
-        CookieService.start_auto_refresh_scheduler(app_instance)
-
-    # 启动自动更新检查任务
-    with app_instance.app_context():
-        start_auto_update_scheduler(app_instance)
-
-    from services.danmaku_listener import start_danmaku_auth_listener
-    start_danmaku_auth_listener(app_instance, socketio)
-
-    # 检查是否启用 HTTPS
+def run_web_server(app_instance, socketio, config=Config):
     ssl_available = False
-    if Config.SSL_ENABLED and Config.SSL_CERT_FILE and Config.SSL_KEY_FILE:
+    if config.SSL_ENABLED and config.SSL_CERT_FILE and config.SSL_KEY_FILE:
         import ssl
         import threading
         import os
 
-        # 检查证书文件是否存在
-        cert_exists = os.path.exists(Config.SSL_CERT_FILE)
-        key_exists = os.path.exists(Config.SSL_KEY_FILE)
+        cert_exists = os.path.exists(config.SSL_CERT_FILE)
+        key_exists = os.path.exists(config.SSL_KEY_FILE)
 
         if cert_exists and key_exists:
             try:
-                # 创建 SSL 上下文
                 ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-                ssl_context.load_cert_chain(Config.SSL_CERT_FILE, Config.SSL_KEY_FILE)
+                ssl_context.load_cert_chain(config.SSL_CERT_FILE, config.SSL_KEY_FILE)
                 ssl_available = True
             except ssl.SSLError as e:
                 logger.error(f"加载 SSL 证书失败: {e}")
         else:
             logger.error(f"SSL 证书文件不存在:")
             if not cert_exists:
-                logger.error(f"  - 证书文件: {Config.SSL_CERT_FILE}")
+                logger.error(f"  - 证书文件: {config.SSL_CERT_FILE}")
             if not key_exists:
-                logger.error(f"  - 密钥文件: {Config.SSL_KEY_FILE}")
+                logger.error(f"  - 密钥文件: {config.SSL_KEY_FILE}")
 
     if ssl_available:
-        logger.info(f"启用 HTTPS 支持")
-        logger.info(f"  - HTTP 端口: {Config.PORT}")
-        logger.info(f"  - HTTPS 端口: {Config.SSL_PORT}")
-        logger.info(f"  - SSL 证书: {Config.SSL_CERT_FILE}")
-        logger.info(f"  - SSL 密钥: {Config.SSL_KEY_FILE}")
+        logger.info("启用 HTTPS 支持")
+        logger.info(f"  - HTTP 端口: {config.PORT}")
+        logger.info(f"  - HTTPS 端口: {config.SSL_PORT}")
+        logger.info(f"  - SSL 证书: {config.SSL_CERT_FILE}")
+        logger.info(f"  - SSL 密钥: {config.SSL_KEY_FILE}")
 
-        # 启动 HTTP 服务器（主线程）
         http_thread = threading.Thread(
             target=lambda: socketio.run(
                 app_instance,
-                host=Config.HOST,
-                port=Config.PORT,
-                debug=Config.DEBUG,
+                host=config.HOST,
+                port=config.PORT,
+                debug=config.DEBUG,
                 use_reloader=False
             ),
             daemon=True
         )
         http_thread.start()
 
-        # 启动 HTTPS 服务器（后台线程）
         https_thread = threading.Thread(
             target=lambda: socketio.run(
                 app_instance,
-                host=Config.HOST,
-                port=Config.SSL_PORT,
-                debug=Config.DEBUG,
+                host=config.HOST,
+                port=config.SSL_PORT,
+                debug=config.DEBUG,
                 use_reloader=False,
                 ssl_context=ssl_context
             ),
@@ -706,7 +755,6 @@ if __name__ == '__main__':
         )
         https_thread.start()
 
-        # 保持主线程运行
         try:
             while True:
                 import time
@@ -714,12 +762,18 @@ if __name__ == '__main__':
         except KeyboardInterrupt:
             logger.info("服务器已停止")
     else:
-        logger.info(f"仅启用 HTTP 支持（端口: {Config.PORT}）")
+        logger.info(f"仅启用 HTTP 支持（端口: {config.PORT}）")
         socketio.run(
             app_instance,
-            host=Config.HOST,
-            port=Config.PORT,
-            debug=Config.DEBUG,
+            host=config.HOST,
+            port=config.PORT,
+            debug=config.DEBUG,
             use_reloader=False,
-            allow_unsafe_werkzeug=not Config.DEBUG
+            allow_unsafe_werkzeug=True
         )
+
+
+if __name__ == '__main__':
+    from runtime.web import main
+
+    main()

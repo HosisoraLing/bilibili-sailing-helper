@@ -394,23 +394,11 @@ class AdminService:
 
     @staticmethod
     def create_user(uid: str, nickname: str, is_admin: bool = False) -> Tuple[bool, Optional[str]]:
-        """
-        创建用户
-
-        Args:
-            uid: 用户UID
-            nickname: 用户昵称
-            is_admin: 是否为管理员
-
-        Returns:
-            Tuple[bool, Optional[str]]: (成功与否, 错误信息)
-        """
-        # 验证 UID 格式
+        """创建用户"""
         is_valid, msg = PasswordValidator.validate_uid(uid)
         if not is_valid:
             return False, msg
 
-        # 检查用户是否已存在
         existing = User.query.filter_by(uid=uid).first()
         if existing:
             return False, f"UID {uid} 已存在"
@@ -431,38 +419,21 @@ class AdminService:
 
     @staticmethod
     def delete_user_all_records(uid: str) -> Tuple[bool, Optional[str]]:
-        """
-        删除用户在系统内的所有记录
-        包括：User、Address、Guard、GuardGiftRecord、AuthSession
-
-        Args:
-            uid: 用户UID
-
-        Returns:
-            Tuple[bool, Optional[str]]: (成功与否, 错误信息)
-        """
+        """删除用户及其在系统内的关联记录"""
         user = User.query.filter_by(uid=uid).first()
         if not user:
             return False, "用户不存在"
 
-        # 删除关联记录
         Address.query.filter_by(uid=uid).delete()
         GuardGiftRecord.query.filter_by(uid=uid).delete()
         AuthSession.query.filter_by(uid=uid).delete()
 
-        # 删除 Guard 记录（如果有）
         guard = Guard.query.filter_by(uid=uid).first()
         if guard:
             db.session.delete(guard)
 
-        # 删除用户
         db.session.delete(user)
         db.session.commit()
-
-        # 清除鉴权模式
-        from services.danmaku_listener import clear_auth_mode
-        clear_auth_mode(uid)
-
         return True, None
 
     @staticmethod
@@ -474,19 +445,8 @@ class AdminService:
 
     @staticmethod
     def unset_user_admin(user: User) -> Tuple[bool, Optional[str]]:
-        """
-        取消用户的管理员身份
-
-        Args:
-            user: 用户对象
-
-        Returns:
-            Tuple[bool, Optional[str]]: (成功与否, 错误信息)
-        """
-        from config import RUID_INT
-
-        # 检查是否是主播账号，主播账号不可取消管理员
-        if str(user.uid) == str(RUID_INT):
+        """取消用户的管理员身份"""
+        if AdminService.is_anchor(user.uid):
             return False, "不可取消主播账号的管理员权限"
 
         if user.has_role('admin'):
