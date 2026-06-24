@@ -62,9 +62,11 @@ AGENTS.md
 CLAUDE.md
 .mcp.json
 skills-lock.json
+.omo/
 
 # Local scratch test files
 danmuku_test.py
+test_websocket.py
 scripts/web-refresh-probe/
 
 # Cache
