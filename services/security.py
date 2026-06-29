@@ -336,5 +336,5 @@ class RateLimiter:
 
 # 全局速率限制器实例
 login_limiter = RateLimiter(max_requests=5, window_seconds=60)  # 登录：5次/分钟
-auth_limiter = RateLimiter(max_requests=10, window_seconds=60)   # 鉴权：10次/分钟
+auth_limiter = RateLimiter(max_requests=60, window_seconds=60)   # 鉴权轮询：60次/分钟
 api_limiter = RateLimiter(max_requests=30, window_seconds=60)    # API：30次/分钟
