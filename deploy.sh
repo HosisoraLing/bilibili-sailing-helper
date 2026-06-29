@@ -2,18 +2,17 @@
 # B站舰礼助手 - Docker 部署脚本
 #
 # 用法:
-#   ./deploy.sh                      # 全量增量构建 + 重启所有服务
+#   ./deploy.sh                      # git pull + 增量构建 + 重启所有服务
+#   ./deploy.sh --no-update          # 跳过 git pull，只构建 + 重启
 #   ./deploy.sh --web                # 只重建并重启 web
 #   ./deploy.sh --danmaku            # 只重建并重启 danmaku-worker
 #   ./deploy.sh --scheduler          # 只重建并重启 scheduler
-#   ./deploy.sh --web --danmaku      # 重建并重启 web + danmaku-worker
 #   ./deploy.sh --no-cache           # 全量重建（requirements.txt 变更时使用）
 #   ./deploy.sh --build-only         # 只构建镜像，不重启服务
 #   ./deploy.sh --restart-only       # 只重启服务，不重建镜像
-#   ./deploy.sh --pull               # 拉取最新基础镜像后构建
+#   ./deploy.sh --cn-mirror          # 使用国内镜像源构建
 #   ./deploy.sh --logs               # 部署后自动跟踪日志
 #   ./deploy.sh --status             # 只显示服务状态
-#   ./deploy.sh --update             # git pull + 增量构建 + 滚动重启
 
 set -euo pipefail
 
@@ -37,7 +36,8 @@ FOLLOW_LOGS=false
 BUILD_ONLY=false
 RESTART_ONLY=false
 STATUS_ONLY=false
-DO_UPDATE=false
+DO_UPDATE=true
+CN_MIRROR=false
 TARGET_SERVICES=()
 
 for arg in "$@"; do
@@ -49,7 +49,8 @@ for arg in "$@"; do
         --build-only)   BUILD_ONLY=true ;;
         --restart-only) RESTART_ONLY=true ;;
         --status)       STATUS_ONLY=true ;;
-        --update)       DO_UPDATE=true ;;
+        --no-update)    DO_UPDATE=false ;;
+        --cn-mirror)    CN_MIRROR=true ;;
         --web)          TARGET_SERVICES+=("web") ;;
         --danmaku)      TARGET_SERVICES+=("danmaku-worker") ;;
         --scheduler)    TARGET_SERVICES+=("scheduler") ;;
@@ -67,19 +68,20 @@ for arg in "$@"; do
   --pull           拉取最新基础镜像
   --build-only     只构建镜像，不重启服务
   --restart-only   只重启服务，不重建镜像
+  --cn-mirror      使用国内镜像源（阿里云 apt/pip）
 
 部署选项:
-  --update         git pull + 增量构建 + 滚动重启
+  --no-update      跳过 git pull（默认会拉取更新）
   --logs           部署后跟踪日志（--follow 同义）
   --status         只显示服务状态，不做任何操作
 
 示例:
-  ./deploy.sh                    # 全量增量构建 + 重启
+  ./deploy.sh                    # git pull + 增量构建 + 重启
+  ./deploy.sh --no-update        # 跳过 git pull，直接构建 + 重启
   ./deploy.sh --web              # 只重建 web
-  ./deploy.sh --danmaku --logs   # 重建 danmaku-worker 并跟踪日志
-  ./deploy.sh --no-cache         # 全量重建所有服务
+  ./deploy.sh --cn-mirror        # 使用国内镜像源构建
   ./deploy.sh --restart-only     # 只重启，不重建（配置变更后）
-  ./deploy.sh --update --logs    # 拉取更新 + 构建 + 重启 + 跟踪日志
+  ./deploy.sh --logs             # 部署后跟踪日志
 EOF
             exit 0
             ;;
@@ -92,8 +94,26 @@ if [ ${#TARGET_SERVICES[@]} -eq 0 ]; then
     TARGET_SERVICES=("web" "danmaku-worker" "scheduler")
 fi
 
-# 构建 compose 服务列表（用于 docker compose 命令）
 COMPOSE_SERVICES="${TARGET_SERVICES[*]}"
+
+# ==================== 读取配置 ====================
+
+read_port_from_settings() {
+    local port
+    port=$(python3 -c "
+import json, sys
+try:
+    with open('settings.json') as f:
+        cfg = json.load(f)
+    print(cfg.get('flask', {}).get('port', 7111))
+except Exception:
+    print(7111)
+" 2>/dev/null || echo "7111")
+    echo "$port"
+}
+
+APP_PORT=$(read_port_from_settings)
+export APP_PORT
 
 # ==================== 工具函数 ====================
 
@@ -136,14 +156,13 @@ check_config() {
             error "settings.json 不存在"
         fi
     fi
-    success "配置文件就绪"
+    success "配置文件就绪 (端口: $APP_PORT)"
 }
 
 prepare_dirs() {
     mkdir -p data logs
     chmod 777 data logs 2>/dev/null || true
     chmod 666 data/* 2>/dev/null || true
-    # bind mount 的 settings.json 需要容器内 appuser 可写
     [ -f settings.json ] && chmod 666 settings.json 2>/dev/null || true
     success "目录权限就绪"
 }
@@ -158,7 +177,6 @@ pull_latest_code() {
 
     info "拉取最新代码..."
 
-    # 保存本地修改
     local stashed=false
     if ! git diff --quiet 2>/dev/null; then
         git stash push -m "deploy-stash-$(date +%s)" 2>/dev/null
@@ -171,7 +189,6 @@ pull_latest_code() {
         warn "git pull 失败，使用本地代码继续"
     fi
 
-    # 恢复本地修改
     if [ "$stashed" = true ]; then
         git stash pop 2>/dev/null || warn "本地修改恢复失败，可能需要手动处理冲突"
     fi
@@ -194,6 +211,11 @@ build_services() {
         info "增量构建（利用 Docker 层缓存）..."
     fi
 
+    if $CN_MIRROR; then
+        info "使用国内镜像源构建..."
+        build_args="$build_args --build-arg CN_MIRROR=1"
+    fi
+
     if $PULL_BASE; then
         info "拉取最新基础镜像..."
         compose pull 2>/dev/null || true
@@ -214,8 +236,6 @@ deploy_services() {
 
     info "部署服务: $(service_names)"
 
-    # 使用 --build 确保代码变更被应用
-    # --no-deps 不重建依赖服务
     if $RESTART_ONLY; then
         compose up -d --no-deps ${COMPOSE_SERVICES}
     else
@@ -228,11 +248,11 @@ deploy_services() {
 # ==================== 健康检查 ====================
 
 wait_for_web() {
-    info "等待 web 服务就绪..."
+    info "等待 web 服务就绪 (端口 $APP_PORT)..."
     local retry=0
     while [ $retry -lt 15 ]; do
         local code
-        code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:7111/ 2>/dev/null || echo "000")
+        code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${APP_PORT}/" 2>/dev/null || echo "000")
         if echo "$code" | grep -q "200\|302"; then
             success "web 服务就绪"
             return 0
@@ -258,7 +278,6 @@ check_service_health() {
     state=$(docker inspect -f '{{.State.Status}}' "$container" 2>/dev/null || echo "unknown")
 
     if [ "$state" = "running" ]; then
-        # 检查是否有 healthcheck
         local health
         health=$(docker inspect -f '{{.State.Health.Status}}' "$container" 2>/dev/null || echo "none")
 
@@ -283,7 +302,6 @@ show_status() {
     echo -e "${CYAN}========== 服务状态 ==========${NC}"
     echo ""
 
-    # 检查所有三个角色（无论 TARGET_SERVICES 是什么）
     check_service_health "web"
     check_service_health "danmaku-worker"
     check_service_health "scheduler"
@@ -291,9 +309,9 @@ show_status() {
     echo ""
     echo -e "${CYAN}========== 访问信息 ==========${NC}"
     echo ""
-    echo "  首页:     http://localhost:7111"
-    echo "  管理后台: http://localhost:7111/admin/panel"
-    echo "  鉴权页面: http://localhost:7111/auth?uid=<B站UID>"
+    echo "  首页:     http://localhost:${APP_PORT}"
+    echo "  管理后台: http://localhost:${APP_PORT}/admin/panel"
+    echo "  鉴权页面: http://localhost:${APP_PORT}/auth?uid=<B站UID>"
     echo ""
     echo -e "${CYAN}========== 常用命令 ==========${NC}"
     echo ""
@@ -312,15 +330,14 @@ main() {
     echo -e "${CYAN}========== B站舰礼助手 ==========${NC}"
     echo ""
 
-    # --status 只显示状态
     if $STATUS_ONLY; then
+        check_docker
         show_status
         exit 0
     fi
 
     check_docker
 
-    # --update 先拉代码
     if $DO_UPDATE; then
         pull_latest_code
     fi
@@ -330,7 +347,6 @@ main() {
     build_services
     deploy_services
 
-    # 等待 web 就绪（如果部署了 web）
     for svc in "${TARGET_SERVICES[@]}"; do
         if [ "$svc" = "web" ]; then
             wait_for_web || true

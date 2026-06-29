@@ -5,7 +5,12 @@ FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
-RUN sed -i s/deb.debian.org/mirrors.aliyun.com/g /etc/apt/sources.list.d/debian.sources
+ARG CN_MIRROR=0
+
+# CN_MIRROR=1 时使用阿里云镜像源（国内网络加速）
+RUN if [ "$CN_MIRROR" = "1" ]; then \
+        sed -i s/deb.debian.org/mirrors.aliyun.com/g /etc/apt/sources.list.d/debian.sources; \
+    fi
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
@@ -14,7 +19,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # requirements.txt 变更频率最低，放最前面最大化缓存命中
 COPY requirements.txt .
-RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# CN_MIRROR=1 时使用阿里云 pip 镜像（GitHub Actions 默认用 PyPI）
+RUN if [ "$CN_MIRROR" = "1" ]; then \
+        pip install --no-cache-dir --prefix=/install \
+            -i https://mirrors.aliyun.com/pypi/simple/ \
+            --trusted-host mirrors.aliyun.com \
+            -r requirements.txt; \
+    else \
+        pip install --no-cache-dir --prefix=/install -r requirements.txt; \
+    fi
 
 
 # ============================================================
@@ -24,7 +38,11 @@ FROM python:3.11-slim AS runtime
 
 WORKDIR /app
 
-RUN sed -i s/deb.debian.org/mirrors.aliyun.com/g /etc/apt/sources.list.d/debian.sources
+ARG CN_MIRROR=0
+
+RUN if [ "$CN_MIRROR" = "1" ]; then \
+        sed -i s/deb.debian.org/mirrors.aliyun.com/g /etc/apt/sources.list.d/debian.sources; \
+    fi
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \

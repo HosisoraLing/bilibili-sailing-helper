@@ -63,7 +63,34 @@
         .actions {
             display: flex;
             gap: 10px;
+            align-items: center;
             flex-wrap: wrap;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            padding: 6px 12px;
+            border-radius: var(--radius-sm);
+            background: #f3f4f6;
+        }
+
+        .conn-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #9ca3af;
+        }
+
+        .conn-dot.connected { background: #22c55e; }
+        .conn-dot.connecting { background: #f59e0b; animation: pulse 1s infinite; }
+        .conn-dot.disconnected { background: #ef4444; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
         }
 
         .log-card {
@@ -125,20 +152,26 @@
             color: white;
         }
 
-        .auto-refresh {
+        .log-controls {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 12px;
+        }
+
+        .auto-scroll {
+            display: flex;
+            align-items: center;
+            gap: 6px;
             font-size: 13px;
             color: var(--text-secondary);
         }
 
-        .auto-refresh input[type="checkbox"] {
+        .auto-scroll input[type="checkbox"] {
             accent-color: var(--primary);
         }
 
         .log-container {
-            max-height: 70vh;
+            height: 70vh;
             overflow-y: auto;
             font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
             font-size: 13px;
@@ -165,6 +198,15 @@
             border-left: 3px solid #f59e0b;
         }
 
+        .log-entry.new-entry {
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
         .log-meta {
             display: flex;
             gap: 12px;
@@ -186,25 +228,10 @@
             text-transform: uppercase;
         }
 
-        .log-level.ERROR {
-            background: #dc2626;
-            color: white;
-        }
-
-        .log-level.WARN {
-            background: #f59e0b;
-            color: white;
-        }
-
-        .log-level.INFO {
-            background: #3b82f6;
-            color: white;
-        }
-
-        .log-level.DEBUG {
-            background: #6b7280;
-            color: white;
-        }
+        .log-level.ERROR { background: #dc2626; color: white; }
+        .log-level.WARN { background: #f59e0b; color: white; }
+        .log-level.INFO { background: #3b82f6; color: white; }
+        .log-level.DEBUG { background: #6b7280; color: white; }
 
         .log-source {
             color: var(--primary);
@@ -216,25 +243,6 @@
             color: var(--text-primary);
             white-space: pre-wrap;
             word-break: break-all;
-            max-height: 200px;
-            overflow-y: auto;
-        }
-
-        .log-entry.collapsed .log-message {
-            max-height: 1.6em;
-            overflow: hidden;
-        }
-
-        .expand-btn {
-            color: var(--primary);
-            cursor: pointer;
-            font-size: 12px;
-            margin-top: 4px;
-            display: inline-block;
-        }
-
-        .expand-btn:hover {
-            text-decoration: underline;
         }
 
         .empty-state {
@@ -272,7 +280,6 @@
 
         .stat-dot.error { background: #dc2626; }
         .stat-dot.warn { background: #f59e0b; }
-        .stat-dot.info { background: #3b82f6; }
 
         @media (max-width: 600px) {
             body { padding: 10px; }
@@ -292,11 +299,15 @@
                 <h2>系统日志</h2>
             </div>
             <div class="actions">
+                <div class="connection-status">
+                    <span class="conn-dot" id="connDot"></span>
+                    <span id="connText">连接中...</span>
+                </div>
                 <a href="/admin/panel" class="btn btn-light btn-sm">
                     <i class="fas fa-arrow-left"></i> 返回面板
                 </a>
-                <button class="btn btn-primary btn-sm" onclick="refreshLogs()">
-                    <i class="fas fa-sync-alt"></i> 刷新
+                <button class="btn btn-primary btn-sm" id="clearBtn" onclick="clearLogs()">
+                    <i class="fas fa-trash-alt"></i> 清空
                 </button>
             </div>
         </div>
@@ -314,56 +325,117 @@
                 </button>
                 <button class="filter-btn" data-level="INFO" onclick="filterLogs('INFO', this)">信息</button>
             </div>
-            <div class="auto-refresh">
-                <input type="checkbox" id="autoRefresh" checked>
-                <label for="autoRefresh">自动刷新 (10秒)</label>
+            <div class="log-controls">
+                <div class="auto-scroll">
+                    <input type="checkbox" id="autoScroll" checked>
+                    <label for="autoScroll">自动滚动</label>
+                </div>
             </div>
         </div>
 
         <div class="stats-bar">
             <div class="stat-item">
                 <span class="stat-dot error"></span>
-                <span>错误: <strong id="statError">{{ entries|selectattr('level', 'equalto', 'ERROR')|list|length }}</strong></span>
+                <span>错误: <strong id="statError">0</strong></span>
             </div>
             <div class="stat-item">
                 <span class="stat-dot warn"></span>
-                <span>警告: <strong id="statWarn">{{ entries|selectattr('level', 'equalto', 'WARN')|list|length }}</strong></span>
+                <span>警告: <strong id="statWarn">0</strong></span>
             </div>
             <div class="stat-item">
-                共 <strong id="statTotal">{{ entries|length }}</strong> 条
+                共 <strong id="statTotal">0</strong> 条
             </div>
         </div>
 
         <div class="log-container" id="logContainer">
-            {% if entries %}
-                {% for entry in entries %}
-                <div class="log-entry level-{{ entry.level }}" data-level="{{ entry.level }}">
-                    <div class="log-meta">
-                        <span class="log-timestamp">{{ entry.timestamp }}</span>
-                        <span class="log-level {{ entry.level }}">{{ entry.level }}</span>
-                        {% if entry.source %}
-                        <span class="log-source">{{ entry.source }}</span>
-                        {% endif %}
-                    </div>
-                    <div class="log-message">{{ entry.message }}</div>
-                    {% if entry.message|length > 200 %}
-                    <span class="expand-btn" onclick="toggleExpand(this)">展开</span>
-                    {% endif %}
-                </div>
-                {% endfor %}
-            {% else %}
-                <div class="empty-state">
-                    <i class="fas fa-check-circle"></i>
-                    <p>暂无日志记录</p>
-                </div>
-            {% endif %}
+            <div class="empty-state" id="emptyState">
+                <i class="fas fa-stream"></i>
+                <p>等待日志输出...</p>
+            </div>
         </div>
     </div>
 </div>
 
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script>
+    const logContainer = document.getElementById('logContainer');
+    const emptyState = document.getElementById('emptyState');
+    const connDot = document.getElementById('connDot');
+    const connText = document.getElementById('connText');
+
     let currentFilter = 'all';
-    let refreshTimer = null;
+    let errorCount = 0;
+    let warnCount = 0;
+    let totalCount = 0;
+
+    const socket = io({
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 1000,
+    });
+
+    socket.on('connect', () => {
+        connDot.className = 'conn-dot connected';
+        connText.textContent = '已连接';
+        socket.emit('join_logs');
+    });
+
+    socket.on('disconnect', () => {
+        connDot.className = 'conn-dot disconnected';
+        connText.textContent = '已断开';
+    });
+
+    socket.on('connect_error', () => {
+        connDot.className = 'conn-dot connecting';
+        connText.textContent = '重连中...';
+    });
+
+    socket.on('logs_connected', (data) => {
+        console.log('已连接到日志流');
+    });
+
+    socket.on('log_entry', (entry) => {
+        if (emptyState) {
+            emptyState.remove();
+        }
+
+        const div = document.createElement('div');
+        div.className = `log-entry level-${entry.level} new-entry`;
+        div.dataset.level = entry.level;
+
+        if (currentFilter !== 'all' && entry.level !== currentFilter) {
+            div.style.display = 'none';
+        }
+
+        let metaHtml = '';
+        if (entry.timestamp) {
+            metaHtml += `<span class="log-timestamp">${escapeHtml(entry.timestamp)}</span>`;
+        }
+        metaHtml += `<span class="log-level ${entry.level}">${entry.level}</span>`;
+        if (entry.source) {
+            metaHtml += `<span class="log-source">${escapeHtml(entry.source)}</span>`;
+        }
+
+        div.innerHTML = `
+            <div class="log-meta">${metaHtml}</div>
+            <div class="log-message">${escapeHtml(entry.message)}</div>
+        `;
+
+        logContainer.appendChild(div);
+
+        totalCount++;
+        if (entry.level === 'ERROR') errorCount++;
+        if (entry.level === 'WARN') warnCount++;
+
+        updateStats();
+
+        if (document.getElementById('autoScroll').checked) {
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        setTimeout(() => div.classList.remove('new-entry'), 300);
+    });
 
     function filterLogs(level, btn) {
         currentFilter = level;
@@ -379,69 +451,25 @@
         });
     }
 
-    function toggleExpand(btn) {
-        const entry = btn.closest('.log-entry');
-        entry.classList.toggle('collapsed');
-        btn.textContent = entry.classList.contains('collapsed') ? '展开' : '收起';
+    function clearLogs() {
+        logContainer.innerHTML = `
+            <div class="empty-state" id="emptyState">
+                <i class="fas fa-stream"></i>
+                <p>等待日志输出...</p>
+            </div>
+        `;
+        errorCount = 0;
+        warnCount = 0;
+        totalCount = 0;
+        updateStats();
     }
 
-    function refreshLogs() {
-        fetch('/admin/logs/raw')
-            .then(r => r.json())
-            .then(data => {
-                const container = document.getElementById('logContainer');
-                if (data.lines.length === 0) {
-                    container.innerHTML = '<div class="empty-state"><i class="fas fa-check-circle"></i><p>暂无日志记录</p></div>';
-                    return;
-                }
-
-                let html = '';
-                let errorCount = 0;
-                let warnCount = 0;
-
-                data.lines.reverse().forEach(line => {
-                    if (!line.trim()) return;
-
-                    let level = 'INFO';
-                    if (line.includes('[ERROR]')) { level = 'ERROR'; errorCount++; }
-                    else if (line.includes('[WARN]')) level = 'WARN';
-                    else if (line.includes('[DEBUG]')) level = 'DEBUG';
-
-                    if (level === 'WARN') warnCount++;
-
-                    const match = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) \[(\w+)\] ([^:]+): (.*)/s);
-                    let timestamp = '', source = '', message = line;
-                    if (match) {
-                        timestamp = match[1];
-                        source = match[3];
-                        message = match[4];
-                    }
-
-                    const display = currentFilter === 'all' || level === currentFilter ? '' : 'display:none';
-                    const collapsed = message.length > 200 ? 'collapsed' : '';
-                    const expandBtn = message.length > 200 ? '<span class="expand-btn" onclick="toggleExpand(this)">展开</span>' : '';
-
-                    html += `
-                        <div class="log-entry level-${level}" data-level="${level}" style="${display}">
-                            <div class="log-meta">
-                                <span class="log-timestamp">${timestamp}</span>
-                                <span class="log-level ${level}">${level}</span>
-                                ${source ? `<span class="log-source">${source}</span>` : ''}
-                            </div>
-                            <div class="log-message">${escapeHtml(message)}</div>
-                            ${expandBtn}
-                        </div>
-                    `;
-                });
-
-                container.innerHTML = html;
-                document.getElementById('errorCount').textContent = errorCount;
-                document.getElementById('warnCount').textContent = warnCount;
-                document.getElementById('statError').textContent = errorCount;
-                document.getElementById('statWarn').textContent = warnCount;
-                document.getElementById('statTotal').textContent = data.lines.length;
-            })
-            .catch(err => console.error('刷新日志失败:', err));
+    function updateStats() {
+        document.getElementById('errorCount').textContent = errorCount;
+        document.getElementById('warnCount').textContent = warnCount;
+        document.getElementById('statError').textContent = errorCount;
+        document.getElementById('statWarn').textContent = warnCount;
+        document.getElementById('statTotal').textContent = totalCount;
     }
 
     function escapeHtml(text) {
@@ -450,16 +478,30 @@
         return div.innerHTML;
     }
 
-    function startAutoRefresh() {
-        if (refreshTimer) clearInterval(refreshTimer);
-        refreshTimer = setInterval(() => {
-            if (document.getElementById('autoRefresh').checked) {
-                refreshLogs();
-            }
-        }, 10000);
-    }
+    // Load initial entries from server-rendered HTML
+    {% for entry in entries %}
+    (function() {
+        if (emptyState) emptyState.remove();
+        const div = document.createElement('div');
+        div.className = 'log-entry level-{{ entry.level }}';
+        div.dataset.level = '{{ entry.level }}';
+        div.innerHTML = `
+            <div class="log-meta">
+                <span class="log-timestamp">{{ entry.timestamp }}</span>
+                <span class="log-level {{ entry.level }}">{{ entry.level }}</span>
+                {% if entry.source %}<span class="log-source">{{ entry.source }}</span>{% endif %}
+            </div>
+            <div class="log-message">{{ entry.message }}</div>
+        `;
+        logContainer.appendChild(div);
+        totalCount++;
+        {% if entry.level == 'ERROR' %}errorCount++;{% endif %}
+        {% if entry.level == 'WARN' %}warnCount++;{% endif %}
+    })();
+    {% endfor %}
 
-    startAutoRefresh();
+    updateStats();
+    logContainer.scrollTop = logContainer.scrollHeight;
 </script>
 
 </body>

@@ -7,7 +7,7 @@ services:
     restart: unless-stopped
     command: ["python", "-m", "runtime.web"]
     ports:
-      - "7111:7111"
+      - "${APP_PORT:-7111}:${APP_PORT:-7111}"
     volumes:
       - ./settings.json:/app/settings.json
       - ./data:/app/data
@@ -39,7 +39,7 @@ services:
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
       - TZ=Asia/Shanghai
-      - INTERNAL_API_URL=http://web:7111
+      - INTERNAL_API_URL=http://web:${APP_PORT:-7111}
       - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:?set INTERNAL_API_SECRET}
     healthcheck:
       disable: true
@@ -60,7 +60,7 @@ services:
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
       - TZ=Asia/Shanghai
-      - INTERNAL_API_URL=http://web:7111
+      - INTERNAL_API_URL=http://web:${APP_PORT:-7111}
       - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:?set INTERNAL_API_SECRET}
     healthcheck:
       disable: true

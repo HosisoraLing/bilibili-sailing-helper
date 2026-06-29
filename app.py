@@ -23,6 +23,15 @@ logger = get_logger(__name__)
 def register_socketio_events(socketio):
     """注册 SocketIO 事件"""
 
+    @socketio.on('join_logs')
+    def handle_join_logs():
+        """处理加入日志房间请求"""
+        from flask_login import current_user
+        if current_user.is_authenticated and current_user.is_admin():
+            from flask_socketio import join_room
+            join_room('admin_logs')
+            emit('logs_connected', {'status': 'ok'})
+
     @socketio.on('join_auth')
     def handle_join_auth(data):
         """

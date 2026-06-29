@@ -31,6 +31,10 @@ def main():
         register_admins()
 
     start_runtime_services(app_instance, role="web")
+
+    from route_handlers.admin.logs import start_tail_thread
+    start_tail_thread(app_instance, socketio)
+
     run_web_server(app_instance, socketio, Config)
 
 
