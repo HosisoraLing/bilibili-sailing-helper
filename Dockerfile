@@ -5,27 +5,16 @@ FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
-# 使用国内镜像源
 RUN sed -i s/deb.debian.org/mirrors.aliyun.com/g /etc/apt/sources.list.d/debian.sources
 
-# 安装系统依赖（cryptography 需要 gcc）
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libffi-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# 先复制 requirements 利用 Docker 层缓存
+# requirements.txt 变更频率最低，放最前面最大化缓存命中
 COPY requirements.txt .
-
-# GitHub Actions 构建默认使用 PyPI，避免国内镜像源在 CI 中反而变慢。
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
-
-# 本地网络需要加速时，可改用阿里云 pip 镜像源：
-# RUN pip install --no-cache-dir --prefix=/install \
-#     -i https://mirrors.aliyun.com/pypi/simple/ \
-#     --trusted-host mirrors.aliyun.com \
-#     --retries 3 \
-#     -r requirements.txt
 
 
 # ============================================================
@@ -35,34 +24,53 @@ FROM python:3.11-slim AS runtime
 
 WORKDIR /app
 
-# 使用国内镜像源
 RUN sed -i s/deb.debian.org/mirrors.aliyun.com/g /etc/apt/sources.list.d/debian.sources
 
-# 安装运行时依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# 从构建阶段复制已安装的依赖
 COPY --from=builder /install /usr/local
 
-# 创建应用用户（带home目录）
 RUN useradd -m -s /bin/bash appuser
 
+# -----------------------------------------------------------
+# 层排序策略：变更频率从低到高
+#
+#   最低频  requirements.txt (builder 阶段已处理)
+#   ↓       根入口 + db + utils — 业务骨架，很少改动
+#   ↓       storage + static — 资源文件，偶尔改动
+#   ↓       runtime — 运行角色入口，偶尔改动
+#   ↓       services + route_handlers — 核心业务，频繁改动
+#   最高频  templates — 前端页面，最频繁改动
+#
+# 当 services/ 或 route_handlers/ 变更时，其上游层（utils、
+# static 等）仍命中缓存，仅重建变更层及其下游。
+# -----------------------------------------------------------
+
+# 根入口 + 数据层（很少改动）
 COPY --chown=appuser:appuser app.py config.py routes.py decorators.py constants.py migrate.py ./
-COPY --chown=appuser:appuser db/        ./db/
-COPY --chown=appuser:appuser route_handlers/ ./route_handlers/
-COPY --chown=appuser:appuser runtime/   ./runtime/
-COPY --chown=appuser:appuser services/  ./services/
-COPY --chown=appuser:appuser utils/     ./utils/
-COPY --chown=appuser:appuser storage/   ./storage/
-COPY --chown=appuser:appuser static/    ./static/
+COPY --chown=appuser:appuser db/     ./db/
+COPY --chown=appuser:appuser utils/  ./utils/
+
+# 资源文件（偶尔改动）
+COPY --chown=appuser:appuser storage/  ./storage/
+COPY --chown=appuser:appuser static/   ./static/
+
+# 运行角色入口（偶尔改动）
+COPY --chown=appuser:appuser runtime/  ./runtime/
+
+# 核心业务逻辑（频繁改动）
+COPY --chown=appuser:appuser services/        ./services/
+COPY --chown=appuser:appuser route_handlers/  ./route_handlers/
+
+# 前端页面（最频繁改动）
 COPY --chown=appuser:appuser templates/ ./templates/
 
-# 创建数据和日志目录
+# -----------------------------------------------------------
+
 RUN mkdir -p data logs && chown -R appuser:appuser data logs
 
-# 切换到应用用户运行
 USER appuser
 
 EXPOSE 7111

@@ -1,7 +1,15 @@
 #!/bin/bash
 # B站舰礼助手 - 自动更新脚本
+#
+# 用法:
+#   ./auto-update.sh          # 检查更新 + 备份 + 拉取 + 增量构建 + 重启
+#   ./auto-update.sh --check  # 只检查是否有更新
+#   ./auto-update.sh --force  # 跳过检查，强制拉取 + 构建 + 重启
 
-set -e
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEPLOY="$SCRIPT_DIR/deploy.sh"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -9,181 +17,104 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-info() { echo -e "${BLUE}[INFO]${NC} $1"; }
-success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
-warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
-error() { echo -e "${RED}[ERROR]${NC} $1"; }
+info()    { echo -e "${BLUE}[INFO]${NC} $1"; }
+success() { echo -e "${GREEN}[OK]${NC} $1"; }
+warn()    { echo -e "${YELLOW}[WARN]${NC} $1"; }
+error()   { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 
-REPO_URL="https://github.com/HosisoraLing/bilibili-sailing-helper.git"
 BRANCH="main"
 
-# 检查是否有更新
+# ==================== Git 操作 ====================
+
 check_update() {
-    info "检查GitHub更新..."
-    
-    # 获取远程最新提交
-    git fetch origin $BRANCH 2>/dev/null
-    
-    LOCAL=$(git rev-parse HEAD)
-    REMOTE=$(git rev-parse origin/$BRANCH)
-    
-    if [ "$LOCAL" = "$REMOTE" ]; then
-        info "已是最新版本"
+    if [ ! -d ".git" ]; then
+        error "当前目录不是 git 仓库"
+    fi
+
+    info "检查 GitHub 更新..."
+    git fetch origin "$BRANCH" 2>/dev/null || error "git fetch 失败"
+
+    local local_hash remote_hash
+    local_hash=$(git rev-parse HEAD)
+    remote_hash=$(git rev-parse "origin/$BRANCH")
+
+    if [ "$local_hash" = "$remote_hash" ]; then
+        success "已是最新版本"
         return 1
-    else
-        BEHIND=$(git rev-list --count HEAD..origin/$BRANCH)
-        success "发现 $BEHIND 个新提交"
-        return 0
     fi
+
+    local behind
+    behind=$(git rev-list --count "HEAD..origin/$BRANCH")
+    success "发现 $behind 个新提交"
+    return 0
 }
 
-# 备份当前版本
-backup_current() {
-    info "备份当前版本..."
-    BACKUP_DIR="/tmp/bilibili-sailing-helper-backup-$(date +%Y%m%d%H%M%S)"
-    mkdir -p "$BACKUP_DIR"
-    
-    # 备份配置和数据
-    cp -r data "$BACKUP_DIR/" 2>/dev/null || true
-    cp -r logs "$BACKUP_DIR/" 2>/dev/null || true
-    cp settings.json "$BACKUP_DIR/" 2>/dev/null || true
-    
-    echo "$BACKUP_DIR"
+show_changelog() {
+    echo ""
+    echo -e "${BLUE}========== 最近提交 ==========${NC}"
+    git log --oneline -10 "HEAD..origin/$BRANCH" 2>/dev/null || git log --oneline -10
+    echo ""
 }
 
-# 拉取更新
-pull_update() {
+backup_data() {
+    local backup_dir="/tmp/bsh-backup-$(date +%Y%m%d-%H%M%S)"
+    mkdir -p "$backup_dir"
+
+    for item in data logs settings.json; do
+        [ -e "$item" ] && cp -r "$item" "$backup_dir/" 2>/dev/null || true
+    done
+
+    echo "$backup_dir"
+}
+
+pull_code() {
     info "拉取最新代码..."
-    
-    # 保存本地修改
-    STASHED=false
-    if ! git diff --quiet; then
-        git stash push -m "auto-update-stash-$(date +%s)" 2>/dev/null
-        STASHED=true
+
+    local stashed=false
+    if ! git diff --quiet 2>/dev/null; then
+        git stash push -m "auto-update-$(date +%s)" 2>/dev/null
+        stashed=true
     fi
-    
-    # 拉取更新
-    git pull origin $BRANCH
-    
-    # 恢复本地修改
-    if [ "$STASHED" = true ]; then
+
+    git pull origin "$BRANCH"
+
+    if [ "$stashed" = true ]; then
         git stash pop 2>/dev/null || warn "本地修改恢复失败，可能需要手动处理冲突"
     fi
-    
+
     success "代码更新完成"
 }
 
-# 重建Docker镜像
-rebuild_docker() {
-    info "重建Docker镜像..."
-    
-    if command -v docker compose &> /dev/null; then
-        docker compose build --no-cache
-        docker compose down
-        docker compose up -d
-    else
-        docker-compose build --no-cache
-        docker-compose down
-        docker-compose up -d
-    fi
-    
-    success "Docker服务已重启"
-}
+# ==================== 主流程 ====================
 
-# 重启服务（非Docker）
-restart_service() {
-    info "重启服务..."
-    
-    # 查找并停止旧进程
-    pkill -f "python app.py" 2>/dev/null || true
-    sleep 2
-    
-    # 启动新服务
-    nohup python app.py > /dev/null 2>&1 &
-    
-    success "服务已重启"
-}
-
-# 检查服务健康
-check_health() {
-    info "检查服务健康状态..."
-    sleep 5
-    
-    if curl -s -o /dev/null -w "%{http_code}" http://localhost:7111/ | grep -q "200\|302"; then
-        success "服务运行正常"
-    else
-        warn "服务可能未正常启动，请检查日志"
-    fi
-}
-
-# 显示更新日志
-show_changelog() {
-    echo ""
-    echo "=========================================="
-    echo "           更新日志"
-    echo "=========================================="
-    git log --oneline -10
-    echo ""
-}
-
-# 主函数
 main() {
-    echo "=========================================="
-    echo "   B站舰礼助手 - 自动更新"
-    echo "=========================================="
     echo ""
-    
-    # 检查是否在git仓库中
-    if ! git rev-parse --git-dir > /dev/null 2>&1; then
-        error "当前目录不是git仓库"
-        exit 1
-    fi
-    
-    # 检查更新
-    if ! check_update; then
-        exit 0
-    fi
-    
-    # 显示更新日志
+    echo -e "${BLUE}========== B站舰礼助手 - 自动更新 ==========${NC}"
+    echo ""
+
+    case "${1:-}" in
+        --check)
+            check_update
+            exit $?
+            ;;
+        --force)
+            ;;
+        *)
+            check_update || exit 0
+            ;;
+    esac
+
     show_changelog
-    
-    # 备份
-    BACKUP_DIR=$(backup_current)
-    info "备份已保存到: $BACKUP_DIR"
-    
-    # 拉取更新
-    pull_update
-    
-    # 重启服务
-    if [ -f "docker-compose.yml" ] && command -v docker &> /dev/null; then
-        rebuild_docker
-    else
-        restart_service
-    fi
-    
-    # 检查健康
-    check_health
-    
-    echo ""
-    success "更新完成！"
-    echo "备份位置: $BACKUP_DIR"
-    echo ""
+
+    local backup_dir
+    backup_dir=$(backup_data)
+    info "数据已备份到: $backup_dir"
+
+    pull_code
+
+    # 委托给 deploy.sh 完成构建和部署
+    info "调用 deploy.sh 执行增量构建和部署..."
+    exec "$DEPLOY" --update "$@"
 }
 
-# 支持命令行参数
-case "${1:-}" in
-    --check)
-        check_update
-        ;;
-    --force)
-        pull_update
-        if [ -f "docker-compose.yml" ] && command -v docker &> /dev/null; then
-            rebuild_docker
-        else
-            restart_service
-        fi
-        ;;
-    *)
-        main
-        ;;
-esac
+main "$@"
