@@ -12,5 +12,6 @@ from route_handlers.admin import dashboard as _dashboard
 from route_handlers.admin import gifts as _gifts
 from route_handlers.admin import guards as _guards
 from route_handlers.admin import users as _users
+from route_handlers.admin import logs as _logs
 
 __all__ = ["admin_bp", "internal_bp", "main_bp"]
