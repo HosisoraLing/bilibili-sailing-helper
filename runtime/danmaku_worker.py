@@ -239,6 +239,15 @@ async def run_connection(
             last_error="",
         )
         heartbeat_task = asyncio.create_task(client.heartbeat_loop(websocket))
+        runtime_heartbeat_task = asyncio.create_task(
+            report_runtime_heartbeat(
+                webhook=webhook,
+                instance_id=instance_id,
+                cookie_version=cookie.version,
+                interval=30.0,
+                sleep=sleep,
+            )
+        )
         cookie_task = None
         if cookie_poll_interval > 0:
             cookie_task = asyncio.create_task(
@@ -271,7 +280,7 @@ async def run_connection(
         finally:
             client.stop()
             await close_websocket(websocket)
-            for task in (heartbeat_task, cookie_task):
+            for task in (heartbeat_task, runtime_heartbeat_task, cookie_task):
                 if task is None:
                     continue
                 task.cancel()
