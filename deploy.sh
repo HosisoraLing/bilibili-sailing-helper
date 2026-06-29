@@ -143,6 +143,8 @@ prepare_dirs() {
     mkdir -p data logs
     chmod 777 data logs 2>/dev/null || true
     chmod 666 data/* 2>/dev/null || true
+    # bind mount 的 settings.json 需要容器内 appuser 可写
+    [ -f settings.json ] && chmod 666 settings.json 2>/dev/null || true
     success "目录权限就绪"
 }
 
