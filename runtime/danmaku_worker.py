@@ -223,6 +223,7 @@ async def run_connection(
         api = api_factory(session, cookie_header=cookie_header(live_cookie))
         client = BilibiliLiveClient(
             room_id=room_id,
+            uid=int(live_cookie.get("DedeUserID") or 0),
             buvid3=live_cookie.get("buvid3", ""),
             cookie_version=cookie.version,
         )
