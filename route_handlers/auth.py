@@ -29,8 +29,8 @@ def auth_status():
         # 密码重置模式：跳转到重置密码页面
         redirect_url = url_for('main.reset_password', uid=uid)
     elif login_mode:
-        # 鉴权登录模式：跳转到首页
-        redirect_url = url_for('main.index', uid=uid)
+        # 鉴权登录模式：跳转到登录页触发自动登录
+        redirect_url = url_for('main.login', uid=uid, auto_login='true')
     else:
         # 注册模式：跳转到注册页面
         redirect_url = url_for('main.register', uid=uid)
