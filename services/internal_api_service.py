@@ -243,6 +243,12 @@ def process_danmaku_auth_event(payload: dict[str, Any]) -> dict[str, Any]:
     if not uid or not content:
         raise ValueError("uid and content are required")
 
+    # Strip common prefixes users might send
+    for prefix in ("鉴权码：", "鉴权码:", "验证码：", "验证码:"):
+        if content.startswith(prefix):
+            content = content[len(prefix):].strip()
+            break
+
     session = AuthSession.query.filter_by(
         uid=uid,
         status="pending",
