@@ -243,11 +243,24 @@ def process_danmaku_auth_event(payload: dict[str, Any]) -> dict[str, Any]:
     if not uid or not content:
         raise ValueError("uid and content are required")
 
-    # Strip common prefixes users might send
-    for prefix in ("鉴权码：", "鉴权码:", "验证码：", "验证码:"):
+    # Require prefix "鉴权码:" - strip it before matching
+    for prefix in ("鉴权码：", "鉴权码:"):
         if content.startswith(prefix):
             content = content[len(prefix):].strip()
             break
+    else:
+        # No prefix = not an auth attempt
+        attempt = AuthAttempt(
+            uid=uid,
+            status="ignored",
+            code=content,
+            nickname=payload.get("nickname") or "",
+            room_id=str(payload.get("room_id") or ""),
+            payload_json=to_json_text(payload),
+        )
+        db.session.add(attempt)
+        db.session.commit()
+        return {"matched": False, "uid": uid}
 
     session = AuthSession.query.filter_by(
         uid=uid,
