@@ -213,7 +213,7 @@ build_services() {
 
     if $CN_MIRROR; then
         info "使用国内镜像源构建..."
-        build_args="$build_args --build-arg CN_MIRROR=1"
+        export CN_MIRROR=1
     fi
 
     if $PULL_BASE; then

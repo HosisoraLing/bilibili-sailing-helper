@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        CN_MIRROR: ${CN_MIRROR:-0}
     container_name: bilibili-sailing-helper-web
     restart: unless-stopped
     command: ["python", "-m", "runtime.web"]
@@ -27,6 +29,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        CN_MIRROR: ${CN_MIRROR:-0}
     container_name: bilibili-sailing-helper-danmaku-worker
     restart: unless-stopped
     command: ["python", "-m", "runtime.danmaku_worker"]
@@ -48,6 +52,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        CN_MIRROR: ${CN_MIRROR:-0}
     container_name: bilibili-sailing-helper-scheduler
     restart: unless-stopped
     command: ["python", "-m", "runtime.scheduler"]
