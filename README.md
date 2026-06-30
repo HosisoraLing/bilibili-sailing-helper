@@ -323,6 +323,36 @@ docker compose build
 - 容器化：Docker、Docker Compose
 - 测试：pytest、pytest-flask
 
+## 开源许可
+
+本项目采用 [AGPLv3](LICENSE) 许可证发布。
+
+### 项目简介
+
+bilibili-sailing-helper 是一个面向 B 站主播运营场景的舰长地址收集与舰礼履约系统。用户通过直播间弹幕完成身份验证，自助填写收货地址；管理员在后台同步舰长名单、管理地址、统计舰礼资格。
+
+### 主要功能
+
+- **弹幕鉴权**：用户在直播间发送页面验证码完成注册、登录或重置密码
+- **地址收集**：舰长/陪伴榜用户自助填写和更新收货信息
+- **管理后台**：地址、舰长名单、用户权限、舰礼资格、CSV 导入导出
+- **舰长同步**：从 B 站直播接口同步舰长/陪伴榜数据
+- **舰礼统计**：按月份计算符合资格的舰长礼物记录
+- **B 站授权**：后台支持 Web 扫码授权，自动维护 Cookie
+
+### 技术栈
+
+- 后端：Flask、Flask-Login、Flask-SocketIO、SQLAlchemy
+- 数据库：SQLite
+- 弹幕连接：aiohttp WebSocket
+- 容器化：Docker、Docker Compose
+
+### 相关链接
+
+- 源代码：https://github.com/HosisoraLing/bilibili-sailing-helper
+- 问题反馈：https://github.com/HosisoraLing/bilibili-sailing-helper/issues
+- 许可证：https://www.gnu.org/licenses/agpl-3.0.html
+
 ## License
 
 AGPLv3
