@@ -37,6 +37,15 @@ docker compose build
 docker compose up -d
 ```
 
+后续更新可使用部署脚本：
+
+```bash
+./deploy.sh                  # git pull + 增量构建 + 重启所有服务
+./deploy.sh --no-update      # 跳过 git pull，只构建 + 重启
+./deploy.sh --web            # 只重建并重启 web
+./deploy.sh --restart-only   # 只重启服务，不重建镜像
+```
+
 访问：
 
 - 首页：`http://localhost:7111/`
