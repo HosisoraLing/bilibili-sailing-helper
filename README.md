@@ -46,6 +46,29 @@ docker compose up -d
 ./deploy.sh --restart-only   # 只重启服务，不重建镜像
 ```
 
+完整参数：
+
+| 参数 | 说明 |
+|------|------|
+| `--web` | 只操作 web 服务 |
+| `--danmaku` | 只操作 danmaku-worker 服务 |
+| `--scheduler` | 只操作 scheduler 服务 |
+| `--no-cache` | 全量重建（requirements.txt 变更时使用） |
+| `--pull` | 拉取最新基础镜像 |
+| `--build-only` | 只构建镜像，不重启服务 |
+| `--restart-only` | 只重启服务，不重建镜像 |
+| `--cn-mirror` | 使用国内镜像源（阿里云 apt/pip） |
+| `--no-update` | 跳过 git pull（默认会拉取更新） |
+| `--logs` | 部署后跟踪日志 |
+| `--status` | 只显示服务状态，不做任何操作 |
+
+参数可组合使用，例如：
+
+```bash
+./deploy.sh --web --cn-mirror --logs    # 用国内镜像构建 web 并跟踪日志
+./deploy.sh --no-cache --pull           # 全量重建并拉取最新基础镜像
+```
+
 访问：
 
 - 首页：`http://localhost:7111/`
