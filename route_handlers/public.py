@@ -121,9 +121,12 @@ def submit():
         if not is_valid:
             return jsonify({'error': msg}), 400
 
+    existing_address = get_user_address(uid)
+    is_update = existing_address is not None
+
     save_address(uid, nickname, request.form)
 
-    return render_template('success.html', uid=uid)
+    return render_template('success.html', uid=uid, submitted=is_update)
 
 
 # =========================
