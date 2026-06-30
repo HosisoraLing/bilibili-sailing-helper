@@ -70,7 +70,7 @@ ADMIN_UIDS = admin_cfg.get('uids', [])
 
 # ================= 业务文件路径 =================
 
-REGION_JSON_PATH = os.path.join(STATIC_DIR, 'china-regions.json')
+REGION_JSON_PATH = os.path.join(STATIC_DIR, 'china_regions.json')
 
 
 # ================= 外部接口 =================

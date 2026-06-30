@@ -165,7 +165,7 @@
 
         fetch('/static/china_regions.json')
             .then(r => {
-                if (!r.ok) throw new Error('网络错误');
+                if (!r.ok) throw new Error('HTTP ' + r.status);
                 return r.json();
             })
             .then(data => {
@@ -195,8 +195,12 @@
                     }, 100);
                 }
             })
-            .catch(() => {
-                console.error('加载地区数据失败');
+            .catch(err => {
+                console.error('加载地区数据失败:', err);
+                const alert = document.createElement('div');
+                alert.className = 'alert alert-error';
+                alert.innerHTML = '<i class="fas fa-exclamation-circle"></i> 加载地区数据失败，请刷新页面重试';
+                document.querySelector('.card-body').prepend(alert);
             });
 
         provinceSelect.onchange = function() {
