@@ -179,6 +179,16 @@ EXPECTED_ROUTE_INVENTORY = {
         "methods": ["GET"],
         "blueprint": "admin",
     },
+    "admin.repair_nicknames_preview": {
+        "rule": "/admin/repair-nicknames",
+        "methods": ["GET"],
+        "blueprint": "admin",
+    },
+    "admin.repair_nicknames_apply": {
+        "rule": "/admin/repair-nicknames/apply",
+        "methods": ["POST"],
+        "blueprint": "admin",
+    },
     "admin.admin_poll_qr_login": {
         "rule": "/admin/cookie/qr-login/<task_id>",
         "methods": ["GET"],

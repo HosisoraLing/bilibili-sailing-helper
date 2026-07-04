@@ -117,68 +117,9 @@ class SimpleCache:
             raise
 
 
-def cached(cache_instance: SimpleCache, key_prefix: str, ttl: Optional[int] = None):
-    """
-    装饰器：缓存函数返回值
-
-    Args:
-        cache_instance: 缓存实例
-        key_prefix: 缓存键前缀
-        ttl: 过期时间（秒）
-    """
-    def decorator(func: Callable) -> Callable:
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            # 构建缓存键（基于函数名和参数）
-            key_parts = [key_prefix]
-            key_parts.extend(str(arg) for arg in args[1:] if arg is not None)  # 跳过 self
-            key_parts.extend(f"{k}={v}" for k, v in sorted(kwargs.items()) if v is not None)
-            cache_key = ":".join(key_parts)
-
-            # 尝试从缓存获取
-            result = cache_instance.get(cache_key)
-            if result is not None:
-                return result
-
-            # 执行函数并缓存结果
-            result = func(*args, **kwargs)
-            if result is not None:
-                cache_instance.set(cache_key, result, ttl)
-
-            return result
-
-        # 添加清除缓存的方法
-        wrapper.cache_clear = lambda *args, **kwargs: cache_instance.delete(
-            ":".join([key_prefix] + [str(arg) for arg in args if arg is not None])
-        )
-
-        return wrapper
-    return decorator
-
-
-def invalidate_cache(cache_instance: SimpleCache, key_pattern: str):
-    """
-    清除匹配模式的缓存
-
-    Args:
-        cache_instance: 缓存实例
-        key_pattern: 缓存键模式
-    """
-    cache_instance.clear_pattern(key_pattern)
-
-
 # =========================
 # 全局缓存实例
 # =========================
-
-# 用户查询缓存 (5分钟 TTL)
-user_cache = SimpleCache(default_ttl=300)
-
-# 舰长查询缓存 (5分钟 TTL)
-guard_cache = SimpleCache(default_ttl=300)
-
-# 地址查询缓存 (2分钟 TTL)
-address_cache = SimpleCache(default_ttl=120)
 
 # API 响应缓存 (1分钟 TTL，用于B站API响应)
 api_response_cache = SimpleCache(default_ttl=60)
@@ -186,8 +127,5 @@ api_response_cache = SimpleCache(default_ttl=60)
 
 def clear_all_caches():
     """清空所有缓存"""
-    user_cache.clear()
-    guard_cache.clear()
-    address_cache.clear()
     api_response_cache.clear()
     logger.info("所有缓存已清空")

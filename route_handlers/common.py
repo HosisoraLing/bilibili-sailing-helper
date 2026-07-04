@@ -17,6 +17,7 @@ from services.auth_service import (
 from services.security import (
     RequestValidator,
     auth_limiter,
+    nickname_limiter,
 )
 from services.user_service import UserService
 from services.admin_service import AdminService
@@ -39,13 +40,7 @@ from services.cookie_service import CookieService
 from services.cookie_maintenance_service import CookieMaintenanceService
 from utils.request_utils import get_uid_from_request
 from utils.csv_utils import create_csv_response
-from utils.cache_utils import (
-    invalidate_cache,
-    user_cache,
-    guard_cache,
-    address_cache,
-    api_response_cache,
-)
+from utils.cache_utils import api_response_cache
 from utils.log_utils import get_logger
 from decorators import (
     require_login,

@@ -1,3 +1,4 @@
+import os
 from route_handlers.common import *
 
 
@@ -23,6 +24,120 @@ def admin_users():
     )
 
 
+@admin_bp.route('/repair-nicknames')
+@require_admin
+def repair_nicknames_preview():
+    """预览昵称修复（dry-run）"""
+    from db.models import Guard, Address, User
+
+    guards = {g.uid: g for g in Guard.query.all()}
+    discrepancies = []
+
+    # 检查 Address 表
+    for addr in Address.query.all():
+        if addr.uid in guards:
+            guard = guards[addr.uid]
+            if addr.nickname != guard.nickname:
+                discrepancies.append({
+                    'table': 'Address',
+                    'uid': addr.uid,
+                    'current': addr.nickname,
+                    'correct': guard.nickname,
+                    'record_id': addr.id
+                })
+
+    # 检查 User 表
+    for user in User.query.all():
+        if user.nickname and user.nickname.startswith('管理员_'):
+            continue
+        if user.uid in guards:
+            guard = guards[user.uid]
+            if user.nickname != guard.nickname:
+                discrepancies.append({
+                    'table': 'User',
+                    'uid': user.uid,
+                    'current': user.nickname,
+                    'correct': guard.nickname,
+                    'record_id': user.id
+                })
+
+    return jsonify({
+        'success': True,
+        'count': len(discrepancies),
+        'discrepancies': discrepancies
+    })
+
+
+@admin_bp.route('/repair-nicknames/apply', methods=['POST'])
+@require_admin
+def repair_nicknames_apply():
+    """应用昵称修复"""
+    csrf_token = request.form.get('csrf_token') or request.headers.get('X-CSRF-Token')
+    if not csrf_token or not UserService.verify_csrf_token(csrf_token):
+        return jsonify({'success': False, 'error': 'CSRF token invalid or missing'}), 403
+
+    from db.models import Guard, Address, User
+    import shutil
+    from datetime import datetime
+
+    guards = {g.uid: g for g in Guard.query.all()}
+    fixed_count = 0
+    details = []
+
+    # 修复 Address 表
+    for addr in Address.query.all():
+        if addr.uid in guards:
+            guard = guards[addr.uid]
+            if addr.nickname != guard.nickname:
+                old_nickname = addr.nickname
+                addr.nickname = guard.nickname
+                fixed_count += 1
+                details.append({
+                    'table': 'Address',
+                    'uid': addr.uid,
+                    'old': old_nickname,
+                    'new': guard.nickname
+                })
+
+    # 修复 User 表
+    for user in User.query.all():
+        if user.nickname and user.nickname.startswith('管理员_'):
+            continue
+        if user.uid in guards:
+            guard = guards[user.uid]
+            if user.nickname != guard.nickname:
+                old_nickname = user.nickname
+                user.nickname = guard.nickname
+                fixed_count += 1
+                details.append({
+                    'table': 'User',
+                    'uid': user.uid,
+                    'old': old_nickname,
+                    'new': guard.nickname
+                })
+
+    if fixed_count > 0:
+        # 备份数据库
+        from config import Config
+        db_url = Config.SQLALCHEMY_DATABASE_URI
+        if db_url.startswith('sqlite:///'):
+            db_path = db_url.replace('sqlite:///', '')
+            if db_path and os.path.exists(db_path):
+                backup_dir = os.path.join(os.path.dirname(os.path.dirname(db_path)), 'backups')
+                os.makedirs(backup_dir, exist_ok=True)
+                timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+                backup_path = os.path.join(backup_dir, f'data-{timestamp}.db')
+                shutil.copy2(db_path, backup_path)
+
+        db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'fixed_count': fixed_count,
+        'details': details
+    })
+
+
 @admin_bp.route('/users/add', methods=['POST'])
 @require_admin
 def admin_user_add():
@@ -44,7 +159,6 @@ def admin_user_add():
     if not success:
         return jsonify({'success': False, 'error': error_msg}), 400
 
-    user_cache.delete(f"user:{uid}")
     return jsonify({'success': True, 'message': f'用户 {nickname} 创建成功'})
 
 
@@ -68,7 +182,6 @@ def admin_user_edit():
 
     if nickname:
         AdminService.update_user(user, nickname)
-        user_cache.delete(f"user:{uid}")
 
     return jsonify({'success': True, 'message': '用户信息已更新'})
 
@@ -96,13 +209,6 @@ def admin_user_delete():
     if not success:
         return jsonify({'success': False, 'error': error_msg}), 404
 
-    user_cache.delete(f"user:{uid}")
-    guard_cache.clear_pattern(f"guard:{uid}")
-    guard_cache.clear_pattern(f"guard_info:{uid}")
-    guard_cache.clear_pattern(f"guard_nickname:{uid}")
-    address_cache.delete(f"address:{uid}")
-    api_response_cache.clear_pattern("guards:")
-
     return jsonify({'success': True, 'message': '用户及其所有记录已删除'})
 
 
@@ -123,7 +229,6 @@ def admin_user_set_admin():
         return jsonify({'success': False, 'error': '用户不存在'}), 404
 
     AdminService.set_user_admin(user)
-    user_cache.delete(f"user:{uid}")
     return jsonify({'success': True, 'message': f'已将 {user.nickname} 设置为管理员'})
 
 
@@ -147,5 +252,4 @@ def admin_user_unset_admin():
     if not success:
         return jsonify({'success': False, 'error': error_msg}), 403
 
-    user_cache.delete(f"user:{uid}")
     return jsonify({'success': True, 'message': f'已取消 {user.nickname} 的管理员身份'})

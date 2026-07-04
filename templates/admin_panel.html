@@ -452,6 +452,9 @@
             <a href="/admin/export/csv" class="btn btn-light btn-sm">
                 <i class="fas fa-file-csv"></i> 导出地址 CSV
             </a>
+            <button class="btn btn-warning btn-sm" onclick="repairNicknames()">
+                <i class="fas fa-wrench"></i> 修复昵称
+            </button>
             <a href="/?uid={{ uid }}" class="btn btn-light btn-sm">
                 <i class="fas fa-arrow-left"></i> 返回普通页面
             </a>
@@ -1009,6 +1012,84 @@
             toast.style.transition = 'opacity 0.5s';
             setTimeout(() => toast.remove(), 500);
         }, duration);
+    }
+
+    // ========== 昵称修复功能 ==========
+
+    function repairNicknames() {
+        const csrfToken = document.querySelector('input[name="csrf_token"]')?.value || '';
+
+        // 先预览
+        fetch('/admin/repair-nicknames')
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    alert('检查失败：' + (data.error || '未知错误'));
+                    return;
+                }
+
+                if (data.count === 0) {
+                    showToast('未发现昵称不一致的记录，无需修复');
+                    return;
+                }
+
+                // 构建预览信息
+                let preview = '发现 ' + data.count + ' 条昵称不一致的记录：\n\n';
+                data.discrepancies.forEach((item, index) => {
+                    if (index < 10) {  // 最多显示10条
+                        preview += (index + 1) + '. [' + item.table + '] UID: ' + item.uid + '\n';
+                        preview += '   当前值: ' + item.current + '\n';
+                        preview += '   正确值: ' + item.correct + '\n\n';
+                    }
+                });
+                if (data.count > 10) {
+                    preview += '... 还有 ' + (data.count - 10) + ' 条记录\n\n';
+                }
+                preview += '是否应用修复？（修复前会自动备份数据库）';
+
+                if (!confirm(preview)) {
+                    return;
+                }
+
+                // 应用修复
+                const formData = new FormData();
+                formData.append('csrf_token', csrfToken);
+
+                fetch('/admin/repair-nicknames/apply', {
+                    method: 'POST',
+                    headers: { 'X-CSRF-Token': csrfToken },
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(result => {
+                    if (result.success) {
+                        let message = '修复完成！共修复 ' + result.fixed_count + ' 条记录。';
+                        if (result.details && result.details.length > 0) {
+                            message += '\n\n修复详情：';
+                            result.details.forEach((item, index) => {
+                                if (index < 5) {
+                                    message += '\n- [' + item.table + '] UID ' + item.uid + ': ' + item.old + ' → ' + item.new;
+                                }
+                            });
+                            if (result.details.length > 5) {
+                                message += '\n... 还有 ' + (result.details.length - 5) + ' 条';
+                            }
+                        }
+                        alert(message);
+                        location.reload();
+                    } else {
+                        alert('修复失败：' + (result.error || '未知错误'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('请求失败，请稍后重试');
+                });
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('检查失败，请稍后重试');
+            });
     }
 </script>
 

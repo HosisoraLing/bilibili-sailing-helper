@@ -117,9 +117,9 @@ class SecurityManager:
         if 'csrf_token' not in session:
             return False
 
-        # 检查Token是否过期（30分钟）
+        # 检查Token是否过期（24小时）
         created = session.get('csrf_token_created', 0)
-        if int(time.time()) - created > 1800:
+        if int(time.time()) - created > 86400:
             session.pop('csrf_token', None)
             session.pop('csrf_token_created', None)
             return False
@@ -338,3 +338,4 @@ class RateLimiter:
 login_limiter = RateLimiter(max_requests=5, window_seconds=60)  # 登录：5次/分钟
 auth_limiter = RateLimiter(max_requests=60, window_seconds=60)   # 鉴权轮询：60次/分钟
 api_limiter = RateLimiter(max_requests=30, window_seconds=60)    # API：30次/分钟
+nickname_limiter = RateLimiter(max_requests=5, window_seconds=60)  # 昵称修改：5次/分钟

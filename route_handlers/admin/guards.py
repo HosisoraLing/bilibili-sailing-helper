@@ -110,12 +110,6 @@ def admin_guard_edit():
     guard.updated_at = get_beijing_now()
     db.session.commit()
 
-    # 清除相关缓存
-    guard_cache.clear_pattern(f"guard:{uid}")
-    guard_cache.clear_pattern(f"guard_info:{uid}")
-    if nickname:
-        guard_cache.clear_pattern(f"guard_nickname:{uid}")
-
     return jsonify({'success': True, 'message': 'Guard updated'})
 
 
@@ -145,11 +139,6 @@ def admin_guard_delete():
     # Delete guard
     db.session.delete(guard)
     db.session.commit()
-
-    # 清除相关缓存
-    guard_cache.clear_pattern(f"guard:{uid}")
-    guard_cache.clear_pattern(f"guard_info:{uid}")
-    guard_cache.clear_pattern(f"guard_nickname:{uid}")
 
     return jsonify({'success': True, 'message': 'Guard deleted'})
 

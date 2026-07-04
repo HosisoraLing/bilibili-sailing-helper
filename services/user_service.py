@@ -4,7 +4,7 @@
 """
 from typing import Optional, Tuple
 
-from db.models import db, User, Guard
+from db.models import db, User, Guard, AuthAttempt
 from config import Config
 from services.security import (
     SecurityManager,
@@ -12,7 +12,6 @@ from services.security import (
     login_limiter,
 )
 from services.auth_service import get_active_auth_session
-from utils.cache_utils import user_cache, guard_cache, cached
 
 
 class UserService:
@@ -24,11 +23,31 @@ class UserService:
         return uid in Config.ADMIN_UIDS
 
     @staticmethod
-    @cached(guard_cache, "guard_nickname", ttl=300)
     def get_guard_nickname(uid: str) -> Optional[str]:
         """获取舰长昵称，如果不是舰长返回 None"""
         guard = Guard.query.filter_by(uid=uid).first()
         return guard.nickname if guard else None
+
+    @staticmethod
+    def _get_best_nickname(uid: str) -> str:
+        """
+        获取用户最佳昵称（按优先级，不含B站API调用以避免阻塞）：
+        1. Guard 表中的舰长昵称（来自B站API同步）
+        2. AuthAttempt 中的弹幕昵称（来自用户发送验证码时的B站昵称）
+        3. 默认占位符（B站API查询由调用方异步补充）
+        """
+        guard_nickname = UserService.get_guard_nickname(uid)
+        if guard_nickname:
+            return guard_nickname
+
+        attempt = AuthAttempt.query.filter_by(uid=uid).filter(
+            AuthAttempt.nickname.isnot(None),
+            AuthAttempt.nickname != ''
+        ).order_by(AuthAttempt.created_at.desc()).first()
+        if attempt and attempt.nickname:
+            return attempt.nickname
+
+        return f"用户_{uid}"
 
     @staticmethod
     def get_or_create_user(uid: str, is_admin: bool = False) -> Tuple[User, bool]:
@@ -38,41 +57,39 @@ class UserService:
         """
         uid = str(uid)
 
-        # 尝试从缓存获取
-        cache_key = f"user:{uid}"
-        cached_user = user_cache.get(cache_key)
-        if cached_user:
-            return cached_user, False
-
         user = User.query.filter_by(uid=uid).first()
 
         if user:
-            # 缓存用户对象
-            user_cache.set(cache_key, user, ttl=300)
             return user, False
 
-        # 获取舰长信息用于昵称
-        guard_nickname = UserService.get_guard_nickname(uid)
+        nickname = UserService._get_best_nickname(uid)
 
         if is_admin:
             user = User(uid=uid, nickname=f"管理员_{uid}")
             user.add_role('admin')
         else:
-            user = User(uid=uid, nickname=guard_nickname or f"用户_{uid}")
+            user = User(uid=uid, nickname=nickname)
 
         db.session.add(user)
         db.session.commit()
 
-        # 缓存新创建的用户
-        user_cache.set(cache_key, user, ttl=300)
+        # B站API查询放到DB提交后，避免网络延迟阻塞用户创建
+        if nickname == f"用户_{uid}":
+            try:
+                from services.guard_service import fetch_user_nickname
+                api_nickname = fetch_user_nickname(uid)
+                if api_nickname:
+                    user.nickname = api_nickname
+                    db.session.commit()
+            except Exception:
+                pass  # API失败不影响用户创建
 
         return user, True
 
     @staticmethod
     def invalidate_user_cache(uid: str):
-        """清除用户缓存"""
-        user_cache.delete(f"user:{uid}")
-        guard_cache.delete(f"guard_nickname:{uid}")
+        """清除用户缓存（已移除内存缓存，保留接口兼容性）"""
+        pass
 
     @staticmethod
     def validate_user_access(uid: str) -> Tuple[bool, Optional[str]]:
@@ -98,38 +115,11 @@ class UserService:
     def is_companion_user(uid: str) -> bool:
         """
         检查用户是否在陪伴榜中（有大航海陪伴天数的用户）
-        先检查本地数据库（手动添加的舰长），再检查B站API实时数据
+        只检查本地数据库，不调用 B站 API（避免阻塞请求）
         """
         uid = str(uid)
-
-        # 1. 先检查本地Guard表（手动添加的舰长记录）- 使用缓存
-        cache_key = f"guard:{uid}"
-        cached_guard = guard_cache.get(cache_key)
-        if cached_guard:
-            return True
-
         guard = Guard.query.filter_by(uid=uid).first()
-        if guard:
-            # 缓存舰长信息
-            guard_cache.set(cache_key, guard, ttl=300)
-            return True
-
-        # 2. 再检查B站API实时数据
-        try:
-            from services.guard_service import fetch_guards
-
-            # 获取舰长/陪伴榜用户列表 - 使用缓存版本
-            guards_data = fetch_guards()
-
-            # 检查UID是否在舰长列表中
-            if uid in guards_data:
-                return True
-
-            return False
-        except Exception as e:
-            # 如果API调用失败，记录错误并返回False
-            print(f"⚠ 检查陪伴榜用户失败: {e}")
-            return False
+        return guard is not None
 
     @staticmethod
     def check_password_setup(uid: str) -> Tuple[bool, Optional[str]]:
@@ -139,14 +129,7 @@ class UserService:
         """
         uid = str(uid)
 
-        # 尝试从缓存获取
-        cache_key = f"user:{uid}"
-        user = user_cache.get(cache_key)
-
-        if not user:
-            user = User.query.filter_by(uid=uid).first()
-            if user:
-                user_cache.set(cache_key, user, ttl=300)
+        user = User.query.filter_by(uid=uid).first()
 
         if not user or not user.password_hash:
             return False, "您还没有设置密码，请先注册账号"
@@ -221,8 +204,25 @@ class UserService:
         """设置用户密码"""
         user.set_password(password)
         db.session.commit()
-        # 清除用户缓存
         UserService.invalidate_user_cache(user.uid)
+
+    @staticmethod
+    def update_nickname(user: User, nickname: str) -> Tuple[bool, str]:
+        """
+        更新用户昵称
+        返回: (success, message)
+        """
+        nickname = nickname.strip()
+        if not nickname:
+            return False, "昵称不能为空"
+        if len(nickname) > 64:
+            return False, "昵称不能超过64个字符"
+
+        user.nickname = nickname
+        user.nickname_customized = True
+        db.session.commit()
+        UserService.invalidate_user_cache(user.uid)
+        return True, "昵称更新成功"
 
     @staticmethod
     def clear_session():

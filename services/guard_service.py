@@ -1,15 +1,16 @@
 import requests
 from datetime import date
+from typing import Optional
 
 from config import GUARD_URL, ROOM_ID, RUID
 from constants import GuardLevel
-from utils.cache_utils import api_response_cache, guard_cache
+from utils.cache_utils import api_response_cache
 from utils.log_utils import get_logger
 
 logger = get_logger(__name__)
 
-# 粉丝团成员排行榜 API
 FANS_MEMBERS_URL = "https://api.live.bilibili.com/xlive/general-interface/v1/rank/getFansMembersRank"
+USER_INFO_URL = "https://api.bilibili.com/x/space/acc/info"
 
 
 DEFAULT_HEADERS = {
@@ -272,7 +273,7 @@ def parse_fans_member(item: dict):
 
 def get_guard_info(uid: str) -> dict:
     """
-    获取舰长信息（带缓存）
+    获取舰长信息
 
     Args:
         uid: 用户UID
@@ -280,17 +281,11 @@ def get_guard_info(uid: str) -> dict:
     Returns:
         dict: 舰长信息或 None
     """
-    cache_key = f"guard_info:{uid}"
+    from db.models import Guard
 
-    # 尝试从缓存获取
-    cached_info = guard_cache.get(cache_key)
-    if cached_info:
-        return cached_info
-
-    # 从数据库获取
     guard = Guard.query.filter_by(uid=uid).first()
     if guard:
-        info = {
+        return {
             "uid": guard.uid,
             "nickname": guard.nickname,
             "guard_level": guard.guard_level,
@@ -298,14 +293,55 @@ def get_guard_info(uid: str) -> dict:
             "accompany_days": guard.accompany_days,
             "last_guard_date": guard.last_guard_date.isoformat() if guard.last_guard_date else None
         }
-        guard_cache.set(cache_key, info, ttl=300)
-        return info
 
     return None
 
 
 def invalidate_guard_cache(uid: str):
-    """清除舰长缓存"""
-    guard_cache.delete(f"guard:{uid}")
-    guard_cache.delete(f"guard_info:{uid}")
-    guard_cache.delete(f"guard_nickname:{uid}")
+    """清除舰长缓存（已移除内存缓存，保留接口兼容性）"""
+    pass
+
+
+def fetch_user_nickname(uid: str, use_cache: bool = True) -> Optional[str]:
+    """
+    从B站API获取用户昵称
+
+    Args:
+        uid: 用户UID
+        use_cache: 是否使用缓存
+
+    Returns:
+        str: 用户昵称，失败返回 None
+    """
+    cache_key = f"user_nickname:{uid}"
+    _MISSING = "__missing__"
+
+    if use_cache:
+        cached = api_response_cache.get(cache_key)
+        if cached == _MISSING:
+            return None
+        if cached:
+            return cached
+
+    try:
+        resp = requests.get(
+            USER_INFO_URL,
+            params={"mid": int(uid)},
+            headers=DEFAULT_HEADERS,
+            timeout=10
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        if data.get("code") == 0:
+            nickname = data.get("data", {}).get("name", "")
+            if nickname:
+                api_response_cache.set(cache_key, nickname, ttl=3600)
+                return nickname
+
+        # API返回失败，缓存空值防止穿透
+        api_response_cache.set(cache_key, _MISSING, ttl=300)
+    except Exception as e:
+        logger.error(f"获取用户昵称失败: uid={uid}, error={e}")
+
+    return None

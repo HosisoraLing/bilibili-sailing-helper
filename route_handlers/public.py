@@ -88,21 +88,25 @@ def opensource():
 def submit():
     uid = get_uid_from_request()
     if not uid:
-        return jsonify({'error': '参数错误'}), 400
+        flash('参数错误', 'error')
+        return redirect(url_for('main.index'))
 
     # Verify the submitted UID matches the logged-in user
     if str(current_user.uid) != uid:
-        return jsonify({'error': '非法提交：UID与登录账户不匹配'}), 403
+        flash('非法提交：UID与登录账户不匹配', 'error')
+        return redirect(url_for('main.index', uid=uid))
 
     # 验证CSRF Token
     csrf_token = request.form.get('csrf_token') or request.headers.get('X-CSRF-Token')
     if not csrf_token or not UserService.verify_csrf_token(csrf_token):
-        return jsonify({'error': 'CSRF token invalid or missing'}), 403
+        flash('页面已过期，已为您刷新，请重新提交', 'error')
+        return redirect(url_for('main.index', uid=uid))
 
     # 速率限制检查
     is_allowed, wait_time = AdminService.check_admin_rate_limit(uid, "submit")
     if not is_allowed:
-        return jsonify({'error': f'请求过于频繁，请 {wait_time} 秒后重试'}), 429
+        flash(f'请求过于频繁，请 {wait_time} 秒后重试', 'error')
+        return redirect(url_for('main.index', uid=uid))
 
     # 获取用户昵称（陪伴榜用户或管理员）
     nickname = UserService.get_guard_nickname(uid)
@@ -112,14 +116,16 @@ def submit():
             user = User.query.filter_by(uid=uid).first()
             nickname = user.nickname if user else f"管理员_{uid}"
         else:
-            return jsonify({'error': '非法提交，您不在当前陪伴榜名单中'}), 403
+            flash('非法提交，您不在当前陪伴榜名单中', 'error')
+            return redirect(url_for('main.index', uid=uid))
 
-    # 验证表单数据 - 允许手机号为空（留空）
+    # 验证表单数据
     phone = request.form.get('phone', '')
-    if phone:  # 如果填写了手机号才验证格式
+    if phone:
         is_valid, msg = UserService.validate_phone(phone)
         if not is_valid:
-            return jsonify({'error': msg}), 400
+            flash(msg, 'error')
+            return redirect(url_for('main.index', uid=uid))
 
     existing_address = get_user_address(uid)
     is_update = existing_address is not None
